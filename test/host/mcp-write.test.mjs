@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import { createServer, request } from 'node:http';
 import path from 'node:path';
 import test from 'node:test';
+import { agentAuditValid } from '../../lib/core/audit.js';
 import { JsonlStore } from '../../lib/core/store.js';
 import { mountProjectMcp } from '../../lib/host/mcp.js';
 import { faultFs, ioError } from '../helpers/fault-fs.mjs';
@@ -74,9 +75,9 @@ function denied(body, code) {
   assert.equal(body.result.structuredContent.code, code);
 }
 
-async function readyTask(h) {
+async function readyTask(h, extra = {}) {
   const created = await h.command(command('task.create', {
-    actor: HUMAN, title: 'Synthetic work', acceptance: [{ text: 'Check evidence', requiredKinds: ['note'] }],
+    actor: HUMAN, title: 'Synthetic work', acceptance: [{ text: 'Check evidence', requiredKinds: ['note'] }], ...extra,
   }));
   return created.events[0].data;
 }
@@ -104,7 +105,7 @@ test('MCP writes require explicit opt-in, an allowlist and a distinct write bear
     const mcp = await listener(t, svc, settings, env);
     try {
       const read = await mcp.post(READ, 'tools/list', {});
-      assert.deepEqual(read.result.tools.map(({ name }) => name), ['list_projects', 'list_tasks', 'get_task']);
+      assert.deepEqual(read.result.tools.map(({ name }) => name), ['list_projects', 'list_tasks', 'get_task', 'get_work_context']);
       assert.deepEqual(await mcp.post(WRITE, 'tools/list', {}), { status: 401 });
     } finally {
       await mcp.close();
@@ -131,7 +132,12 @@ test('MCP authorization, session and shape denials leave cold project logs and l
   assert.equal((await mcp.call('create_task', create, READ)).error.code, -32602);
   assert.deepEqual(await mcp.call('claim_task', claim, 'ab'.repeat(24)), { status: 401 });
   assert.equal((await mcp.call('get_task', { projectId: h.id, taskId: task.id })).error.code, -32602);
-  assert.equal((await mcp.call('verify_task', claim)).error.code, -32602);
+  const review = { ...claim, audit: { report: 'Independently checked the synthetic evidence.' } };
+  assert.equal((await mcp.call('verify_task', review, READ)).error.code, -32602);
+  assert.equal((await mcp.call('reject_task', { ...claim, reason: 'Rework required' }, READ)).error.code, -32602);
+  denied(await mcp.call('verify_task', { ...review, projectId: other.id, taskId: otherTask.id }), 'project-forbidden');
+  denied(await mcp.call('verify_task', { ...review, audit: { ...review.audit, by: HUMAN } }), 'invalid-command');
+  denied(await mcp.call('reject_task', { ...claim, reason: 'Rework required', unassign: true }), 'invalid-command');
   denied(await mcp.call('open_work_session', { projectId: other.id }), 'project-forbidden');
   denied(await mcp.call('claim_task', { ...claim, projectId: other.id, taskId: otherTask.id }), 'project-forbidden');
   denied(await mcp.call('create_task', { ...create, projectId: other.id }), 'project-forbidden');
@@ -159,7 +165,8 @@ test('MCP claim, intent and evidence submission use the existing task workflow a
   const mcp = await listener(t, svc, writes([h.id]));
   const { result } = await mcp.post(WRITE, 'tools/list', {});
   assert.deepEqual(result.tools.map(({ name }) => name),
-    ['open_work_session', 'create_task', 'update_task', 'ready_task', 'claim_task', 'begin_task', 'submit_task', 'release_task', 'interrupt_task']);
+    ['open_work_session', 'create_task', 'update_task', 'ready_task', 'claim_task', 'begin_task', 'submit_task',
+      'verify_task', 'reject_task', 'release_task', 'interrupt_task']);
   const claim = await startWork(mcp, h.id, task);
   const before = h.rev;
   denied(await mcp.call('claim_task', { ...claim, projectRev: h.rev + 1 }), 'stale-revision');
@@ -171,7 +178,7 @@ test('MCP claim, intent and evidence submission use the existing task workflow a
   const commit = h.store.commits.at(-1);
   assert.deepEqual(commit.events.map(({ type }) => type), ['session/bound', 'lease/granted', 'task/claimed']);
   assert.equal(commit.actor.kind, 'agent');
-  assert.equal(commit.actor.agentId, 'codex:mcp');
+  assert.equal(commit.actor.agentId, 'codex:mcp:' + commit.actor.sessionId.slice('mcp_'.length));
   assert.equal(commit.actor.via, 'mcp');
   assert.equal(commit.events[0].data.sessionId, commit.actor.sessionId);
   assert.equal(commit.events[0].data.autoResume, false);
@@ -229,7 +236,8 @@ test('MCP task intake and work close the loop using existing agent permissions',
   assert.equal(task.taskRev, 1);
   assert.equal(h.rev, beforeCreate + 1);
   assert.deepEqual(Object.keys(h.state.bindings), []);
-  assert.equal(h.state.tasks[task.taskId].createdBy.agentId, 'codex:mcp');
+  const creator = h.state.tasks[task.taskId].createdBy;
+  assert.equal(creator.agentId, 'codex:mcp:' + creator.sessionId.slice('mcp_'.length));
   assert.equal(h.state.tasks[task.taskId].priority, -5);
   assert.equal(h.state.tasks[task.taskId].weight, 1.5);
   const work = { ...session, taskId: task.taskId };
@@ -269,6 +277,154 @@ test('MCP task intake and work close the loop using existing agent permissions',
   assert.equal(replay.taskId, task.taskId);
   assert.equal(replay.taskRev, done.task.rev);
   assert.equal(Object.keys(h.state.tasks).length, 2);
+});
+
+// 用途：提交带一条验收证据的 MCP 任务，保留提交会话用于自审与独立审查对照。
+async function submitForReview(mcp, projectId, task, evidence = { kind: 'note', ref: 'Checked' }) {
+  const claim = await startWork(mcp, projectId, task);
+  const got = await success(mcp, 'claim_task', claim);
+  const submitted = await success(mcp, 'submit_task', {
+    ...claim, requestId: 'submit', expectedRev: got.taskRev, fencingToken: got.lease.fencingToken,
+    evidence: [{ ...evidence, acceptanceId: task.acceptance[0].id }],
+  });
+  assert.equal(submitted.state, 'review');
+  return { ...claim, requestId: 'review', expectedRev: submitted.taskRev };
+}
+
+// 责任：同一 MCP 会话不可自审，独立会话可验收，失败重试与并发只提交一次。
+test('MCP gated verification uses distinct authenticated identities and commits once', { timeout: 12000 }, async (t) => {
+  let faults;
+  const { svc, h, stateDir } = await withProject(t, {
+    storeFactory(dir, meta) {
+      faults = faultFs(dir);
+      return new JsonlStore(dir, meta, { fs: faults.io });
+    },
+  });
+  const task = await readyTask(h, { requiresAudit: true });
+  const mcp = await listener(t, svc, writes([h.id]));
+  const review = await submitForReview(mcp, h.id, task);
+  const worker = h.store.commits.at(-1).actor;
+  const { sessionToken } = await success(mcp, 'open_work_session', { projectId: h.id });
+  const audit = { report: 'Independently checked the submitted evidence.', checklist: [{ item: 'Evidence', ok: true }] };
+  const verify = { ...review, sessionToken, audit };
+  const { commitsFile } = h.store;
+  const before = fs.readFileSync(commitsFile);
+  denied(await mcp.call('verify_task', { ...review, audit }), 'forbidden-role');
+  denied(await mcp.call('verify_task', { ...verify, sessionId: worker.sessionId }), 'invalid-command');
+  denied(await mcp.call('verify_task', { ...verify, acknowledgeDrift: false }), 'invalid-command');
+  denied(await mcp.call('verify_task', { ...verify, audit: { report: '   too short   ' } }), 'invalid-command');
+  faults.arm('fsyncSync', (file) => file === commitsFile, () => { throw ioError(); });
+  const failed = await mcp.call('verify_task', verify);
+  assert.deepEqual(failed.error, { code: -32603, message: 'Internal error' });
+  faults.consumed();
+  assert.deepEqual(fs.readFileSync(commitsFile), before);
+  assert.equal(h.state.tasks[task.id].state, 'review');
+  assert.equal(h.state.tasks[task.id].lastAudit, null);
+
+  const pair = await Promise.all([success(mcp, 'verify_task', verify), success(mcp, 'verify_task', verify)]);
+  assert.deepEqual(pair.map(({ deduped }) => deduped).sort(), [false, true]);
+  assert.equal(pair[0].state, 'done');
+  assert.equal(h.store.commits.at(-1).events.filter(({ type }) => type === 'task/verified').length, 1);
+  const record = h.state.tasks[task.id].lastAudit;
+  assert.deepEqual(record.by, h.store.commits.at(-1).actor);
+  assert.equal(record.by.kind, 'agent');
+  assert.equal(record.by.via, 'mcp');
+  assert.notEqual(record.by.agentId, worker.agentId);
+  assert.notEqual(record.by.sessionId, worker.sessionId);
+  assert.deepEqual(record.checklist, audit.checklist);
+  assert.ok(agentAuditValid(h.state.tasks[task.id]));
+  const log = fs.readFileSync(commitsFile, 'utf8');
+  assert.ok(!log.includes(sessionToken) && !log.includes(review.sessionToken));
+
+  await mcp.close();
+  await svc.close();
+  const { svc: reopened } = await makeService(t, { rootDir: stateDir });
+  const replayed = (await reopened.open(h.id)).state.tasks[task.id];
+  assert.deepEqual(replayed.lastAudit, record);
+  assert.ok(agentAuditValid(replayed));
+});
+
+// 责任：兼容旧 MCP 归因；漂移由 core 拦截；驳回按原规则返工且不发放 MCP 租约。
+test('MCP review handles legacy attribution and sends drift back for rework', { timeout: 12000 }, async (t) => {
+  const { svc, h } = await withProject(t);
+  const task = await readyTask(h, { requiresAudit: true, acceptance: [{ text: 'Check bytes', requiredKinds: ['file'] }] });
+  const worker = { kind: 'agent', sessionId: 'mcp_legacy_fixture', agentId: 'codex:mcp', via: 'mcp' };
+  const claimed = await h.command(command('task.claim', {
+    actor: worker, taskId: task.id, expected: { entityRev: task.rev },
+  }), { claimSessionSource: 'mcp' });
+  const artifact = path.join(h.workspacePath, 'artifact.txt');
+  fs.writeFileSync(artifact, 'original');
+  const submitted = await h.command(command('task.submit', {
+    actor: worker, taskId: task.id, expected: { entityRev: claimed.entityRev }, fencingToken: h.leases.get(task.id).token,
+    evidence: [{ kind: 'file', ref: 'artifact.txt', acceptanceId: task.acceptance[0].id }],
+  }));
+  const mcp = await listener(t, svc, writes([h.id]));
+  const { sessionToken } = await success(mcp, 'open_work_session', { projectId: h.id });
+  const review = { projectId: h.id, taskId: task.id, sessionToken, expectedRev: submitted.entityRev };
+  const audit = { report: 'The evidence content changed after submission.' };
+  fs.writeFileSync(artifact, 'changed');
+  const before = fs.readFileSync(h.store.commitsFile);
+  const failure = await mcp.call('verify_task', { ...review, requestId: 'verify', audit });
+  denied(failure, 'evidence-drift');
+  assert.ok(!JSON.stringify(failure).includes('artifact.txt'));
+  assert.deepEqual(fs.readFileSync(h.store.commitsFile), before);
+
+  const reject = { ...review, requestId: 'reject', reason: 'Evidence changed. Please rerun the check.', audit };
+  const receipt = await success(mcp, 'reject_task', reject);
+  assert.equal(receipt.state, 'ready');
+  assert.deepEqual(await success(mcp, 'reject_task', reject), { ...receipt, deduped: true });
+  const record = h.state.tasks[task.id].lastAudit;
+  assert.equal(record.verdict, 'fail');
+  assert.equal(record.by.kind, 'agent');
+  assert.equal(record.workers[0].agentId, 'codex:mcp');
+  assert.equal(h.state.tasks[task.id].rejection.reason, reject.reason);
+  assert.equal(h.leases.has(task.id), false);
+  denied(await mcp.call('verify_task', { ...review, requestId: 'stale', audit }), 'stale-revision');
+});
+
+// 责任：普通任务可由 MCP 驳回，人类验收仍可在不提供报告的情况下通过。
+test('an ungated review keeps human acceptance and MCP rejection', { timeout: 12000 }, async (t) => {
+  const { svc, h } = await withProject(t);
+  const task = await readyTask(h);
+  const mcp = await listener(t, svc, writes([h.id]));
+  const review = await submitForReview(mcp, h.id, task);
+  const { sessionToken } = await success(mcp, 'open_work_session', { projectId: h.id });
+  const independent = { ...review, sessionToken };
+  denied(await mcp.call('verify_task', {
+    ...independent, audit: { report: 'Checked but this is not an audit gate.' },
+  }), 'forbidden-role');
+  const rejected = await success(mcp, 'reject_task', { ...independent, reason: 'More evidence needed' });
+  assert.equal(rejected.state, 'ready');
+  assert.equal(h.state.tasks[task.id].lastAudit, null);
+  const resubmitted = await submitForReview(mcp, h.id, h.state.tasks[task.id]);
+  await h.command(command('task.verify', {
+    actor: HUMAN, taskId: task.id, expected: { entityRev: resubmitted.expectedRev },
+  }));
+  assert.equal(h.state.tasks[task.id].verifiedBy, 'human');
+});
+
+// 责任：遗留 review 若有活动租约，MCP 驳回仍走 core 持有者和 fencing 守卫。
+test('a legacy review lease fences MCP rejection to the owner and current token', { timeout: 12000 }, async (t) => {
+  const { svc, h } = await withProject(t);
+  const task = await readyTask(h);
+  const mcp = await listener(t, svc, writes([h.id]));
+  const review = await submitForReview(mcp, h.id, task);
+  // 正常 submit 撤销租约。合成活动租约仅用于命中原生防御分支。
+  const { sessionId, agentId, epoch } = h.state.tasks[task.id].assignee;
+  const token = h.state.counters.leaseToken;
+  h.leases.set(task.id, {
+    taskId: task.id, sessionId, agentId, epoch, token, expiresAt: new Date(Date.now() + 600_000).toISOString(),
+  });
+  const { sessionToken } = await success(mcp, 'open_work_session', { projectId: h.id });
+  const reject = { ...review, reason: 'Rework required' };
+  const before = fs.readFileSync(h.store.commitsFile);
+  denied(await mcp.call('reject_task', { ...reject, sessionToken, fencingToken: token }), 'forbidden-role');
+  denied(await mcp.call('reject_task', reject), 'fencing-stale');
+  denied(await mcp.call('reject_task', { ...reject, fencingToken: token + 1 }), 'fencing-stale');
+  assert.deepEqual(fs.readFileSync(h.store.commitsFile), before);
+  const receipt = await success(mcp, 'reject_task', { ...reject, fencingToken: token });
+  assert.equal(receipt.state, 'in_progress');
+  assert.equal(h.leases.get(task.id).token, token);
 });
 
 // 责任：并发领取只产生一枚有效租约，重试不能返回后续授予的 token。

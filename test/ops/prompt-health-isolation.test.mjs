@@ -60,6 +60,8 @@ test('project:brief registration declares literal text semantics without freezin
     assert.equal(typeof section.text, 'function');
     const first = section.text();
     assert.match(first, /## Project: Prompt audit fixture/);
+    assert.match(first.split('\n')[1], /resuming known project work/);
+    assert.match(first.split('\n')[1], /project_board view=task/);
     await h.command(command('task.create', { title: 'later title', acceptance: [{ text: 'dynamic' }] }));
     assert.notEqual(section.text(), first, 'the section still reads the live project handle');
   } finally { await svc.close(); }

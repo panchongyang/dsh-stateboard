@@ -6,6 +6,11 @@ name: CI
 # bundle smoke, a hard maintainability gate, and a client-artifact drift check.
 # Host tests (tools/routes/preflight) run locally where the real DSH runtime is
 # linked via node_modules/@deepseek-ai.
+#
+# Release train: validate the candidate against the designated train branch,
+# then check CI again on the integrated train commit. CI reports checks for a
+# revision. Merging into the train and publishing remain separate operations.
+# See docs/CONTRIBUTING.md for the handoff and release gates.
 on:
   push:
   pull_request:
@@ -80,3 +85,20 @@ jobs:
       # Host tests (test:host) need the unpublished @deepseek-ai peers; they run
       # locally before release and their absence here is deliberate. Any host/routes
       # change must run `npm run test:host` locally and attach the result.
+
+  release-train-handoff:
+    name: Release train handoff
+    if: github.event_name == 'push' && github.ref == 'refs/heads/release'
+    needs: [offline, performance]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Record the checked commit for local smoke deployment
+        run: |
+          {
+            echo '### Release train ready for local smoke deployment'
+            printf 'Checked commit: `%s`\n\n' "$GITHUB_SHA"
+            echo 'When the development workstation is online, sync this change into local master, deploy to the authorized development profile, and record smoke results.'
+            printf '\n[Release train procedure](%s/%s/blob/%s/docs/CONTRIBUTING.md)\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_SHA"
+          } >> "$GITHUB_STEP_SUMMARY"

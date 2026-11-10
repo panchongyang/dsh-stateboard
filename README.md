@@ -1,10 +1,15 @@
 # ProjectBoard · dsh-stateboard
 
-DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、任务、外置文档与结果材料。当前版本 **0.2.0**，许可证 [BSD-3-Clause](<./LICENSE>)。
+DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、任务、外置文档与结果材料。当前版本 **0.3.0**，许可证 [BSD-3-Clause](<./LICENSE>)。
 
 源码可从 [GitHub 仓库](https://github.com/panchongyang/dsh-stateboard) 下载。npm 安装使用公共 registry 上的同版本包，或使用已下载的同版本 tgz。
 
 导航：[支持环境](#支持环境) · [安装与首次运行](#安装与首次运行) · [约三分钟文字演示](#约三分钟文字演示) · [真实限制](#真实限制) · [备份回退与迁移](#备份回退与迁移) · [贡献与架构入口](#贡献与架构入口)
+
+## 0.3.0 更新
+
+- 可切换到推进视图，查看并行任务、验收队列和依赖线路。看板仍为默认视图。
+- 可选 MCP 新增开工上下文查询，以及受项目授权和现有审计规则约束的验收与驳回操作。
 
 ## 产品边界
 
@@ -16,7 +21,7 @@ DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、
 
 | 项目 | 支持口径与验证限制 |
 |---|---|
-| 产品 | `dsh-stateboard@0.2.0`，BSD-3-Clause |
+| 产品 | `dsh-stateboard@0.3.0`，BSD-3-Clause |
 | 操作系统 | Windows 11 x64；macOS / Linux 未测试、不承诺可用 |
 | DSH 支持带 | `0.2.1-rc.2` 至 `0.2.2-rc.1`；上界不自动跟随 latest 扩展 |
 | Web 宿主 Node | DSH `0.2.2-rc.1` 要求 **Node >=24.9**；其它支持带内版本仍须满足各自宿主要求 |
@@ -40,9 +45,9 @@ DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、
 
 ```text
 # 本地包（把占位路径替换为实际 Windows 绝对路径）
-dsh plugin --profile PROFILE add "D:\Packages\dsh-stateboard-0.2.0.tgz"
+dsh plugin --profile PROFILE add "D:\Packages\dsh-stateboard-0.3.0.tgz"
 # 从公共 npm registry 安装指定版本：
-dsh plugin --profile PROFILE add dsh-stateboard@0.2.0
+dsh plugin --profile PROFILE add dsh-stateboard@0.3.0
 ```
 
 **源码来源**。下载与目标版本对应的完整源码归档并解压。归档已含客户端产物，修改客户端时先构建。
@@ -109,6 +114,8 @@ bearer_token_env_var = "PROJECT_BOARD_MCP_TOKEN"
 
 Codex 可以列项目、列任务和读取详情。需要暂停入口时，在 DSH 插件配置中将 `mcp.enabled` 设为 `false` 并重新加载插件。
 
+执行明确的任务、续做已知项目或交付已有任务时，先用 `get_work_context` 获取开工上下文。传入已确认的 `projectId`，知道任务时再传 `taskId`，即可读取该任务的验收条件、阻塞和下一步。只知道项目时，确认返回的候选后再写入。
+
 需要让 Codex 管理和接手任务时，可在同一 `mcp` 配置下另开写入，并填写明确授权的项目 ID。以下 ID 是占位符，实际值从 `list_projects` 获取。
 
 ~~~yaml
@@ -126,6 +133,8 @@ bearer_token_env_var = "PROJECT_BOARD_MCP_WRITE_TOKEN"
 ~~~
 
 在 Codex 聊天中用 `open_work_session` 开始该项目的工作会话。可以读取已有卡片，或用 `create_task` 建卡、`update_task` 编辑、`ready_task` 将满足条件的待办置为就绪。随后用 `claim_task` 领取、`begin_task` 记录执行意图、`submit_task` 附证据提交审查。工作会话 token 保留在当前聊天内。写入默认关闭。停用写入口或轮换凭据后重新加载插件，既有会话失效。工具参数、续接与异常处理见随包的实现契约 §3.7。
+
+独立的工作会话可在检查证据后用 `verify_task` 为审计门任务记录通过，或按权限用 `reject_task` 带理由退回返工。普通任务仍可在网页人工验收。MCP 与原生工具的覆盖差异见随包实现契约 §3.7.3。
 
 ## 约三分钟文字演示
 

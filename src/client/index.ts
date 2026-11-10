@@ -16,13 +16,14 @@ import { GROUP_MODES, GROUP_OPTIONS, groupTasks, normalizeGroupMode } from './mo
 import { docDirty, docHeadings, inlineRuns, linkTarget, markdownBlocks, matchDocText, splitTableRow, tableAlign } from './utils/markdown.ts';
 import { chartLayout, chartOptions, parseChartSpec, slicePath } from './utils/chart.ts';
 import { buildEvidence, commandBody, createTaskPayload, docLinkPayload, initialPreview } from './model/payloads.ts';
-import { normalizeView, readView, defaultFilters, normalizeFilters, readFilters, saveFilters } from './model/storage.ts';
+import { currentBoardLink, readBoardLink, normalizeView, readView, defaultFilters, normalizeFilters, readFilters, saveFilters } from './model/storage.ts';
 import { comparablePath, matchProjectByCwd, needYouCount, normalizeWorkspacePath, planCatalog, planMeta, pickLatestSession, pickTaskSession, planStepTitle, priorityRanks, rankTier } from './model/selectors.ts';
 import { consumePendingJump, requestBoardJump, setPluginCtx } from './model/state.ts';
 import { Badge, Button, EmptyState, LoadingState, ProgressBar, StatTile, Switch, Tabs, ToastHost } from './components/primitives.tsx';
 import { Drawer } from './components/drawer.tsx';
 import { ChartView, Markdown } from './components/content.tsx';
 import { BoardColumn, BoardView, TaskCard, TaskList, TaskRow } from './components/board.tsx';
+import { FlowView } from './components/flow-view.tsx';
 import { BoardPage } from './pages/board-page.tsx';
 import { AppHeader, AppLayout } from './components/chrome.tsx';
 import { CreateProject } from './pages/create-project.tsx';
@@ -57,7 +58,9 @@ function apply(ctx: ClientContext): void {
     openPanel();
   };
   ctx.slots.inject('main', function () {
-    return ctx.slots.register({ name: 'main', key: PANEL_ID }, BoardPage);
+    const dispose = ctx.slots.register({ name: 'main', key: PANEL_ID }, BoardPage);
+    if (currentBoardLink().view === 'flow') openPanel();
+    return dispose;
   });
   ctx.slots.inject('sidebar.panellist', function () {
     return ctx.slots.register({ name: 'sidebar.panellist', id: PANEL_ID, order: 50, label: '项目板' }, PanelIcon);
@@ -85,6 +88,7 @@ const __test = {
   createTaskPayload: createTaskPayload,
   taskCreatedId: taskCreatedId,
   normalizeView: normalizeView,
+  readBoardLink: readBoardLink,
   readView: readView,
   defaultFilters: defaultFilters,
   normalizeFilters: normalizeFilters,
@@ -162,6 +166,7 @@ const __ui = {
   AppLayout: AppLayout,
   AppHeader: AppHeader,
   BoardView: BoardView,
+  FlowView: FlowView,
   BoardColumn: BoardColumn,
   TaskList: TaskList,
   TaskRow: TaskRow,

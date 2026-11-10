@@ -2,13 +2,14 @@
 // Page shell: data wiring ({data, actions, ui}) and the tab content switch.
 import React from 'react';
 import type * as View from '../model/view-types.ts';
-import { useProjects, useBoard, usePlans, usePageAccess, useMainViewCwd } from '../hooks/use-page-read.ts';
+import { useProjects, useBoard, usePlans, usePageAccess, useMainViewCwd, useFlowSessions } from '../hooks/use-page-read.ts';
 import { useToasts } from '../hooks/use-toasts.ts';
+import { useBoardSearchShortcut, useBoardView } from '../hooks/use-board-view.ts';
 import { PageNavigationContext } from '../hooks/page-navigation.ts';
 import { locateProject, createProjectNavigation } from '../model/project-location.ts';
 import { confirmPageReload } from '../model/page-access.ts';
 import { drawerKey } from '../model/races.ts';
-import { saveLastProject, readView, saveView, normalizeView, readFilters, saveFilters, defaultFilters } from '../model/storage.ts';
+import { saveLastProject, readFilters, saveFilters, defaultFilters } from '../model/storage.ts';
 import { priorityRanks, planCatalog } from '../model/selectors.ts';
 import { latestSessionFor, openSessionById } from '../model/session-jump.ts';
 import { consumePendingJump, JUMP_EVENT } from '../model/state.ts';
@@ -16,6 +17,8 @@ import { EmptyState, LoadingState, ErrorState, Button } from '../components/prim
 import { IconBoard } from '../components/icons.tsx';
 import { AppLayout } from '../components/chrome.tsx';
 import { TaskList, BoardView } from '../components/board.tsx';
+import { FlowView } from '../components/flow-view.tsx';
+import type { FlowViewProps } from '../components/flow-view.tsx';
 import { DocsPane } from './docs.tsx';
 import { PlanPane } from './plans.tsx';
 import { HealthPane } from './health.tsx';
@@ -34,6 +37,9 @@ export interface BoardContentProps {
   projectId?: string;
   tab?: string;
   view?: string;
+  flowFocus?: string | null;
+  onFlowFocus?: (id: string | null) => void;
+  onHealth?: () => void;
   docFocus?: string | null;
   tasks?: View.Card[];
   ranks?: Record<string, number>;
@@ -84,7 +90,7 @@ export function BoardPage(_props?: BoardPageProps) {
   const mainCwd = useMainViewCwd();
   const access = usePageAccess();
   const [tab, setTab] = useState('board');
-  const [view, setViewState] = useState(readView);
+  const { view, focus: flowFocus, applyView, applyFocus, resetFocus, linkedProjectId } = useBoardView(projectId);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const [creatingTask, setCreatingTask] = useState(false);
   const [docFocus, setDocFocus] = useState<string | null>(null);
@@ -111,6 +117,7 @@ export function BoardPage(_props?: BoardPageProps) {
     const off = navigation.subscribe(function(next) {
       if (next.projectId !== previousId) {
         setCreating(false); setSelectedTask(null); setCreatingTask(false); setDocFocus(null);
+        if (previousId) resetFocus(next.projectId);
         saveLastProject(next.projectId);
       }
       previousId = next.projectId;
@@ -128,11 +135,18 @@ export function BoardPage(_props?: BoardPageProps) {
     return function() { window.removeEventListener(JUMP_EVENT, onJump); };
   }, [navigation, hasEditor]);
   useEffect(function() {
+    if (!navigation.snapshot().located && !locationState.intent && linkedProjectId && !projectsState.error) {
+      if (!projectsState.ready || projectsState.loading) return;
+      if (projectsState.projects.some((project) => project.id === linkedProjectId)) {
+        navigation.choose(linkedProjectId);
+        return;
+      }
+    }
     navigation.resolve(projectsState, mainCwd, false as unknown as import('../model/types.ts').NavigationIntent);
-  }, [navigation, locationState.intent, mainCwd, projectsState.projects, projectsState.ready, projectsState.loading, projectsState.error]);
+  }, [navigation, locationState.intent, linkedProjectId, mainCwd, projectsState.projects, projectsState.ready, projectsState.loading, projectsState.error]);
   const target = locationState.intent ? locateProject(projectsState, locationState.intent.cwd) : null;
   const navigationMessage = navigationNotice(target);
-  useSearchShortcut();
+  useBoardSearchShortcut();
   function choose(id: string) {
     if (locationState.intent && hasEditor && id !== projectId && !window.confirm('切换项目会关闭当前编辑器，未保存内容将丢失。确定切换？')) return;
     navigation.choose(id);
@@ -175,17 +189,15 @@ export function BoardPage(_props?: BoardPageProps) {
   const allTasks = priority.tasks;
   const ranks = priority.ranks;
   const nextTask = priority.next;
-  function applyView(next: string) {
-    const value = normalizeView(next);
-    setViewState(value);
-    saveView(value);
-  }
   const content = <BoardContent
     creating={creating}
     createPath={createPath}
     projectId={projectId}
     tab={tab}
     view={view}
+    flowFocus={flowFocus}
+    onFlowFocus={applyFocus}
+    onHealth={() => setTab('health')}
     docFocus={docFocus}
     projects={projectsState}
     board={boardState}
@@ -219,7 +231,7 @@ export function BoardPage(_props?: BoardPageProps) {
       view={view}
       onView={applyView}
       boardMode={tab === 'board' && view === 'board'}
-      nextTask={nextTask}
+      nextTask={view === 'flow' && tab === 'board' ? null : nextTask}
       onOpenTask={openTask}
       query={filters.query}
       onQuery={function(value) { patchFilters({ query: value }); }}
@@ -269,29 +281,6 @@ export function BoardPage(_props?: BoardPageProps) {
     />
   </PageNavigationContext.Provider>;
 }
-/** Global shortcut: "/" or Ctrl/⌘+K focuses the task search (ignored while typing). */
-function useSearchShortcut() {
-  useEffect(function() {
-    if (typeof document === 'undefined') return undefined;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.defaultPrevented) return;
-      const target = event.target as HTMLElement;
-      const tagName = target && target.tagName;
-      const typing = tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || (target && target.isContentEditable);
-      const isSlash = event.key === '/' && !typing;
-      const isCommandK = (event.metaKey || event.ctrlKey) && String(event.key).toLowerCase() === 'k';
-      if (!isSlash && !isCommandK) return;
-      const search = document.getElementById('pb-search') as HTMLInputElement;
-      if (!search) return;
-      event.preventDefault();
-      search.focus();
-      if (search.select) search.select();
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return function() { document.removeEventListener('keydown', onKeyDown); };
-  }, []);
-}
-
 export function BoardContent(props: BoardContentProps) {
   const creating = props.creating;
   const createPath = props.createPath;
@@ -321,16 +310,27 @@ export function BoardContent(props: BoardContentProps) {
       ? <ErrorState message={boardState.error} action={<Button onClick={props.onRetry}>{'重试'}</Button>} />
       : <LoadingState label="看板加载中" />;
   } else if (tab === 'board') {
-    content = view === 'list'
-      ? <TaskList
+    if (view === 'flow' && boardState.board) {
+      content = <FlowBoard
+        key={projectId}
+        board={boardState.board}
+        query={filters?.query}
+        focus={props.flowFocus}
+        onFocus={props.onFlowFocus}
+        onOpen={openTask}
+        onHealth={props.onHealth}
+      />;
+    } else if (view === 'list') {
+      content = <TaskList
         tasks={allTasks}
         ranks={ranks}
         filters={filters}
         plans={props.plans}
         onOpen={openTask}
         onClearFilters={props.onClearFilters}
-      />
-      : <BoardView
+      />;
+    } else {
+      content = <BoardView
         board={boardState.board}
         error={boardState.error}
         filters={filters}
@@ -338,6 +338,7 @@ export function BoardContent(props: BoardContentProps) {
         onOpen={openTask}
         onClearFilters={function() { props.onClearFilters(); }}
       />;
+    }
   } else if (tab === 'docs') {
     content = <DocsPane
       key={projectId + ':' + (docFocus || 'docs')}
@@ -361,6 +362,10 @@ export function BoardContent(props: BoardContentProps) {
     content = <HealthPane projectId={projectId} />;
   }
   return content;
+}
+
+function FlowBoard(props: FlowViewProps) {
+  return <FlowView {...props} sessions={useFlowSessions()} />;
 }
 
 function currentProject(projects: View.ProjectView[], projectId: string) {

@@ -56,10 +56,53 @@ test('reader reports durable in-progress state without creating, recovering, or 
     ]);
     detail.task.acceptance[0].text = 'Changed local result';
     assert.equal((await reader.getTask({ projectId, taskId })).task.acceptance[0].text, 'Check result');
+    const context = await reader.getWorkContext({ projectId, taskId });
+    assert.equal(context.projectRev, projectRev);
+    assert.equal(context.task.id, taskId);
+    assert.equal(context.task.acceptance[0].text, 'Check result');
+    assert.equal(Object.hasOwn(context.task, 'owner'), false);
+    assert.equal(context.nextAction, 'check_work_session');
     assert.equal(cold.handles.size, 0);
     assert.equal(fs.existsSync(path.join(cold.projectsDir, projectId, 'lock.json')), false);
     assert.deepEqual(snapshotFiles(stateDir), before);
   } finally { await reader.close(); }
+});
+
+// 责任：项目上下文给出有界的续做候选；读者确认任务后才返回详情。
+test('work context prioritizes continuity and never selects a candidate', async (t) => {
+  const { svc, h } = await withProject(t, { name: 'Context fixture' });
+  const projectId = h.id;
+  const reader = createProjectReader(svc);
+  t.after(() => reader.close());
+  const empty = await reader.getWorkContext({ projectId });
+  assert.deepEqual(empty, {
+    projectId, projectRev: h.rev, project: { name: 'Context fixture', phase: 'active' },
+    task: null, candidates: [], candidateCount: 0, nextAction: 'no_open_task',
+  });
+  const blockedId = await addTask(h, 'Blocked task', { requiresAudit: true });
+  const human = { kind: 'human', via: 'test' };
+  await h.command(command('task.claim', { actor: human, taskId: blockedId, expected: { entityRev: 1 } }));
+  await h.command(command('task.block', {
+    actor: human, taskId: blockedId, expected: { entityRev: 2 }, code: 'waiting', note: 'x'.repeat(450),
+  }));
+  const single = await reader.getWorkContext({ projectId });
+  assert.equal(single.task, null);
+  assert.equal(single.candidateCount, 1);
+  assert.equal(single.nextAction, 'select_task');
+  for (let i = 0; i < 5; i += 1) await addTask(h, 'Ready ' + i);
+  const before = h.rev;
+  const many = await reader.getWorkContext({ projectId });
+  assert.equal(many.candidateCount, 6);
+  assert.equal(many.candidates.length, 5);
+  assert.equal(many.candidates[0].id, blockedId);
+  assert.equal(many.task, null);
+  const blocked = await reader.getWorkContext({ projectId, taskId: blockedId });
+  assert.equal(blocked.task.requiresAudit, true);
+  assert.deepEqual(blocked.task.blocker, { code: 'waiting', note: 'x'.repeat(400), truncated: true });
+  assert.equal(blocked.nextAction, 'inspect_blocker');
+  await assert.rejects(reader.getWorkContext({ projectId, taskId: 'tsk_missing' }), { code: 'not-found' });
+  await assert.rejects(reader.getWorkContext({ projectId, taskId: '' }), { code: 'invalid-command' });
+  assert.equal(h.rev, before);
 });
 
 // 责任：fsync 失败前日志上已可见的完整行，不能进入同进程 writer 的已提交任务视图。

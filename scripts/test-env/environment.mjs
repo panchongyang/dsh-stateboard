@@ -4,6 +4,11 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const DEFAULT_REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+export const TEST_PLUGIN_PACKAGE = JSON.parse(fs.readFileSync(path.join(DEFAULT_REPO, 'package.json'), 'utf8')).name;
+if (typeof TEST_PLUGIN_PACKAGE !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(TEST_PLUGIN_PACKAGE)) {
+  throw new Error('invalid test plugin package name');
+}
+const LEGACY_TEST_PLUGIN_PACKAGE = 'dsh-project-board';
 export const OWNER_KIND = 'project-board-test-env';
 
 // The command-line never accepts a root override. Offline tests can inject a repository root.
@@ -59,6 +64,9 @@ export function assertOwned(env) {
   }
   for (const relative of ['AppData', 'AppData/Roaming', 'AppData/Local']) assertNoLinks(path.join(env.userHome, relative));
   assertNoLinks(path.join(env.profile, 'node_modules'));
+  const [pluginLink, legacyPluginLink] = pluginLinks(env);
+  if (pluginLink !== legacyPluginLink && fs.lstatSync(pluginLink, { throwIfNoEntry: false })
+    && fs.lstatSync(legacyPluginLink, { throwIfNoEntry: false })) throw new Error('conflicting test plugin links');
   for (const name of ['package.json', 'cordis.patch.yml', 'cordis.yml', 'pnpm-workspace.yaml']) {
     assertNoLinks(path.join(env.profile, name));
   }
@@ -66,12 +74,17 @@ export function assertOwned(env) {
   return marker;
 }
 
+function pluginLinks(env) {
+  const modules = path.join(env.profile, 'node_modules');
+  return [TEST_PLUGIN_PACKAGE, LEGACY_TEST_PLUGIN_PACKAGE].map((name) => path.join(modules, name));
+}
+
 function assertOwnedTree(directory, env) {
-  const pluginLink = path.join(env.profile, 'node_modules', 'dsh-project-board');
+  const allowed = pluginLinks(env);
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const full = path.join(directory, entry.name);
     if (entry.isSymbolicLink()) {
-      if (full !== pluginLink || fs.realpathSync(full) !== env.repoRoot) throw new Error('symbolic link in test environment refused: ' + full);
+      if (!allowed.includes(full) || fs.realpathSync(full) !== env.repoRoot) throw new Error('symbolic link in test environment refused: ' + full);
     } else if (entry.isDirectory()) assertOwnedTree(full, env);
   }
 }
@@ -122,10 +135,16 @@ function ensurePluginLink(env) {
   const modules = path.join(env.profile, 'node_modules');
   assertNoLinks(modules);
   fs.mkdirSync(modules, { recursive: true });
-  const link = path.join(modules, 'dsh-project-board');
+  const [link, legacy] = pluginLinks(env);
   const stat = fs.lstatSync(link, { throwIfNoEntry: false });
   if (stat) {
     if (!stat.isSymbolicLink() || fs.realpathSync(link) !== env.repoRoot) throw new Error('plugin link target mismatch');
+    return;
+  }
+  const previous = fs.lstatSync(legacy, { throwIfNoEntry: false });
+  if (previous) {
+    if (!previous.isSymbolicLink() || fs.realpathSync(legacy) !== env.repoRoot) throw new Error('legacy plugin link target mismatch');
+    fs.renameSync(legacy, link);
   } else fs.symlinkSync(env.repoRoot, link, process.platform === 'win32' ? 'junction' : 'dir');
 }
 
@@ -139,11 +158,12 @@ function prepareFiles(env) {
   for (const dir of [roaming, local]) { assertNoLinks(dir); fs.mkdirSync(dir, { recursive: true }); }
   const manifest = {
     name: 'dsh-profile-project-board-test', private: true,
-    dependencies: { 'dsh-project-board': 'link:' + env.repoRoot.replaceAll('\\', '/') },
+    dependencies: { [TEST_PLUGIN_PACKAGE]: 'link:' + env.repoRoot.replaceAll('\\', '/') },
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] } },
   };
   writeJson(path.join(env.profile, 'package.json'), manifest);
-  const patch = '- insert:\n    - id: project-board\n      name: dsh-project-board\n      config:\n        rootDir: ' + JSON.stringify(env.board) + '\n';
+  const patch = '- insert:\n    - id: project-board\n      name: ' + JSON.stringify(TEST_PLUGIN_PACKAGE)
+    + '\n      config:\n        rootDir: ' + JSON.stringify(env.board) + '\n';
   const patchFile = path.join(env.profile, 'cordis.patch.yml');
   assertNoLinks(patchFile);
   fs.writeFileSync(patchFile, patch);

@@ -1,7 +1,7 @@
 // React resource adapters subscribe to API-owned read lifecycles; they never issue HTTP directly.
 import React from 'react';
 import type { PageRead, ReadState, ReadRequest } from '../api/read-lifecycle.ts';
-import type { Project, Plan, TaskView } from '../model/types.ts';
+import type { Project, Plan, SessionSnapshot, TaskView } from '../model/types.ts';
 import { getProjects, getBoard, getTask, getPlans } from '../api/transport.ts';
 import requestGate from '../api/request-gate.ts';
 import { createPageRead } from '../api/read-lifecycle.ts';
@@ -39,20 +39,32 @@ export function usePageAccess() {
   return notice;
 }
 
-export function useMainViewCwd() {
-  const [cwd, setCwd] = useState('');
+function useSessionList<T>(select: (snapshot: SessionSnapshot) => T, initial: T) {
+  const [value, setValue] = useState(initial);
   useEffect(function () {
     let sessions;
     try { sessions = pluginCtx && pluginCtx.get && pluginCtx.get('sessions'); } catch (error) { return undefined; }
     const list = sessions && sessions.list;
     if (!list || typeof list.getSnapshot !== 'function') return undefined;
     // Subscription callbacks use the capability checked above; no host fallback is invented.
-    function update() { setCwd(mainViewCwd(list!.getSnapshot!())); }
+    function update() { setValue(select(list!.getSnapshot!())); }
     const off = typeof list.subscribe === 'function' ? list.subscribe(update) : null;
     update();
     return typeof off === 'function' ? off : undefined;
-  }, []);
-  return cwd;
+  }, [select]);
+  return value;
+}
+
+export function useMainViewCwd() {
+  return useSessionList(mainViewCwd, '');
+}
+
+function sessionRows(snapshot: SessionSnapshot) {
+  return snapshot?.byId;
+}
+
+export function useFlowSessions() {
+  return useSessionList(sessionRows, undefined);
 }
 
 export function useProjects() {

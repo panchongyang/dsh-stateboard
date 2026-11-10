@@ -116,8 +116,9 @@ export function AppHeader(props: AppHeaderProps) {
         // selected project, or while the project form is open it would be a dead
         // control, so it stays out of the header entirely.
         props.onView && props.tab === 'board' && props.project && !props.creating ? <div className="pb-viewswitch" role="group" aria-label="视图">
-        <button type="button" className={cx('pb-viewswitch__btn', props.view === 'board' ? 'pb-viewswitch__btn--on' : null)} onClick={function() { props.onView!('board'); }}>{'看板'}</button>
-        <button type="button" className={cx('pb-viewswitch__btn', props.view === 'list' ? 'pb-viewswitch__btn--on' : null)} onClick={function() { props.onView!('list'); }}>{'列表'}</button>
+        <button type="button" aria-pressed={props.view === 'board'} className={cx('pb-viewswitch__btn', props.view === 'board' ? 'pb-viewswitch__btn--on' : null)} onClick={function() { props.onView!('board'); }}>{'看板'}</button>
+        <button type="button" aria-pressed={props.view === 'list'} className={cx('pb-viewswitch__btn', props.view === 'list' ? 'pb-viewswitch__btn--on' : null)} onClick={function() { props.onView!('list'); }}>{'列表'}</button>
+        <button type="button" aria-pressed={props.view === 'flow'} className={cx('pb-viewswitch__btn', props.view === 'flow' ? 'pb-viewswitch__btn--on' : null)} onClick={function() { props.onView!('flow'); }}>{'推进'}</button>
       </div> : null}
       {props.showFilters && props.view === 'list' && props.onGroup ? <div className="pb-groupby">
         <Select compact={true} ariaLabel="分组方式" value={(props.filters && props.filters.group) || 'none'} options={GROUP_OPTIONS} onChange={function(event) { props.onGroup!(event.target.value); }} />
@@ -141,7 +142,7 @@ export function AppHeader(props: AppHeaderProps) {
             aria-label="搜索任务"
           />
         </div>
-        <div className="pb-filter-chips">
+        {props.view !== 'flow' ? <><div className="pb-filter-chips">
           <Chip active={!props.filters!.state} onClick={function() { if (props.onStateFilter) props.onStateFilter(null); }}>{'全部'}</Chip>
           {['ready', 'in_progress', 'review'].map(function(key) {
             return <Chip key={key} active={props.filters!.state === key} onClick={function() { if (props.onStateFilter) props.onStateFilter(props.filters!.state === key ? null : key); }}>{stateLabel(key)}</Chip>;
@@ -152,7 +153,7 @@ export function AppHeader(props: AppHeaderProps) {
         </div>
         {hasActiveFilters(props.filters)
           ? <button type="button" className="pb-filter-clear" title="清除搜索、状态、审计与计划过滤" onClick={props.onClearFilters}>{'清除筛选'}</button>
-          : null}
+          : null}</> : null}
       </div> : null}
       <div className="pb-header__spacer" />
       {props.refreshedAt

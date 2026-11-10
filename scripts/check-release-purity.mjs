@@ -21,7 +21,7 @@ const GIT_CALLERS = new Map([
 const GIT_SPAWN = /\b(?:spawnSync|spawn|execFileSync|execFile|execSync)\s*\(/g;
 
 export function checkMetadata(metadata, licenseText) {
-  if (metadata?.name !== 'dsh-stateboard' || metadata.version !== '0.2.0' || metadata.license !== 'BSD-3-Clause') throw new Error('Release metadata must be dsh-stateboard@0.2.0, BSD-3-Clause');
+  if (metadata?.name !== 'dsh-stateboard' || metadata.version !== '0.3.0' || metadata.license !== 'BSD-3-Clause') throw new Error('Release metadata must be dsh-stateboard@0.3.0, BSD-3-Clause');
   if (!isValidPrivateField(metadata.private)) throw new Error('Release metadata private field must be a boolean when present');
   const url = typeof metadata.repository === 'string' ? metadata.repository : metadata.repository?.url;
   if (typeof url !== 'string' || !/^https:\/\/github\.com\/panchongyang\/dsh-stateboard(?:\.git)?\/?$/.test(url) || (metadata.repository && typeof metadata.repository === 'object' && metadata.repository.type !== 'git')) throw new Error('Release repository URL is missing or incorrect');

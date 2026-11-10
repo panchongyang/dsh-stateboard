@@ -10,7 +10,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-function harness() {
+function harness(href = 'http://localhost/') {
   const slots = [], hooks = [], effects = [], calls = [], timers = new Map();
   let cursor = 0, dirty = false, id = 0, captured, tree;
   const same = (a, b) => a && b && a.length === b.length && a.every((v, n) => Object.is(v, b[n]));
@@ -27,7 +27,13 @@ function harness() {
     useCallback(fn, deps) { return React.useMemo(() => fn, deps); },
     useEffect(fn, deps) { const n = cursor++; if (!hooks[n] || !same(hooks[n].deps, deps)) effects.push(() => { hooks[n]?.cleanup?.(); hooks[n] = { deps, effect: fn, cleanup: fn() }; }); },
   };
-  const win = new EventTarget(); win.__ModuleLoader__ = { load(value) { captured = value; } }; win.confirm = () => false; win.location = { reload() { throw new Error('unexpected navigation'); } };
+  const win = new EventTarget();
+  win.__ModuleLoader__ = { load(value) { captured = value; } };
+  win.confirm = () => false;
+  const location = new URL(href);
+  location.reload = () => { throw new Error('unexpected navigation'); };
+  win.location = location;
+  win.history = { replaceState(_state, _title, url) { location.href = String(url); } };
   const doc = new EventTarget(); doc.visibilityState = 'visible';
   const fakeFetch = (url, init) => new Promise((resolve, reject) => { calls.push({ url, init, resolve: (value, status = 200) => resolve(new Response(JSON.stringify(value), { status })), reject }); });
   const source = fs.readFileSync(new URL('../../../lib/client.js', import.meta.url), 'utf8');
@@ -38,15 +44,17 @@ function harness() {
   );
   const entry = captured.factory(require);
   let sessionListener; let snapshot = { byId: {} };
+  const selectedPanels = [];
   entry.apply({
     get: name => name === 'sessions' ? { list: { getSnapshot: () => snapshot, subscribe(fn) { sessionListener = fn; return () => { sessionListener = null; }; } } } : null,
     slots: { inject(_name, fn) { fn(); }, register(options, component) { slots.push({ options, component }); } },
+    layout: { selectPanel(id) { assert.ok(slots.some(({ options }) => options.key === id)); selectedPanels.push(id); } },
   });
   const Page = slots.find(s => s.options.name === 'main').component;
   function render() { cursor = 0; dirty = false; tree = Page().children[0]; while (effects.length) effects.shift()(); return tree; }
   async function settle() { for (let n = 0; n < 30; n++) { await Promise.resolve(); if (dirty) render(); } return tree; }
   function stop() { hooks.forEach(h => h.cleanup?.()); }
-  return { render, settle, stop, calls, timers, win, doc, entry, tree: () => tree,
+  return { render, settle, stop, calls, timers, win, doc, entry, selectedPanels, tree: () => tree,
     session(value) { snapshot = value; sessionListener?.(); },
     jump(cwd) { slots.find(s => s.options.name === 'conversation.session.header.utilities').options.inject().onOpen(cwd); },
     replay() { hooks.forEach(h => h.cleanup?.()); hooks.forEach(h => { if (h.effect) h.cleanup = h.effect(); }); },
@@ -55,6 +63,31 @@ function harness() {
 }
 
 const projects = [{ id: 'p', name: 'P', workspacePath: 'D:\\work' }, { id: 'other', name: 'Other', workspacePath: 'D:\\other' }];
+
+// 责任：直达链接等待项目身份确认，历史变化保留已挂编辑页。
+test('direct Flow opens the registered panel and validates the linked project before loading', async (t) => {
+  const h = harness('http://localhost/?view=flow&project=other#focus=tsk_sample');
+  t.after(h.stop);
+  assert.deepEqual(h.selectedPanels, ['project-board']);
+  h.render();
+  await h.settle();
+  assert.equal(h.tree().props.projectId, '');
+  h.calls[0].resolve({ projects });
+  await h.settle();
+  assert.equal(h.tree().props.projectId, 'other');
+  h.calls.find(({ url }) => url.endsWith('/other/board')).resolve({ project: projects[1], columns: {} });
+  await h.settle();
+  assert.equal(h.content().type.name, 'FlowBoard');
+  assert.equal(h.content().props.focus, 'tsk_sample');
+  h.tree().props.onTab('plan');
+  h.win.dispatchEvent(new Event('hashchange'));
+  await h.settle();
+  assert.equal(h.content().type.name, 'PlanPane', 'history events must preserve a mounted editor');
+  h.tree().props.onChoose('p');
+  await h.settle();
+  assert.equal(h.win.location.hash, '');
+  assert.equal(h.win.location.searchParams.get('project'), 'p');
+});
 
 // 责任：实际页面慢/失败列表须显示 Loading/Error 且不自动建项目，成功后仅按 main cwd 定位。
 test('actual page waits on slow/failed lists, never mounts create automatically, then locates main cwd', async t => {

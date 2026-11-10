@@ -70,6 +70,6 @@ declare namespace JSX {
     tr: DOMProps; th: DOMProps; td: DOMProps; br: DOMProps; hr: DOMProps; img: DOMProps<HTMLImageElement>;
     strong: DOMProps; em: DOMProps; small: DOMProps; time: DOMProps; fieldset: DOMProps; legend: DOMProps;
     form: DOMProps<HTMLFormElement>; datalist: DOMProps; figure: DOMProps; figcaption: DOMProps; blockquote: DOMProps;
-    dl: DOMProps; dt: DOMProps; dd: DOMProps; details: DOMProps<HTMLDetailsElement>; summary: DOMProps;
+    dl: DOMProps; dt: DOMProps; dd: DOMProps; details: DOMProps<HTMLDetailsElement>; summary: DOMProps; dialog: DOMProps<HTMLDialogElement>;
   }
 }

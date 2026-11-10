@@ -247,12 +247,52 @@ test("board view switch visibility", () => {
   }
   const boardSwitch = viewSwitchNode({ project: demoHeaderProject, tab: 'board', onView() {} });
   assert.ok(boardSwitch, 'board tab keeps the board/list switch');
-  assert.deepEqual((boardSwitch.children || []).map((node) => node.children.join('')), ['看板', '列表'], 'the switch still offers both views');
+  assert.deepEqual((boardSwitch.children || []).map((node) => node.children.join('')), ['看板', '列表', '推进']);
   assert.equal(viewSwitchNode({ project: demoHeaderProject, tab: 'docs', onView() {} }), undefined, 'docs tab hides the board/list switch');
   assert.equal(viewSwitchNode({ project: demoHeaderProject, tab: 'plan', onView() {} }), undefined, 'plan tab hides the board/list switch');
   assert.equal(viewSwitchNode({ project: demoHeaderProject, tab: 'health', onView() {} }), undefined, 'health tab hides the board/list switch');
   assert.equal(viewSwitchNode({ project: null, tab: 'board', onView() {} }), undefined, 'no project hides the board/list switch');
   assert.equal(viewSwitchNode({ project: demoHeaderProject, tab: 'board', creating: true, onView() {} }), undefined, 'creating a project hides the board/list switch');
+});
+
+// 责任：直达链接解析推进视图、项目与焦点，未知视图仍回退。
+test('direct board links accept a Flow view and task focus', () => {
+  const { readBoardLink, normalizeView } = loadClientBundle().exportsValue.__test;
+  const read = (search, hash = '') => ({ ...readBoardLink({ search, hash }) });
+  assert.deepEqual(read('?view=flow&project=prj_sample'), { view: 'flow', focus: null, projectId: 'prj_sample' });
+  assert.deepEqual(read('', '#focus=tsk_sample'), { view: 'flow', focus: 'tsk_sample', projectId: null });
+  assert.deepEqual(read('?view=list', '#focus=tsk_sample'), { view: 'list', focus: null, projectId: null });
+  assert.deepEqual(read('?view=bad', '#host-panel'), { view: null, focus: null, projectId: null });
+  assert.equal(normalizeView(null), 'board');
+});
+
+// 责任：进行中与待处理各有入口，会话标题缺失时可区分短 ID。
+test('Flow exposes separate task groups and renders host session titles', () => {
+  const { __ui: ui } = loadClientBundle().exportsValue;
+  const running = Array.from({ length: 8 }, (_, index) => ({
+    id: 'work-' + index, title: '工作 ' + index, state: 'in_progress',
+    owner: { sessionId: ['session-001', 'session-002', 'session-003'][index % 3] },
+    intent: { summary: '核对场景 ' + index },
+  }));
+  const board = {
+    project: { policy: { maxInProgress: 10 } },
+    columns: {
+      in_progress: running,
+      review: [{ id: 'manual', state: 'review' }, { id: 'audit', state: 'review', requiresAudit: true }],
+    },
+    attention: { blocked: [{ id: 'blocked', state: 'blocked' }] },
+  };
+  const flow = ui.FlowView({ board, sessions: { 'session-001': { title: '安装流程' }, 'session-003': { title: '  文档交付  ' } } });
+  const now = flow.children[0];
+  const nodes = flattenTree(now.type(now.props), []);
+  const counts = nodes.filter((node) => node.props['aria-haspopup'] === 'dialog').map((node) => nodeText(node));
+  assert.deepEqual(counts, ['进行中| |8 / 10', '待验收| |1', '待审计| |1', '异常| |1']);
+  const previews = nodes.filter((node) => node.type?.name === 'NowPreview');
+  assert.deepEqual(previews[0].props.tasks.map((task) => task.id).join(','), 'work-0,work-1,work-2');
+  assert.ok(previews[1].props.tasks.every((task) => task.state !== 'in_progress'));
+  const cards = previews[0].type(previews[0].props).children[0];
+  const owners = cards.map((card) => flattenTree(card.type(card.props), []).find((node) => node.props.className === 'pb-flow__task-owner'));
+  assert.deepEqual(owners.map((node) => nodeText(node)).join(','), '安装流程,会话 session-002,文档交付');
 });
 
 // 责任：只有列表视图展示分组切换，活动筛选要有清除入口。（原 L920-940）
@@ -281,6 +321,13 @@ test("list grouping and clear filters", () => {
     query: '', filters: { query: '', state: null, gateOnly: false, plan: null, group: 'none' }, onView() {},
   }), []);
   assert.equal(boardHeaderNodes.some((node) => typeof node.type === 'function' && node.type.name === 'Select' && node.props.ariaLabel === '分组方式'), false, 'board view has no grouping switch');
+  const flowHeaderNodes = flattenTree(ui.AppHeader({
+    project: { id: 'prj_x', name: '演示' }, tab: 'board', view: 'flow', showFilters: true,
+    query: '安装', filters: { state: 'ready', plan: 'in' }, onView() {},
+  }), []);
+  assert.ok(flowHeaderNodes.some((node) => node.type === 'input' && node.props.value === '安装'));
+  assert.ok(flowHeaderNodes.some((node) => node.props['aria-pressed'] === true && node.children.join('') === '推进'));
+  assert.ok(!flowHeaderNodes.some((node) => node.props.className === 'pb-filter-chips'));
 });
 
 // 责任：布局须保留 keyed tabpanel、抽屉打开状态及 Drawer 层结构。（原 L942-956）
