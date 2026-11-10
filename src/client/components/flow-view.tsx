@@ -26,9 +26,7 @@ export interface FlowViewProps {
 }
 
 interface Highlight {
-  active: string | null;
   chain: ReadonlySet<string>;
-  chainLane?: Lane;
   matches: ReadonlySet<string>;
   search: string;
 }
@@ -38,7 +36,6 @@ interface Interaction {
   highlight: Highlight;
   sessions?: SessionSnapshot['byId'];
   open: (id: string) => void;
-  hover: (id: string | null) => void;
 }
 
 const PALETTE = ['accent', 'violet', 'teal', 'rose', 'amber', 'success', 'cyan', 'indigo'];
@@ -54,20 +51,16 @@ const TRACK_TOP = 25;
 
 export function FlowView({ board, query, focus, onFocus, onOpen, onHealth, sessions }: FlowViewProps) {
   const model = React.useMemo(() => buildFlowModel(board), [board]);
-  const [hovered, hover] = React.useState<string | null>(null);
   const search = query?.trim().toLowerCase() || '';
   const matches = React.useMemo(() => new Set(search ? model.tasks.filter((task) =>
     (cardHaystack(task) + ' ' + (model.laneByTask.get(task.id)?.title || '').toLowerCase()).includes(search)
   ).map((task) => task.id) : []), [model, search]);
   const pinned = focus && model.byId.has(focus) ? focus : null;
-  const active = hovered && model.byId.has(hovered) ? hovered : pinned;
-  const chainLane = active ? model.laneByTask.get(active) : undefined;
-  const chain = React.useMemo(() => active ? flowChain(model, active, chainLane) : new Set<string>(), [model, active, chainLane]);
-  const highlight = { active, chain, chainLane, matches, search };
+  const chain = React.useMemo(() => pinned ? flowChain(model, pinned, model.laneByTask.get(pinned)) : new Set<string>(), [model, pinned]);
+  const highlight = { chain, matches, search };
   const interaction = {
-    model, highlight, hover, sessions,
+    model, highlight, sessions,
     open: (id: string) => {
-      hover(null);
       onFocus?.(id);
       onOpen?.(id);
     },
@@ -169,14 +162,8 @@ function NowDialog({ scope, tasks, ui, onClose }: { scope: NowScope; tasks: read
   </dialog>;
 }
 
-function taskClass(task: Task, { model, highlight }: Interaction) {
-  const inFocusLane = highlight.chainLane && highlight.chainLane === model.laneByTask.get(task.id);
-  return cx(
-    (highlight.search && !highlight.matches.has(task.id) && !highlight.chain.has(task.id))
-      || (inFocusLane && !highlight.chain.has(task.id) && !highlight.matches.has(task.id)) ? 'pb-flow--dim' : null,
-    highlight.matches.has(task.id) && 'pb-flow--match',
-    highlight.active === task.id && 'pb-flow--selected',
-  );
+function searchMatchClass(task: Task, { highlight }: Interaction) {
+  return highlight.matches.has(task.id) && 'pb-flow--match';
 }
 
 function flowState(task: Task, model: Model): string | undefined {
@@ -200,11 +187,9 @@ function FlowCard({ task, ui, variant, style, onClick }: { task: Task; ui: Inter
   const sessionTitle = session ? ui.sessions?.[session]?.title : undefined;
   const owner = typeof sessionTitle === 'string' ? sessionTitle.trim() : '';
   const reason = task.blocked?.note || (task.blocked?.code ? blockerLabel(task.blocked.code) : undefined);
-  return <button type="button" className={cx('pb-flow__task', variant && 'pb-flow__task--' + variant, taskClass(task, ui))}
+  return <button type="button" className={cx('pb-flow__task', variant && 'pb-flow__task--' + variant, searchMatchClass(task, ui))}
     data-state={task.state} title={task.title} style={style}
-    onClick={onClick || (() => ui.open(task.id))}
-    onMouseEnter={() => ui.hover(task.id)} onMouseLeave={() => ui.hover(null)}
-    onFocus={() => ui.hover(task.id)} onBlur={() => ui.hover(null)}>
+    onClick={onClick || (() => ui.open(task.id))}>
     {isStation ? <span className="pb-flow__station-dot" aria-hidden="true" /> : null}
     {isStation ? null : <span className="pb-flow__task-head">
       <span><StatusDot tone={task.leaseExpired ? 'danger' : stateTone(task.state)} />{flowState(task, model)}</span>
@@ -302,8 +287,7 @@ function FlowTrack({ lane, ui, keep, expanded, toggle }: { lane: Lane; ui: Inter
             const bend = x < targetX ? (x + targetX) / 2 : Math.max(x, end.x + end.width) + COLUMN_GAP / 2;
             const highlighted = ui.highlight.chain.has(from) && ui.highlight.chain.has(to);
             return <path key={from + ':' + to}
-              className={cx(start.width === FRONT_WIDTH && 'pb-flow__line--front', highlighted && 'pb-flow__line--hot',
-                ui.highlight.chainLane === lane && !highlighted && 'pb-flow__line--dim')}
+              className={cx(start.width === FRONT_WIDTH && 'pb-flow__line--front', highlighted && 'pb-flow__line--hot')}
               d={x < targetX ? `M ${x} ${y} H ${bend} V ${targetY} H ${targetX}`
                 : `M ${x} ${y} H ${bend} V ${targetY} H ${end.x + end.width}`} />;
           })}
@@ -375,9 +359,7 @@ function FlowRail({ ui }: { ui: Interaction }) {
 }
 
 function RailTask({ task, ui, marker, meta, date }: { task: Task; ui: Interaction; marker: string; meta?: string; date?: string }) {
-  return <button type="button" className={cx('pb-flow__rail-task', taskClass(task, ui))} title={task.title} onClick={() => ui.open(task.id)}
-    onMouseEnter={() => ui.hover(task.id)} onMouseLeave={() => ui.hover(null)}
-    onFocus={() => ui.hover(task.id)} onBlur={() => ui.hover(null)}>
+  return <button type="button" className={cx('pb-flow__rail-task', searchMatchClass(task, ui))} title={task.title} onClick={() => ui.open(task.id)}>
     <strong className={marker === '✓' ? 'pb-flow__done-mark' : 'pb-flow__rank'}>{marker}</strong>
     <span><strong>{task.title || task.id}</strong><small>{meta || '计划外'}</small></span>
     {date ? <time dateTime={date} title={formatDateTime(date)}>{formatDateTime(date).split(' ')[0]}</time> : null}
