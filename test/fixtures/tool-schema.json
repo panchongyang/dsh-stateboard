@@ -1,0 +1,737 @@
+[
+  {
+    "name": "project_board",
+    "description": "Read ProjectBoard state for this workspace (the only read tool; authoritative over memory or chat). The brief is already in your system prompt; do not re-read it for rules. Read view=task before mutating a task; view=board only when you need every card.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "view": {
+          "type": "string",
+          "description": "task = full task + allowedOps; plan = one plan (planId or focus).",
+          "enum": [
+            "brief",
+            "board",
+            "task",
+            "plan",
+            "plans",
+            "docs",
+            "doc",
+            "events",
+            "health"
+          ]
+        },
+        "taskId": {
+          "type": "string",
+          "description": "Required for view=task."
+        },
+        "planId": {
+          "type": "string",
+          "description": "Optional for view=plan."
+        },
+        "docId": {
+          "type": "string",
+          "description": "Required for view=doc."
+        },
+        "query": {
+          "type": "string",
+          "description": "Optional text filter for view=docs."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Event limit for view=events (default 50)."
+        },
+        "maxBytes": {
+          "type": "integer",
+          "description": "Max body bytes for view=doc."
+        },
+        "fresh": {
+          "type": "boolean",
+          "description": "Reprint a view that would collapse to \"unchanged since <seq>\"."
+        }
+      },
+      "required": [
+        "view"
+      ]
+    }
+  },
+  {
+    "name": "project_doc",
+    "description": "Read or write project documents. Inline documents are read-only archives: put/link return inline-write-disabled unless the project owner explicitly re-enabled inline writes; reads and historical docId@rev keep working. External documents are registered workspace files: register/inspect/update_meta/relocate/confirm/unregister work on a locator and expectedMetaRev and never read or write a body blob; get/put/link reject external docs. Doc evidence is automatic: submit {kind:\"doc\", ref:docId} and the server pins a committed clean Git version or silently degrades to current-only evidence with fixedState/fixedReason; no approval or confirmation step exists, and callers never pass a fixed reference as evidence. For external docs an @rev suffix is ignored (it is metadata, not content); inline docId@rev keeps its historical pinned bytes. get_fixed is an advanced read of explicit Git bytes and creates no evidence.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "get",
+            "put",
+            "list",
+            "link",
+            "register",
+            "inspect",
+            "update_meta",
+            "relocate",
+            "confirm",
+            "unregister",
+            "list_external",
+            "get_fixed"
+          ]
+        },
+        "fixed": {
+          "type": "object",
+          "description": "Legacy explicit Git byte identity returned by get_fixed; auto doc evidence does not need it.",
+          "additionalProperties": false,
+          "properties": {
+            "v": {
+              "type": "integer"
+            },
+            "projectId": {
+              "type": "string"
+            },
+            "commitOid": {
+              "type": "string"
+            },
+            "pathAtCommit": {
+              "type": "string"
+            },
+            "blobOid": {
+              "type": "string"
+            },
+            "objectFormat": {
+              "type": "string",
+              "enum": [
+                "sha1",
+                "sha256"
+              ]
+            },
+            "blobContentHash": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "v",
+            "projectId",
+            "commitOid",
+            "pathAtCommit",
+            "blobOid",
+            "objectFormat",
+            "blobContentHash"
+          ]
+        },
+        "commitOid": {
+          "type": "string",
+          "description": "get_fixed: explicit full commit OID (alternative to fixed)."
+        },
+        "pathAtCommit": {
+          "type": "string",
+          "description": "get_fixed: repository-relative path at commitOid."
+        },
+        "docId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "spec",
+            "design",
+            "decision",
+            "note",
+            "runbook"
+          ]
+        },
+        "body": {
+          "type": "string"
+        },
+        "baseRev": {
+          "type": "integer"
+        },
+        "maxBytes": {
+          "type": "integer"
+        },
+        "links": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "taskIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "planRefs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "planId": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "planId",
+                  "version"
+                ]
+              }
+            }
+          }
+        },
+        "bindingId": {
+          "type": "string",
+          "description": "External locator binding; defaults to the project main binding."
+        },
+        "relPath": {
+          "type": "string",
+          "description": "Workspace-relative path of the external file (register/relocate)."
+        },
+        "expectedMetaRev": {
+          "type": "integer",
+          "description": "External doc metaRev; required for update_meta/relocate/confirm/unregister."
+        },
+        "expectedContentHash": {
+          "type": "string",
+          "description": "Lowercase hex64 SHA-256 of the full file (confirm)."
+        },
+        "status": {
+          "type": "string",
+          "description": "Management state for update_meta.",
+          "enum": [
+            "draft",
+            "in_review",
+            "adopted",
+            "archived"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "includeUnregistered": {
+          "type": "boolean",
+          "description": "list_external: include unregistered tombstones."
+        },
+        "fresh": {
+          "type": "boolean",
+          "description": "inspect: bypass the 30 s observation cache."
+        },
+        "preview": {
+          "type": "boolean",
+          "description": "inspect: include the bounded preview text."
+        }
+      },
+      "required": [
+        "op"
+      ]
+    }
+  },
+  {
+    "name": "project_plan",
+    "description": "Manage versioned plans (plan = initiative, steps = phases, tasks = work). publish (a draft, or create+publish without planId), revise (version+1), create (draft), rename, adopt/release tasks, archive/unarchive. adopt/release bump the version and never delete tasks. focus is human-only.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "publish",
+            "revise",
+            "create",
+            "rename",
+            "archive",
+            "unarchive",
+            "focus",
+            "adopt",
+            "release"
+          ]
+        },
+        "planId": {
+          "type": "string",
+          "description": "Required except for create and create+publish."
+        },
+        "expectedRev": {
+          "type": "integer",
+          "description": "Plan head rev, for ops on a draft or the plan head."
+        },
+        "baseVersion": {
+          "type": "integer",
+          "description": "Required for active revise and adopt/release; must match head.currentVersion."
+        },
+        "stepId": {
+          "type": "string",
+          "description": "Required for adopt."
+        },
+        "taskIds": {
+          "type": "array",
+          "description": "Required for adopt/release.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "title": {
+          "type": "string",
+          "description": "Required for create/rename; optional elsewhere."
+        },
+        "goal": {
+          "type": "string"
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "risks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "steps": {
+          "type": "array",
+          "description": "Required for publish. Tasks use a plan-local key (taskId on revise); deps reference keys.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "tasks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "taskId": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "priority": {
+                      "type": "integer"
+                    },
+                    "weight": {
+                      "type": "number"
+                    },
+                    "labels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "requiresAudit": {
+                      "type": "boolean"
+                    },
+                    "deps": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "acceptance": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "text": {
+                            "type": "string"
+                          },
+                          "requiredKinds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "file",
+                                "command",
+                                "doc",
+                                "url",
+                                "note",
+                                "test"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "text"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "acceptance"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "title",
+              "tasks"
+            ]
+          }
+        }
+      },
+      "required": [
+        "op"
+      ]
+    }
+  },
+  {
+    "name": "project_session",
+    "description": "Create an empty project for this workspace (init), or record a checkpoint/handoff note. init exists so a project can be inspected before any plan exists; it creates no plan and no placeholder task. Checkpoint/handoff do not change task state.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "init",
+            "checkpoint",
+            "handoff"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "description": "Optional project name for init; defaults to the workspace directory name."
+        },
+        "note": {
+          "type": "string",
+          "description": "Required for checkpoint/handoff."
+        },
+        "nextActions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "op"
+      ]
+    }
+  },
+  {
+    "name": "project_task",
+    "description": "Drive one task through the state machine. Read project_board view=task first for rev and allowedOps. claim/begin/submit need a live lease; begin writes an intent before irreversible work; submit attaches evidence and only enters review. verify records acceptance, not correctness: human may verify any review task; an independent agent may verify only an audit gate with audit.report (20–4000 characters). Reports are self-declared; no evidence commands are executed. Any agent may reject review with reason (a live lease requires its owner); unassign remains human-only. Doc evidence is automatic: {kind:\"doc\", ref:docId} is pinned when the path is committed and clean, otherwise it degrades silently to current-only evidence (fixedState/fixedReason); no repository approval or version confirmation is needed. renew extends a lease (max 2 without progress). gate with requiresAudit:true enables third-party audit (agents can only enable it outside review; human may enable/disable; no lease needed). With an open intent, block/release/cancel/reject must pass intent:{outcome:\"stopped\",sideEffects:[...]}; if the outcome is unknown, interrupt then reconcile. On stale-revision or fencing-stale, re-read instead of forcing.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "create",
+            "update",
+            "gate",
+            "ready",
+            "claim",
+            "begin",
+            "renew",
+            "submit",
+            "verify",
+            "reject",
+            "block",
+            "interrupt",
+            "unblock",
+            "release",
+            "reconcile",
+            "cancel",
+            "reopen"
+          ]
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "expectedRev": {
+          "type": "integer",
+          "description": "Current task rev; required to mutate an existing task."
+        },
+        "projectRev": {
+          "type": "integer"
+        },
+        "fencingToken": {
+          "type": "integer",
+          "description": "Lease token from claim; required while you hold the lease."
+        },
+        "intent": {
+          "type": "object",
+          "description": "Settles an open intent; outcome=stopped requires sideEffects (observed, not verified).",
+          "additionalProperties": false,
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "enum": [
+                "stopped",
+                "unknown"
+              ]
+            },
+            "sideEffects": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "file",
+                      "command",
+                      "network",
+                      "other"
+                    ]
+                  },
+                  "ref": {
+                    "type": "string"
+                  },
+                  "note": {
+                    "type": "string"
+                  },
+                  "hash": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "ref"
+                ]
+              }
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "outcome"
+          ]
+        },
+        "sideEffects": {
+          "type": "array",
+          "description": "For op=interrupt: side effects already observed.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "file",
+                  "command",
+                  "network",
+                  "other"
+                ]
+              },
+              "ref": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              },
+              "hash": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "ref"
+            ]
+          }
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "integer"
+        },
+        "weight": {
+          "type": "number"
+        },
+        "acceptance": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "requiredKinds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "file",
+                    "command",
+                    "doc",
+                    "url",
+                    "note",
+                    "test"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "text"
+            ]
+          }
+        },
+        "deps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requiresAudit": {
+          "type": "boolean",
+          "description": "Third-party audit gate. Agents may only enable it outside review; human may enable/disable."
+        },
+        "audit": {
+          "type": "object",
+          "description": "Self-declared verify/reject report; required for agent verify, optional for human. Never executes evidence.",
+          "additionalProperties": false,
+          "properties": {
+            "report": {
+              "type": "string",
+              "description": "20–4000 trimmed characters for agent verify; human verify does not require a report."
+            },
+            "checklist": {
+              "type": "array",
+              "description": "At most 50 checklist items.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "item": {
+                    "type": "string",
+                    "description": "At most 200 characters."
+                  },
+                  "ok": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string",
+                    "description": "At most 500 characters."
+                  }
+                },
+                "required": [
+                  "item",
+                  "ok"
+                ]
+              }
+            }
+          },
+          "required": [
+            "report"
+          ]
+        },
+        "unassign": {
+          "type": "boolean",
+          "description": "Human-only (reject); agents cannot clear the assignee."
+        },
+        "note": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "acknowledgeDrift": {
+          "type": "boolean",
+          "description": "Human-only (verify)."
+        },
+        "refreshDrift": {
+          "type": "boolean",
+          "description": "Human-only (verify)."
+        },
+        "code": {
+          "type": "string"
+        },
+        "choice": {
+          "type": "string",
+          "enum": [
+            "resume",
+            "completed",
+            "discard"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "plannedSteps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expectedArtifacts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "file",
+                  "command",
+                  "doc",
+                  "url",
+                  "note",
+                  "test"
+                ]
+              },
+              "ref": {
+                "type": "string",
+                "description": "doc evidence: docId; external @rev is metadata and ignored, inline @rev keeps historical bytes."
+              },
+              "hash": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "acceptanceId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "ref"
+            ]
+          }
+        }
+      },
+      "required": [
+        "op"
+      ]
+    }
+  }
+]

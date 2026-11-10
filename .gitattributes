@@ -1,0 +1,15 @@
+# External documents are identified by their working-tree bytes: the board hashes
+# the file on disk, so a clone must check out exactly the bytes that were committed.
+# Pin the checkout to LF everywhere instead of relying on the local core.autocrlf
+# setting (global "true" would otherwise turn committed LF into CRLF on Windows).
+# text=auto still lets Git detect binary content; the explicit binary rules below
+# keep assets free of any text conversion.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.exe binary

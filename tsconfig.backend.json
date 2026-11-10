@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+    "typeRoots": ["./tools/typescript/node_modules/@types"]
+  },
+  "include": [
+    "lib/index.js",
+    "lib/shared/**/*.js",
+    "lib/shared/**/*.ts",
+    "lib/core/**/*.js",
+    "lib/core/**/*.ts",
+    "lib/host/**/*.js",
+    "lib/host/**/*.ts",
+    "scripts/typecheck.mjs"
+  ]
+}

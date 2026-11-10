@@ -1,0 +1,82 @@
+name: CI
+
+# The DSH host packages (@deepseek-ai/dsh-tools etc.) are not fully published to
+# npm yet (a transitive @deepseek-ai/dsh-compact 404s), so a clean clone cannot
+# install them. CI therefore runs the offline subset: core state machine, client
+# bundle smoke, a hard maintainability gate, and a client-artifact drift check.
+# Host tests (tools/routes/preflight) run locally where the real DSH runtime is
+# linked via node_modules/@deepseek-ai.
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  performance:
+    name: event-loop and I/O budgets (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Built-in Node modules and Git only: no DSH host or production store.
+      - name: Enforce real Prompt and project-list performance budgets
+        run: npm run test:perf
+
+  offline:
+    name: offline subset
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install (skip un-published peer packages)
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Install dev-only client build toolchain
+        run: npm --prefix tools/build install --no-audit --no-fund
+
+      - name: Build client and check artifact drift
+        run: |
+          npm run build:client
+          git diff --exit-code -- lib/client.js lib/client.js.map
+
+      - name: Install isolated development-only TypeScript toolchain
+        run: npm --prefix tools/typescript ci --ignore-scripts --no-audit --no-fund
+
+      - name: Client layering gate (imports, fetch boundary, cycles, size)
+        run: npm run check:client-layers
+
+      - name: Check backend types without emitting runtime artifacts
+        run: npm run typecheck
+
+      - name: Check client types without emitting runtime artifacts
+        run: npm run typecheck:client
+
+      - name: Tests that do not need the DSH runtime
+        run: npm run test:ci
+
+      - name: Synthetic recovery drill (separate from default core)
+        run: npm run test:recovery
+
+      - name: Maintainability audit (hard gate)
+        run: npm run audit:check
+
+      - name: Packed release surface purity
+        run: npm run check:release
+
+      # Host tests (test:host) need the unpublished @deepseek-ai peers; they run
+      # locally before release and their absence here is deliberate. Any host/routes
+      # change must run `npm run test:host` locally and attach the result.

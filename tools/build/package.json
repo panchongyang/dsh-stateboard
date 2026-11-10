@@ -1,0 +1,10 @@
+{
+  "name": "dsh-project-board-build",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Dev-only bundler for the browser half; isolated so the plugin's runtime stays dependency-free and the host junction is untouched",
+  "type": "module",
+  "dependencies": {
+    "esbuild": "0.28.2"
+  }
+}

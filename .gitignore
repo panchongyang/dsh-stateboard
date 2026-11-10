@@ -1,0 +1,15 @@
+node_modules/
+.evidence/
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+.test-env/
+/private/
+/evidence/
+/docs/archive/
+/bin/
+/scripts/wt.mjs
+/test/wt.test.mjs
+/lib/scripts/
+/test/fixtures/stores-baseline.json

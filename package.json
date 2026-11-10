@@ -1,0 +1,99 @@
+{
+  "name": "dsh-stateboard",
+  "version": "0.2.0",
+  "private": true,
+  "license": "BSD-3-Clause",
+  "author": "潘重阳",
+  "homepage": "https://github.com/panchongyang/dsh-stateboard#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/panchongyang/dsh-stateboard.git"
+  },
+  "type": "module",
+  "description": "ProjectBoard — durable cross-session project state machine (tasks/plans/docs/board) for DeepSeek Harness",
+  "main": "lib/index.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "npm run test:core && npm run test:host",
+    "typecheck": "node scripts/typecheck.mjs",
+    "typecheck:client": "node scripts/typecheck-client.mjs",
+    "test:types": "node --test test/ops/typescript-toolchain.test.mjs",
+    "test:types:client": "node --test test/ops/typescript-client-toolchain.test.mjs",
+    "test:core": "node scripts/check-test-size.mjs && node scripts/run-suite.mjs core",
+    "test:client": "node scripts/run-suite.mjs client",
+    "test:unit:client": "node scripts/run-suite.mjs unit:client",
+    "test:host": "node scripts/run-suite.mjs host",
+    "test:fast": "node scripts/run-suite.mjs fast",
+    "test:ci": "npm run test:core",
+    "test:perf": "node scripts/run-suite.mjs perf",
+    "test:stores": "node scripts/stores-replay.mjs",
+    "test:coverage": "node scripts/run-suite.mjs coverage",
+    "audit": "node scripts/maintainability-audit.mjs",
+    "audit:check": "node scripts/check-client-layers.mjs && node scripts/maintainability-audit.mjs --check",
+    "audit:context": "node scripts/measure-context-cost.mjs",
+    "check:architecture": "node scripts/check-architecture.mjs",
+    "check:client-layers": "node scripts/check-client-layers.mjs",
+    "check": "npm run audit && npm test",
+    "check:strict": "npm run audit:check && npm test && npm run test:perf && npm run test:recovery && npm run test:stores -- --gate && npm run check:release",
+    "check:release": "node scripts/check-release-purity.mjs",
+    "check:release:readiness": "node scripts/check-release-purity.mjs --readiness",
+    "release:tag": "node scripts/release-tag.mjs",
+    "build:client": "node scripts/build-client.mjs",
+    "env:test:prepare": "node scripts/test-env.mjs prepare",
+    "env:test:run": "node scripts/test-env.mjs run",
+    "env:test:start": "node scripts/test-env.mjs start",
+    "env:test:status": "node scripts/test-env.mjs status",
+    "env:test:stop": "node scripts/test-env.mjs stop",
+    "env:test:reset": "node scripts/test-env.mjs reset",
+    "env:test:seed": "node scripts/test-env-seed.mjs",
+    "env:test:verify": "node scripts/test-env-verify.mjs",
+    "env:test:open": "node scripts/test-env-open.mjs",
+    "typecheck:test": "node scripts/typecheck-test.mjs",
+    "test:recovery": "node scripts/run-suite.mjs recovery",
+    "test:unit": "node scripts/run-suite.mjs unit",
+    "test:integration": "node scripts/run-suite.mjs integration",
+    "test:cli": "node scripts/run-suite.mjs cli",
+    "test:ops": "node scripts/run-suite.mjs ops",
+    "check:test-size": "node scripts/check-test-size.mjs"
+  },
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./lib/cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-home-paths": "*",
+    "@deepseek-ai/dsh-tools": "*"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/cordis.patch.yml",
+    "lib/client.js",
+    "lib/client.js.map",
+    "lib/core",
+    "lib/host",
+    "lib/shared",
+    "src",
+    "README.md",
+    "docs/CONTRACT.md",
+    "LICENSE"
+  ]
+}
