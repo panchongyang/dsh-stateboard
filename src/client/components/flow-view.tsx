@@ -46,7 +46,10 @@ const FRONT_X = 96;
 const FRONT_WIDTH = 230;
 const STATION_WIDTH = 144;
 const COLUMN_GAP = 37;
-const ROW_HEIGHT = 88;
+// Fit two full title lines alongside the status and acceptance rows.
+const TRACK_CARD_HEIGHT = 86;
+const TRACK_CARD_CENTER = TRACK_CARD_HEIGHT / 2;
+const ROW_HEIGHT = TRACK_CARD_HEIGHT + 14;
 const TRACK_TOP = 25;
 
 export function FlowView({ board, query, focus, onFocus, onOpen, onHealth, sessions }: FlowViewProps) {
@@ -279,7 +282,7 @@ function FlowTrack({ lane, ui, keep, expanded, toggle }: { lane: Lane; ui: Inter
   const height = TRACK_TOP + Math.max(1, layout.rows) * ROW_HEIGHT;
   const tail = layout.nodes.some((node) => node.column > 0);
   const frontier = layout.nodes.filter((node) => node.column === 0);
-  const capsuleY = TRACK_TOP + 37;
+  const capsuleY = TRACK_TOP + TRACK_CARD_CENTER;
   return <div>
     <div className="pb-flow__track-scroll" role="region" aria-label={lane.title + '依赖线路'} tabIndex={0}>
       <div className="pb-flow__track" style={{ width, height }}>
@@ -287,15 +290,15 @@ function FlowTrack({ lane, ui, keep, expanded, toggle }: { lane: Lane; ui: Inter
         {tail ? <div className="pb-flow__tail-zone" style={{ left: FRONT_X + FRONT_WIDTH + 18 }}><span>等待前置完成</span></div> : null}
         <svg className="pb-flow__lines" width={width} height={height} aria-hidden="true">
           {frontier.map((node) => <path key={'origin:' + node.task.id} className="pb-flow__line--origin"
-            d={`M 47 ${capsuleY} H 76 V ${TRACK_TOP + node.row * ROW_HEIGHT + 37} H ${FRONT_X}`} />)}
+            d={`M 47 ${capsuleY} H 76 V ${positioned.get(node.task.id)!.y + TRACK_CARD_CENTER} H ${FRONT_X}`} />)}
           {layout.edges.map(({ from, to }) => {
             const start = positioned.get(from);
             const end = positioned.get(to);
             if (!start || !end) return null;
             const x = start.x + start.width;
-            const y = start.y + 37;
+            const y = start.y + TRACK_CARD_CENTER;
             const targetX = end.x;
-            const targetY = end.y + 37;
+            const targetY = end.y + TRACK_CARD_CENTER;
             const bend = x < targetX ? (x + targetX) / 2 : Math.max(x, end.x + end.width) + COLUMN_GAP / 2;
             const highlighted = ui.highlight.chain.has(from) && ui.highlight.chain.has(to);
             return <path key={from + ':' + to}
@@ -309,7 +312,7 @@ function FlowTrack({ lane, ui, keep, expanded, toggle }: { lane: Lane; ui: Inter
         {layout.nodes.map((node) => {
           const pos = positioned.get(node.task.id)!;
           return <FlowCard key={node.task.id} task={node.task} ui={ui} variant={node.column === 0 ? undefined : 'station'}
-            style={{ position: 'absolute', left: pos.x, top: pos.y, width: pos.width, height: 74 }} />;
+            style={{ position: 'absolute', left: pos.x, top: pos.y, width: pos.width, height: TRACK_CARD_HEIGHT }} />;
         })}
       </div>
     </div>
