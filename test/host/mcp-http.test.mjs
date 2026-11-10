@@ -76,6 +76,8 @@ test('MCP HTTP negotiates legacy revisions and exposes a deterministic read cata
     assert.equal(json.id, 'init');
     assert.equal(json.result.protocolVersion, protocolVersion === 'unknown' ? VERSION : protocolVersion);
     assert.deepEqual(json.result.capabilities, { tools: {} });
+    assert.match(json.result.instructions, /resuming known project work/);
+    assert.match(json.result.instructions, /get_work_context/);
   }
   const initialized = await send({ jsonrpc: '2.0', method: 'notifications/initialized' });
   assert.equal(initialized.status, 202);

@@ -130,8 +130,10 @@ test('configured plugin serves bounded MCP reads and closes its listener on unlo
 
   const catalogue = await post(held.port, 'tools/list', {});
   assert.equal(catalogue.status, 200);
-  assert.deepEqual(catalogue.body.result.tools.map(({ name }) => name), ['list_projects', 'list_tasks', 'get_task']);
+  assert.deepEqual(catalogue.body.result.tools.map(({ name }) => name), ['list_projects', 'list_tasks', 'get_task', 'get_work_context']);
   assert.ok(catalogue.body.result.tools.every((tool) => tool.annotations.readOnlyHint === true));
+  const contextTool = catalogue.body.result.tools.find(({ name }) => name === 'get_work_context');
+  assert.match(contextTool.description, /resuming known project work/);
   const projects = await post(held.port, 'tools/call', { name: 'list_projects', arguments: {} });
   assert.equal(projects.body.result.structuredContent.projects[0].id, projectId);
   const listed = await post(held.port, 'tools/call', { name: 'list_tasks', arguments: { projectId, state: 'in_progress' } });
@@ -141,6 +143,14 @@ test('configured plugin serves bounded MCP reads and closes its listener on unlo
   assert.equal(row.state, 'in_progress');
   assert.equal(row.acceptance[0].text, 'check result');
   assert.equal(Object.hasOwn(row, 'owner'), false);
+  const work = (args) => post(held.port, 'tools/call', { name: 'get_work_context', arguments: args });
+  const candidates = (await work({ projectId })).body.result.structuredContent;
+  assert.equal(candidates.task, null);
+  assert.equal(candidates.candidates[0].id, taskId);
+  const selected = (await work({ projectId, taskId })).body.result.structuredContent;
+  assert.equal(selected.task.acceptance[0].text, 'check result');
+  assert.equal(selected.nextAction, 'check_work_session');
+  assert.equal((await work({ projectId, taskId: 'tsk_missing' })).body.result.structuredContent.code, 'not-found');
   const invalid = await post(held.port, 'tools/call', { name: 'get_task', arguments: { projectId, taskId, actor: { kind: 'human' } } });
   assert.equal(invalid.body.result.isError, true);
   assert.deepEqual(fs.readFileSync(logFile), before);

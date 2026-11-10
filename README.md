@@ -109,6 +109,8 @@ bearer_token_env_var = "PROJECT_BOARD_MCP_TOKEN"
 
 Codex 可以列项目、列任务和读取详情。需要暂停入口时，在 DSH 插件配置中将 `mcp.enabled` 设为 `false` 并重新加载插件。
 
+执行明确的任务、续做已知项目或交付已有任务时，先用 `get_work_context` 获取开工上下文。传入已确认的 `projectId`，知道任务时再传 `taskId`，即可读取该任务的验收条件、阻塞和下一步。只知道项目时，确认返回的候选后再写入。
+
 需要让 Codex 管理和接手任务时，可在同一 `mcp` 配置下另开写入，并填写明确授权的项目 ID。以下 ID 是占位符，实际值从 `list_projects` 获取。
 
 ~~~yaml
@@ -126,6 +128,8 @@ bearer_token_env_var = "PROJECT_BOARD_MCP_WRITE_TOKEN"
 ~~~
 
 在 Codex 聊天中用 `open_work_session` 开始该项目的工作会话。可以读取已有卡片，或用 `create_task` 建卡、`update_task` 编辑、`ready_task` 将满足条件的待办置为就绪。随后用 `claim_task` 领取、`begin_task` 记录执行意图、`submit_task` 附证据提交审查。工作会话 token 保留在当前聊天内。写入默认关闭。停用写入口或轮换凭据后重新加载插件，既有会话失效。工具参数、续接与异常处理见随包的实现契约 §3.7。
+
+独立的工作会话可在检查证据后用 `verify_task` 为审计门任务记录通过，或按权限用 `reject_task` 带理由退回返工。普通任务仍可在网页人工验收。MCP 与原生工具的覆盖差异见随包实现契约 §3.7.3。
 
 ## 约三分钟文字演示
 
