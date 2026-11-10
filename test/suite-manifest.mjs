@@ -15,6 +15,7 @@ export const suites = {
     'test/client/unit/bundle-logic.test.mjs',
     'test/client/unit/doc-view.test.mjs',
     'test/client/unit/external-docs.test.mjs',
+    'test/client/unit/flow-layout.test.mjs',
     'test/client/unit/logic.test.mjs',
     'test/client/unit/page-lifecycle.test.mjs',
     'test/client/unit/page-navigation.test.mjs',

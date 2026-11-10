@@ -2,16 +2,27 @@
 import type { ExternalBody, EditPayloadStep, ExternalErrorView, Actor, Board, Doc, DocView, EditForm, EditStep, EditTask, Evidence, Filters, FormGuard, FormMode, Links, ListSchema, Plan, PlanStep, Project, Task, TaskSession, SessionSnapshot, ExternalInput } from './types.ts';
 export type { ExternalBody, Actor, Board, Doc, DocView, EditForm, EditStep, EditTask, Evidence, Filters, FormGuard, FormMode, Links, ListSchema, Plan, PlanStep, Project, Task, TaskSession, SessionSnapshot, ExternalInput };
 // 卡片携带验收摘要，完整任务携带验收行；选择器只消费二者共有的身份与状态。
-export interface Card extends Task { acceptance?: any }
+export interface Card extends Task {
+  acceptance?: any;
+  intent?: { summary: string; startedAt: string | null } | null;
+  leaseExpired?: boolean | null;
+  leaseExpiresAt?: string | null;
+  verifiedAt?: string | null;
+  verifiedBy?: 'human' | 'agent' | 'policy' | null;
+}
 export interface Column { key: string; label: string; hint: string }
 export interface Attention { blocked?: Card[]; interrupted?: Card[] }
 export interface BoardView extends Omit<Board, 'columns' | 'attention'> {
   columns?: Record<string, Card[]>; attention?: Attention; rev?: number; project?: ProjectView;
+  readyOrder?: string[];
   counts?: { percent?: number; weightDone?: number; weightTotal?: number; total?: number; verifiedPercent?: number; interrupted?: number };
 }
 
 // 页面级资源快照独立于卡片摘要，避免把部分列表伪装成完整详情。
-export interface ProjectView extends Project { phase?: string; readOnly?: boolean; rev?: number; inlineWritesDisabled?: boolean }
+export interface ProjectView extends Project {
+  phase?: string; readOnly?: boolean; rev?: number; inlineWritesDisabled?: boolean;
+  policy?: { maxInProgress?: number };
+}
 export interface PlanSummary extends Plan { progress?: { done: number; total: number; percent: number }; taskCount?: number; createdBy?: Actor; updatedAt?: string; archivedFrom?: string }
 export interface PlanHead extends PlanSummary { goal?: string; assumptions?: string[]; risks?: string[] }
 export interface PlanDetail { plan?: PlanHead; head?: PlanHead; steps?: PlanStep[]; progress?: { done: number; total: number; percent: number } }

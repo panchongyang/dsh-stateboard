@@ -3,7 +3,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { assertOwned, assertNoLinks, childEnvironment, readRuntime, withStoppedEnvironment, writeJson } from './environment.mjs';
+import { assertOwned, assertNoLinks, childEnvironment, readRuntime, TEST_PLUGIN_PACKAGE, withStoppedEnvironment, writeJson } from './environment.mjs';
 import { findRepository, resolveGitExecutable } from '../../lib/core/git-exec.js';
 
 const IDENTITY = 'project-board-test-supervisor';
@@ -100,7 +100,7 @@ export function versionInfo(env) {
 function validatePrepared(env) {
   assertOwned(env);
   if (!env.cliPath || !fs.existsSync(env.cliPath)) throw new Error('installed DSH CLI not found; pass --cli <path>');
-  const link = path.join(env.profile, 'node_modules', 'dsh-project-board');
+  const link = path.join(env.profile, 'node_modules', TEST_PLUGIN_PACKAGE);
   if (!fs.lstatSync(link, { throwIfNoEntry: false })?.isSymbolicLink() || fs.realpathSync(link) !== env.repoRoot) {
     throw new Error('prepared plugin link missing or mismatched');
   }

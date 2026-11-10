@@ -403,7 +403,7 @@ export class BoardError extends Error {
 | view | params | 返回 |
 |---|---|---|
 | brief | sessionId? | `{project, plans: {active, draft, archived, focusPlanId}, counts, session, focus, attention, next, health, rev}` |
-| board | sessionId? | `{project, plan, focusPlanId, plans: PlanSummary[]（仅 active）, columns, attention, counts, rev}` |
+| board | sessionId? | `{project, plan, focusPlanId, plans: PlanSummary[]（仅 active）, columns, attention, readyOrder, counts, rev}` |
 | task | taskId, sessionId? | `{task, acceptance, evidence, timeline, plan, allowedOps, rev}` |
 | plan | planId? | `{plan, head, steps, progress, rev}`；不带 planId 返回 focus；未知 planId 返回 `{plan:null}`（不抛错） |
 | plans | includeArchived? | `{plans: PlanSummary[], focusPlanId, rev}`；默认含 archived，传 `false` 只留 active + draft |
@@ -417,8 +417,14 @@ export class BoardError extends Error {
 
 `Card`：
 ~~~js
-{ id, title, state, rev, priority, labels, requiresAudit, lastAudit, planRef, owner, acceptance: { total, met }, evidenceCount, blocked, updatedAt }
+{ id, title, state, rev, priority, labels, requiresAudit, lastAudit, planRef, owner, acceptance: { total, met }, evidenceCount, blocked, updatedAt,
+  deps: string[], intent: { summary, startedAt } | null, verifiedAt, verifiedBy }
 ~~~
+
+- `deps` 是任务的前置任务 ID，缺失时为 `[]`。`PlanSummary.steps` 包含 `{id, title, taskIds}`，`taskIds` 按已发布版本的步骤成员顺序投影，草案摘要为 `[]`。
+- `intent` 仅投影进行中任务的开放执行意图，包含最多 160 个 UTF-16 单元的单行摘要与开始时间（缺失时为 `null`）。会话身份继续取 `owner`。board 的进行中卡片另外携带 `leaseExpiresAt` 和 `leaseExpired`，由读取时的运行时租约与服务端时钟得出。无可观测的到期时间时两项均为 `null`。
+- `verifiedAt`、`verifiedBy` 来自任务的实际验收记录，缺失时为 `null`。`verifiedBy` 的 `human` 表示人工验收，`agent` 表示 AI 审计（自述），`policy` 表示历史自动验收。
+- `readyOrder` 是全部 ready 任务 ID，复用 brief 的派发排序（priority 升序，同优先级按 createdAt 升序）。brief 仍只返回前三项，board 列仍按原有顺序展示。
 
 `TaskView` = 完整 Task + `allowedOps: [{op, enabled, reason?}]`。
 

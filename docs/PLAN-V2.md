@@ -187,17 +187,17 @@ applyEvent 必须幂等；同一事件 replay 两次结果相同。旧日志没�
       focus: boolean,
       stepCount, taskCount,
       progress: { total, done, percent },
-      steps: [{ id, title }],
+      steps: [{ id, title, taskIds }],
       archivedFrom, createdAt, updatedAt
     }
 
-steps 只带标题，供任务卡显示“计划名 / 步骤名”；不带 taskIds，避免看板响应膨胀。
+steps 带标题和已发布版本的任务 ID，供任务卡显示计划名和步骤名，并为推进视图提供成员归属。草案摘要的 taskIds 为空。
 
 ### 5.2 board
 
 - 保持现有字段；新增 focusPlanId、plans: PlanSummary[]（仅 active）。
 - plan 字段保留 = focus plan 的完整详情（兼容旧客户端）；没有 focus 时为 null。
-- 任务卡 Card 不新增冗余字段；前端用 board.plans 的 steps 做 join。
+- 前端用 board.plans 的 steps 做 join。任务卡投影和派发顺序见 [读模型契约](CONTRACT.md#25-query)。
 
 ### 5.3 view=plans
 

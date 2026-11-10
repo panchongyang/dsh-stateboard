@@ -22,7 +22,7 @@ export function saveLastProject(id: string): void {
 
 // 视图与筛选独立保存，切换布局不应清空筛选。
 export const VIEW_KEY = 'projectBoard.view';
-export const VIEWS = ['board', 'list'];
+export const VIEWS = ['board', 'list', 'flow'];
 
 /** 未知的持久化视图回到看板，避免旧值使布局不可用。 */
 export function normalizeView(value: string | null): string {
@@ -40,6 +40,37 @@ export function saveView(value: string): void {
   try {
     if (typeof localStorage !== 'undefined') localStorage.setItem(VIEW_KEY, normalizeView(value));
   } catch (error) { /* private mode */ }
+}
+
+export function readBoardLink(location: Pick<Location, 'search' | 'hash'>) {
+  const params = new URLSearchParams(location.search);
+  const requested = params.get('view');
+  const focus = location.hash?.startsWith('#focus=') ? new URLSearchParams(location.hash.slice(1)).get('focus') || null : null;
+  const view = requested && VIEWS.includes(requested) ? requested : (focus ? 'flow' : null);
+  return { view, focus: view === 'flow' ? focus : null, projectId: view === 'flow' ? params.get('project') : null };
+}
+
+export function currentBoardLink() {
+  return typeof window !== 'undefined' && window.location
+    ? readBoardLink(window.location)
+    : { view: null, focus: null, projectId: null };
+}
+
+export function replaceBoardLink(view: string, focus: string | null, projectId: string) {
+  if (typeof window === 'undefined' || !window.location || !window.history) return;
+  const url = new URL(window.location.href);
+  if (view === 'flow') {
+    url.searchParams.set('view', view);
+    if (projectId) url.searchParams.set('project', projectId);
+    else url.searchParams.delete('project');
+  } else {
+    if (url.searchParams.get('view') === 'flow') url.searchParams.delete('project');
+    if (VIEWS.includes(url.searchParams.get('view') || '')) url.searchParams.delete('view');
+  }
+  if (!url.hash || url.hash.startsWith('#focus=')) {
+    url.hash = view === 'flow' && focus ? 'focus=' + encodeURIComponent(focus) : '';
+  }
+  if (url.href !== window.location.href) window.history.replaceState(window.history.state, '', url);
 }
 
 export const FILTERS_KEY = 'projectBoard.filters';

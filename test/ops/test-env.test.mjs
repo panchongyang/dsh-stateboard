@@ -61,9 +61,11 @@ test('prepare creates only isolated roots, a minimal web profile and the branch 
   assert.equal(owner.repoRoot, env.repoRoot);
   const manifest = JSON.parse(fs.readFileSync(path.join(env.profile, 'package.json')));
   assert.deepEqual(manifest.dsh.profile.bundles, ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']);
-  assert.deepEqual(Object.keys(manifest.dependencies), ['dsh-project-board']);
-  assert.equal(fs.realpathSync(path.join(env.profile, 'node_modules', 'dsh-project-board')), env.repoRoot);
-  assert.match(fs.readFileSync(path.join(env.profile, 'cordis.patch.yml'), 'utf8'), /rootDir:/);
+  assert.deepEqual(Object.keys(manifest.dependencies), ['dsh-stateboard']);
+  assert.equal(fs.realpathSync(path.join(env.profile, 'node_modules', 'dsh-stateboard')), env.repoRoot);
+  const patch = fs.readFileSync(path.join(env.profile, 'cordis.patch.yml'), 'utf8');
+  assert.match(patch, /name: "dsh-stateboard"/);
+  assert.match(patch, /rootDir:/);
   assert.equal(fs.existsSync(path.join(env.home, '.env')), false);
   assert.equal(fs.existsSync(path.join(env.home, '.credentials.yaml')), false);
   assert.equal(fs.existsSync(path.join(env.workspace, '.env')), false);
@@ -71,6 +73,19 @@ test('prepare creates only isolated roots, a minimal web profile and the branch 
   await prepareEnvironment(env);
   assert.equal(assertOwned(env).owner, owner.owner);
   assert.equal((await statusEnvironment(env)).phase, 'prepared');
+});
+
+// 责任：状态可读取合法旧链接，停止后准备操作切换为当前包名。
+test('prepare migrates an owned legacy plugin link while status remains available', async (t) => {
+  const env = fixture(t);
+  await prepareEnvironment(env);
+  const canonical = path.join(env.profile, 'node_modules', 'dsh-stateboard');
+  const legacy = path.join(env.profile, 'node_modules', 'dsh-project-board');
+  fs.renameSync(canonical, legacy);
+  assert.equal((await statusEnvironment(env)).phase, 'prepared');
+  await prepareEnvironment(env);
+  assert.equal(fs.realpathSync(canonical), env.repoRoot);
+  assert.equal(fs.existsSync(legacy), false);
 });
 
 // 责任：child env 须大小写无关白名单并重定向所有 HOME，不能继承模型密钥或宿主身份。

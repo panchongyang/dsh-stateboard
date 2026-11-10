@@ -1,6 +1,6 @@
 // 客户端消费面的类型投影，不是后端实体：可选字段表示列表与详情的部分响应。
 // 未经运行时检查的 JSON 叶子保持 unknown，类型断言不补默认值或创造校验。
-export interface Actor { kind?: string; via?: string; sessionId?: string }
+export interface Actor { kind?: string; via?: string; sessionId?: string; agentId?: string }
 export interface PlanRef { planId?: string; stepId?: string; version?: number }
 export interface Links { taskIds?: string[]; planRefs?: PlanRef[] }
 export interface Acceptance { text?: string; requiredKinds?: string[] | null }
@@ -16,11 +16,11 @@ export interface Task {
   planRef?: PlanRef; blocked?: { code?: string; note?: string };
   evidence?: Evidence[]; deps?: string[]; acceptance?: Acceptance[];
 }
-export interface PlanStep { id?: string; title?: string; tasks?: Task[] }
+export interface PlanStep { id?: string; title?: string; tasks?: Task[]; taskIds?: string[] }
 export interface Plan { id?: string; title?: string; status?: string; focus?: boolean; rev?: number; currentVersion?: number; steps?: PlanStep[] }
 export interface Board { plans?: Plan[]; plan?: Plan; columns?: Record<string, Task[]>; attention?: { blocked?: Task[]; interrupted?: Task[] } }
 export interface Project { id?: string; workspacePath?: string; name?: string }
-export interface Session { cwd?: string; blank?: boolean; origin?: string; updatedAt?: number; retainedBy?: { mainView?: number } }
+export interface Session { title?: string; cwd?: string; blank?: boolean; origin?: string; updatedAt?: number; retainedBy?: { mainView?: number } }
 export interface SessionSnapshot { byId?: Record<string, Session> }
 export interface SessionTarget { sessionId: string; updatedAt: number }
 export interface TaskSession { sessionId: string | null; source: string | null }

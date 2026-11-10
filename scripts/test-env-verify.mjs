@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { createEnvironment, readRuntime } from './test-env/environment.mjs';
+import { createEnvironment, readRuntime, TEST_PLUGIN_PACKAGE } from './test-env/environment.mjs';
 import { statusEnvironment } from './test-env/lifecycle.mjs';
 
 export function localUrl(value) {
@@ -82,10 +82,10 @@ export async function verifyEnvironment(env = createEnvironment()) {
     assert.equal((await response.json()).ok, true);
   }
   const entries = Array.isArray(boot.entries) ? boot.entries : [];
-  const boardEntry = entries.find((entry) => entry.id === 'dsh-project-board');
+  const boardEntry = entries.find((entry) => entry.id === TEST_PLUGIN_PACKAGE);
   assert.ok(boardEntry && typeof boardEntry.url === 'string', 'ProjectBoard browser module must be in the real boot manifest');
   // DSH bootstraps plugin batches from this manifest; they need not be script-src tags.
-  const candidates = [new URL(boardEntry.url, base), ...scriptUrls(html, base).filter((url) => url.href.includes('project-board/client.js'))];
+  const candidates = [new URL(boardEntry.url, base), ...scriptUrls(html, base).filter((url) => url.pathname.includes('/' + TEST_PLUGIN_PACKAGE + '/client.js'))];
   const expected = fs.readFileSync(path.join(env.repoRoot, 'lib', 'client.js'), 'utf8')
     .replace(/\r\n/g, '\n').replace(/\n\/\/# sourceMappingURL=client\.js\.map\s*$/, '');
   let matched = false;

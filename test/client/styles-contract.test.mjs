@@ -27,11 +27,8 @@ test("stylesheet bytes and metrics", () => {
 
   const cssText = exportsValue.__ui.css;
   assert.equal(typeof cssText, 'string', 'stylesheet is exported at runtime');
-  assert.equal(
-    fs.readFileSync(path.join(here, '../..', 'src', 'client', 'styles.css'), 'utf8'),
-    cssText,
-    'bundled stylesheet equals src/client/styles.css byte for byte',
-  );
+  const readCss = (filename) => fs.readFileSync(path.join(here, '../..', 'src', 'client', filename), 'utf8');
+  assert.equal(cssText, readCss('styles.css') + '\n' + readCss('flow-view.css'), 'bundled stylesheets match their sources byte for byte');
 
   const FONT_TOKENS = { '--pb-fs-xs': 11, '--pb-fs-sm': 12, '--pb-fs-md': 13, '--pb-fs-base': 14, '--pb-fs-lg': 16, '--pb-fs-xl': 20, '--pb-fs-num': 28 };
   const fontDecls = [...cssText.matchAll(/font-size:\s*([^;]+);/g)].map((match) => match[1].trim());
