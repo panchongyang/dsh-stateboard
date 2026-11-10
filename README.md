@@ -129,7 +129,7 @@ bearer_token_env_var = "PROJECT_BOARD_MCP_WRITE_TOKEN"
 
 在 Codex 聊天中用 `open_work_session` 开始该项目的工作会话。可以读取已有卡片，或用 `create_task` 建卡、`update_task` 编辑、`ready_task` 将满足条件的待办置为就绪。随后用 `claim_task` 领取、`begin_task` 记录执行意图、`submit_task` 附证据提交审查。工作会话 token 保留在当前聊天内。写入默认关闭。停用写入口或轮换凭据后重新加载插件，既有会话失效。工具参数、续接与异常处理见随包的实现契约 §3.7。
 
-独立的工作会话可在检查证据后用 `verify_task` 为审计门任务记录通过，或按权限用 `reject_task` 带理由退回返工。普通任务仍可在网页人工验收。MCP 与原生工具的覆盖差异见随包实现契约 §3.7.3。
+检查证据后，用 `verify_task` 显式验收普通任务（提交者也可以，无需报告）。审计门任务需要独立会话和报告；所有任务也可在网页人工验收。可按权限用 `reject_task` 带理由退回返工。MCP 与原生工具的覆盖差异见随包实现契约 §3.7.3。
 
 ## 约三分钟文字演示
 
@@ -167,7 +167,7 @@ bearer_token_env_var = "PROJECT_BOARD_MCP_WRITE_TOKEN"
 
 `3` 与 `1` 都必须换成实际最新 rev/token。无 Git 时 doc 材料会显式 current-only，附 fixedReason；核心流程照常进入 review。
 
-5. **2:35 人工完成判定。** 人打开任务抽屉，阅读材料和验收项，选择 verify 或 reject。不是由提交 agent 自称 done。若证据提交后变化，先调查；可刷新的 file 漂移可由 human refresh，其它情形 human 可填理由 acknowledge，留痕不等于材料正确。独立 agent 只可在开启审计门的任务显式带审计报告 verify，session 级独立性不是信任保证。
+5. **2:35 人工完成判定。** 人打开任务抽屉，阅读材料和验收项，选择 verify 或 reject。普通任务也可由提交 agent 显式 verify；审计门任务要求独立 agent 带报告。若证据提交后变化，先调查；可刷新的 file 漂移可由 human refresh，其它情形 human 可填理由 acknowledge，留痕不等于材料正确。
 
 **可选 Git 镜头**：若示例文件恰在主绑定仓库中、已经干净提交且对象本地可得，沿用上一步带 `acceptanceId` 的 doc 材料提交，就会自动记录只读 Git 版本引用。不需额外 approval；UI/材料可显示 fixedState。项目板不替你 commit，不切分支，不 fetch，不进入其它 worktree 复验。首次 pin 失败降为 current-only；已有历史 fixed 引用缺对象时保持原引用并报告不可观测，绝不用当前正文冒充历史。
 

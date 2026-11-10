@@ -212,7 +212,7 @@ export class BoardError extends Error {
 | acceptance-unmet | 422 | 验收未满足 |
 | missing-evidence | 422 | 没有合格 evidence |
 | evidence-drift | 409 | verify/submit/reconcile 时 file/doc 内容漂移或不可读；不包含命令执行结论 |
-| audit-scope-locked | 409 | plan.revise 试图改变 agent 审计完成任务的实质验收范围；先由 human reopen，再返工重提 |
+| audit-scope-locked | 409 | plan.revise 试图改变 agent 已验收任务的实质验收范围；先由 human reopen，再返工重提 |
 | verification-required | 403 | 需要获授权的显式验收 |
 | forbidden-role | 403 | 角色不允许 |
 | project-inactive | 409 | paused/archived |
@@ -278,7 +278,7 @@ export class BoardError extends Error {
 | task.begin | summary, plannedSteps?, expectedArtifacts? | 写 open intent |
 | task.renew | — | 显式续租（owner；内存态不写 commit；宽限期内/已过期可续；默认最多 2 次无进展） |
 | task.submit | note?, evidence | 关 intent → review；先做一次内容审计（内容 hard 409，不可观测 warning 随结果返回）；同 identity 的新证据退休旧行（见 §2.4） |
-| task.verify | audit?, note?, reason?, acknowledgeDrift?, refreshDrift? | review → done（human 或审计门的独立 agent）；漂移参数仅 human；`refreshDrift:true` + `reason` 重算 file 漂移并退休旧行；`acknowledgeDrift:true` + `reason` 豁免剩余漂移 |
+| task.verify | audit?, note?, reason?, acknowledgeDrift?, refreshDrift? | review → done（human、普通任务的任意授权 agent，或审计门的独立 agent）；漂移参数仅 human；`refreshDrift:true` + `reason` 重算 file 漂移并退休旧行；`acknowledgeDrift:true` + `reason` 豁免剩余漂移 |
 | task.reject | reason, audit?, unassign?（仅 human）, intent?（仅遗留 intent 防御用） | review → in_progress/ready；有 live lease 时非 human 校验 token |
 | task.block | code, note, intent? | → blocked；有 open intent 时必须 `intent.outcome=stopped` + sideEffects |
 | task.interrupt | note, sideEffects? | in_progress → interrupted（保留 open intent）；遗留异常状态仅 human |
@@ -423,7 +423,7 @@ export class BoardError extends Error {
 
 - `deps` 是任务的前置任务 ID，缺失时为 `[]`。`PlanSummary.steps` 包含 `{id, title, taskIds}`，`taskIds` 按已发布版本的步骤成员顺序投影，草案摘要为 `[]`。
 - `intent` 仅投影进行中任务的开放执行意图，包含最多 160 个 UTF-16 单元的单行摘要与开始时间（缺失时为 `null`）。会话身份继续取 `owner`。board 的进行中卡片另外携带 `leaseExpiresAt` 和 `leaseExpired`，由读取时的运行时租约与服务端时钟得出。无可观测的到期时间时两项均为 `null`。
-- `verifiedAt`、`verifiedBy` 来自任务的实际验收记录，缺失时为 `null`。`verifiedBy` 的 `human` 表示人工验收，`agent` 表示 AI 审计（自述），`policy` 表示历史自动验收。
+- `verifiedAt`、`verifiedBy` 来自任务的实际验收记录，缺失时为 `null`。`human` 表示人工验收，`agent` 表示 AI 验收（`lastAudit.gate:false`）或 AI 审计（`lastAudit.gate:true`），`policy` 表示历史自动验收。
 - `readyOrder` 是全部 ready 任务 ID，复用 brief 的派发排序（priority 升序，同优先级按 createdAt 升序）。brief 仍只返回前三项，board 列仍按原有顺序展示。
 
 `TaskView` = 完整 Task + `allowedOps: [{op, enabled, reason?}]`。
@@ -432,7 +432,7 @@ export class BoardError extends Error {
 
 - `claim` 使用与命令共用的资格判定：项目 active、计划未归档、到期投影中的 ready、无有效租约、依赖已完成且项目/会话 WIP 有余量（human 不受会话上限）。读取只预览回收，提交仍独立校验 committed entityRev。
 - in_progress + lease 属于该 session → `begin`（无 open intent）、`submit`、`release`、`block`
-- review → `verify`（human 或审计门的独立 agent）、`reject`（任意 agent/human，无 live lease 或为持有者）；第三方 agent 无租约不能 block
+- review → `verify`（human、普通任务的任意授权 agent，或审计门的独立 agent）、`reject`（任意 agent/human，无 live lease 或为持有者）；第三方 agent 无租约不能 block
 - blocked → `unblock`
 - interrupted → `reconcile`
 - done/canceled → `reopen`（human）
@@ -509,12 +509,12 @@ export class BoardError extends Error {
 
 **verify**
 
-- agent 只允许审计门（`requiresAudit` / `gate:audit`），非门控返回 403 forbidden-role，details.reason=not-audit-gate。worker 集合为 assignee + 所有 evidence.producedBy（含 superseded）+ workers；审计者 sessionId/agentId 均不能命中，缺 worker 返回 worker-unknown，命中返回 not-independent；createdBy 不算 worker。独立性只在 session 级，不抵抗新 session/子代理分身。
-- `audit={report,checklist?:[{item,ok,note?}]}` 用于 verify/reject。agent verify report 去空白后 20–4000 字；清单最多 50 项、item ≤200 字、note ≤500 字。human verify 报告可空，取 audit.report 或 reason/note，无需配置。
+- 普通任务允许任意拥有项目写权限的 agent 显式验收，包括开发或提交者，不需要独立会话。审计门（`requiresAudit` / `gate:audit`）仍要求独立 agent：worker 集合为 assignee + 所有 evidence.producedBy（含 superseded）+ workers；审计者 sessionId/agentId 均不能命中，缺 worker 返回 worker-unknown，命中返回 not-independent；createdBy 不算 worker。独立性只在 session 级，不抵抗新 session/子代理分身。
+- `audit={report,checklist?:[{item,ok,note?}]}` 用于 verify/reject。审计门的 agent verify 必须提供报告；普通任务的 agent 和 human 可直接 verify，或传 reason/note（入口支持时）。传入 audit 时 report 去空白后 20–4000 字；清单最多 50 项、item ≤200 字、note ≤500 字。
 - `lastAudit={id,at,gate,by:{kind,sessionId,agentId,via},verdict,report,checklist,evidence:{count,digest},scopeDigest,workers,warnings,taskRev}`；evidence.digest 锚定 active evidence 的 id/kind/ref/hash。`scopeDigest` 是独立的验收范围指纹，绑定标题/说明、依赖、验收项及材料覆盖、审计门、active evidence 与来源身份、worker 集合；不绑定 planRef/orphaned/priority/weight/rev 等管理元数据。`taskRev` 保留审计命令写后修订号，作为不可变的正整数历史锚点，不大于当前 rev，不随元数据编辑重写。warnings 最多 20 条。human pass 覆盖旧 fail；begin/reopen 清记录，同 attempt 的 submit 保留 fail。报告与指纹均不证明内容正确，agent 报告为自述，不能显示为系统核验或人类核验。
-- agent 显式传 refreshDrift/acknowledgeDrift 返回 403；hard 漂移返回 409，canRefresh/canAcknowledgeDrift 均 false，下一步是 reject 返工或 human 处理。固定 Git 不可观测 warning 仍可放行，保留在 lastAudit。I23 检查 agent done 必须有 pass、报告、有效历史 taskRev 锚点（正整数且 ≤ 当前 rev）、与当前实质验收范围匹配的 scopeDigest、匹配当前 active evidence 的 count/digest 与 worker 快照，且 auditor 在快照及当前 worker 集合中均独立；历史 human/policy 不追溯。元数据调整不冒充重新审计；agent 审计完成任务通过 plan.revise 改动实质范围返回 409 audit-scope-locked，应先由 human reopen，再返工、重提与显式验收。
+- agent 显式传 refreshDrift/acknowledgeDrift 返回 403；hard 漂移返回 409，canRefresh/canAcknowledgeDrift 均 false，下一步是 reject 返工或 human 处理。固定 Git 不可观测 warning 仍可放行，保留在 lastAudit。I23 检查 agent done 必须有可追溯的 pass、匹配任务的 gate、有效历史 taskRev 锚点（正整数且 ≤ 当前 rev）、与当前实质验收范围匹配的 scopeDigest、匹配当前 active evidence 的 count/digest 与 worker 快照；审计门另检查报告与独立性，普通验收不检查独立性。历史 human/policy 不追溯。元数据调整不冒充重新验收；对 agent 已验收任务通过 plan.revise 改动实质范围返回 409 audit-scope-locked，应先由 human reopen，再返工、重提与显式验收。继续使用 schema v3 和已有事件；只能由支持普通 agent 验收的构建正确检查这类新增记录的 I23，不能用旧构建回退后忽略健康错误。
 
-- actor 必须是 human，或审计门的独立 agent；review；所有 acceptance met；verify 前重新审计内容观测：file 漂移/缺失/不可读、无 `@rev` 的 doc head 漂移、pinned doc blob 丢失/损坏、固定 Git 的结构/来源身份/hash/OID/type 不符 → `evidence-drift`（409，details.warnings；`canRefresh` 表示存在可刷新的 file 漂移）。固定 Git 在 Git/绑定/对象暂时不可观测时只给 warning，不阻断 verify。**verify 不复核命令执行结论**：不重跑 command/test、不判断退出码，命令/测试材料只按提交者记录保留。写 `task/verified` 与最近审计 `lastAudit`；这是验收操作记录，不是系统对交付正确性的担保。
+- 获授权的验收者只能验收 review 且所有 acceptance met 的任务。verify 前重新审计内容观测：file 漂移/缺失/不可读、无 `@rev` 的 doc head 漂移、pinned doc blob 丢失/损坏、固定 Git 的结构/来源身份/hash/OID/type 不符 → `evidence-drift`（409，details.warnings；`canRefresh` 表示存在可刷新的 file 漂移）。固定 Git 在 Git/绑定/对象暂时不可观测时只给 warning，不阻断 verify。**verify 不复核命令执行结论**：不重跑 command/test、不判断退出码，命令/测试材料只按提交者记录保留。写 `task/verified` 与最近验收记录 `lastAudit`；这是验收操作记录，不是系统对交付正确性的担保。
 - **人工刷新（file 内容漂移）**：hard 错误里有 `file-drift`（内容变、文件仍可读）时，human 传 `refreshDrift:true` + `reason`（去空白后 ≥4 字），服务端重读文件、重算 hash、追加新证据并退休旧行，再复核；`missing`/`unreadable` 与固定 Git 不可观测不可刷新。刷新后仍有 hard 且未 `acknowledgeDrift` → 409；两者同用则先刷新、剩余按豁免规则。刷新写入任务 `refreshedDrift = {at, by, reason, items[{evidenceId, supersededIds, ref, oldHash, newHash}]}` 并随 `task/verified` 持久化。
 - **人工豁免（解阻塞）**：硬审计错误存在时，human 传 `acknowledgeDrift:true` + `reason`（去空白后 ≥4 字）可照常 done；豁免写入任务的 `waivedDrift = {at, by, reason, warnings[]}` 并随 `task/verified` 事件持久化。不带 ack 仍 409（details 里 `canAcknowledgeDrift:true`）；带 ack 但 reason 缺失/过短 → 400 `invalid-command`。豁免是显式的人类决定，不隐藏漂移：health 仍按原样报告。
 
@@ -730,7 +730,7 @@ export function apply(ctx, config) { ... }
 - `project_plan publish` 在无项目时用 cwd 创建。
 - 工具错误：把 `BoardError` 转成 `new Error(JSON.stringify({code,message,details,next}))`。
 - `output.schema` 用宽松 `{type:'object'}`；`output.render` 返回一段短文本；`presentCall` 返回 `{card:'generic', title, kind:'other', rawInput:args}`。
-- 工具描述必须写清：先读后写、expectedRev、submit 不带 done、verify 需要 human 或审计门的独立 agent 带 audit.report；非门控 agent verify 403。
+- 工具描述必须写清：先读后写、expectedRev、submit 不带 done；普通任务可由任意授权 agent verify（含提交者）；审计门需独立 agent 带 audit.report，human 始终可验收。
 
 ### 3.4 Prompt
 
@@ -812,7 +812,7 @@ events / health / projects / commands / shared）。
 
 返回：成功 `{ok:true, ...}`；失败 HTTP status + `{ok:false, error:{code,message,details}}`。
 
-task/board/brief 的审计门摘要使用 `audit=1`，最近审计使用 `lastAudit` 与 `by.kind`；agent 标为「AI审计（自述）」，human 标为「人类验收记录」。UI gate/verify/reject 服从当前 allowedOps；已授权的网页操作使用 human actor。人类在 review 仍可开门，human verify 不要求报告。抽屉展示 auditor/time/report/checklist/evidence digest/warnings。
+task/board/brief 的审计门摘要使用 `audit=1`，最近验收使用 `lastAudit` 与 `by.kind`；agent 的普通通过标为「AI验收（自述）」，审计记录标为「AI审计（自述）」，human 标为「人类验收记录」。UI gate/verify/reject 服从当前 allowedOps；已授权的网页操作使用 human actor。人类在 review 仍可开门，human verify 不要求报告。抽屉展示验收者、时间、报告、清单、证据 digest 和 warnings。
 
 ### 3.6 工具返回里的 projectId
 
@@ -862,12 +862,12 @@ task/board/brief 的审计门摘要使用 `audit=1`，最近审计使用 `lastAu
 | `claim_task` | — | 领取既有可领任务，返回 `lease: {fencingToken, expiresAt}`。 |
 | `begin_task` | `summary`, `plannedSteps?`, `expectedArtifacts?` | 执行前写入 open intent。 |
 | `submit_task` | `evidence` | 沿用 core 证据校验，成功进入 `review`。 |
-| `verify_task` | `audit` | 独立 Agent 在审计门任务的 `review` 状态记录通过，进入 `done`。 |
+| `verify_task` | `audit?` | 普通任务允许任意授权 Agent（含提交者）在 `review` 记录通过；审计门要求独立 Agent 并提供 `audit`。成功后进入 `done`。 |
 | `reject_task` | `reason`, `audit?`, `fencingToken?`, `intent?` | 驳回 `review`，沿用 core 的租约、意图和返工规则。持有活动租约时须携带该租约的 token。 |
 | `release_task` | `note?`, `intent?` | 放回 `ready`。有 open intent 时传 `intent: {outcome:"stopped", sideEffects, note?}`。 |
 | `interrupt_task` | `note`, `sideEffects?` | 执行结果未知时进入 `interrupted`，由现有入口对账。 |
 
-MCP 审查沿用 §2.6 的 `audit={report,checklist?:[{item,ok,note?}]}`、验收项、独立性和证据漂移校验。审核报告为 Agent 自述。独立性按会话和既有 worker 记录判断，无法识别由同一操作者另开的会话。无审计门或独立审查条件不满足时可由人类验收。漂移时可驳回返工或交给人类处理。MCP 不接受漂移刷新、豁免或清除委派参数。
+MCP 审查沿用 §2.6 的 `audit={report,checklist?:[{item,ok,note?}]}`、验收项和证据漂移校验。审计门的独立性按会话和既有 worker 记录判断，无法识别由同一操作者另开的会话。Agent 的验收和审计报告均为自述。人类可验收所有任务。漂移时可驳回返工或交给人类处理。MCP 不接受漂移刷新、豁免或清除委派参数。
 
 成功返回 `{projectId, taskId, projectRev, taskRev, state, deduped}`，版本和状态是响应时可见的已提交状态。提交和验收回执可包含仅带错误码和严重程度的证据警告。原样重试同一工作会话、工具和参数会去重。创建重试返回原任务 ID。改动参数会产生新命令并重新校验版本与租约。领取重试只有在原授予的租约仍可用时才返回其 token，其他情况返回 `lease:null`。收到 `lease:null`、`stale-revision` 或 `fencing-stale` 时先重新读卡。出现 `log-write-uncertain` 或工作会话失效时，先核对日志和实际副作用再继续。租约沿用项目 TTL 与宽限期，超期或重启后按 §2.6 回收。驳回、解阻或重开可以产生待重新领取的任务，系统不向 MCP 会话隐式发放新租约。MCP 工具错误仅返回稳定错误码和安全提示。
 

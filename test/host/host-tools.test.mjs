@@ -337,14 +337,23 @@ try {
   const auditText = taskTool.output.render({ op: 'verify' }, verifiedAudit)[0].text;
   assert.match(auditText, /AI审计（自述）/);
   assert.match(auditText, /by.kind=agent/);
-  const notGated = await taskTool.execute({ op: 'verify', taskId, expectedRev: submitted.task.task.rev, audit }, auditor).then(() => null, error => error);
-  assert.equal(JSON.parse(notGated.message).details.reason, 'not-audit-gate');
   const unassignDenied = await taskTool.execute({ op: 'reject', taskId, expectedRev: submitted.task.task.rev, reason: 'rework synthetic evidence', unassign: true }, auditor).then(() => null, error => error);
   assert.equal(JSON.parse(unassignDenied.message).details.reason, 'unassign-human-only');
   const rejectedAudit = await taskTool.execute({ op: 'reject', taskId, expectedRev: submitted.task.task.rev, reason: 'rework synthetic evidence', audit }, auditor);
   assert.equal(rejectedAudit.task.task.rejection.byKind, 'agent');
   assert.equal(rejectedAudit.task.task.lastAudit.verdict, 'fail');
   assert.equal(rejectedAudit.task.task.lastAudit.by.sessionId, auditor.agent.id);
+
+  const ordinaryClaimed = rejectedAudit.task.lease ? rejectedAudit
+    : await taskTool.execute({ op: 'claim', taskId, expectedRev: rejectedAudit.task.task.rev }, exec);
+  const fencingToken = ordinaryClaimed.task.lease.token;
+  const ordinaryBegun = await taskTool.execute({ op: 'begin', taskId, expectedRev: ordinaryClaimed.task.task.rev, fencingToken, summary: 'ordinary rework' }, exec);
+  const ordinarySubmitted = await taskTool.execute({ op: 'submit', taskId, expectedRev: ordinaryBegun.task.task.rev, fencingToken,
+    evidence: [{ kind: 'note', ref: 'reworked evidence', acceptanceId: ordinaryBegun.task.task.acceptance[0].id }] }, exec);
+  const verifiedOrdinary = await taskTool.execute({ op: 'verify', taskId, expectedRev: ordinarySubmitted.task.task.rev }, exec);
+  assert.equal(verifiedOrdinary.task.task.state, 'done');
+  assert.equal(verifiedOrdinary.task.task.lastAudit.by.sessionId, exec.agent.id);
+  assert.match(taskTool.output.render({ op: 'verify' }, verifiedOrdinary)[0].text, /AI验收（自述）/);
 
   console.log('PASS host-tools: plan/claim/begin/submit/board/doc/audit/agent-reject');
 } finally {

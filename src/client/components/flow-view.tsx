@@ -3,7 +3,7 @@ import React from 'react';
 import type { BoardView } from '../model/view-types.ts';
 import type { SessionSnapshot } from '../model/types.ts';
 import { cardHaystack, isGate } from '../model/filters.ts';
-import { blockerLabel, stateLabel, stateTone } from '../model/labels.ts';
+import { auditActorLabel, blockerLabel, stateLabel, stateTone } from '../model/labels.ts';
 import { buildFlowModel, flowChain, flowNowGroups, flowOrderTasks, flowUnlockCount, flowWaitState, flowWindow, layoutFlowLane } from '../model/flow-layout.ts';
 import { cx, formatDateTime, percentOf, shortId } from '../utils/format.ts';
 import { IconCheck, IconChevron, IconClose, IconHealth, IconInbox, IconPlay, IconWarning } from './icons.tsx';
@@ -333,7 +333,7 @@ function LaneMore({ expanded, hidden, toggle }: { expanded: boolean; hidden: num
   return <div className="pb-flow__more"><Button size="sm" variant="ghost" onClick={toggle}>{expanded ? '收起额外任务' : '展开其余 ' + hidden + ' 项'}</Button></div>;
 }
 
-const VERIFIED_BY = { human: '人工验收', agent: 'AI 审计（自述）', policy: '自动验收' };
+const VERIFIED_BY = { human: '人工验收', agent: 'AI审计（自述）', policy: '自动验收' };
 
 function FlowRail({ ui }: { ui: Interaction }) {
   const { model } = ui;
@@ -352,7 +352,8 @@ function FlowRail({ ui }: { ui: Interaction }) {
       <div className="pb-flow__rail-head"><h2><IconCheck />最近完成</h2></div>
       {model.recent.length ? <ul className="pb-flow__rail-list">{model.recent.slice(0, 5).map((task) =>
         <li key={task.id}><RailTask task={task} ui={ui} marker="✓"
-          meta={task.verifiedBy ? VERIFIED_BY[task.verifiedBy] || '验收方式未记录' : '验收方式未记录'}
+          meta={task.verifiedBy === 'agent' && task.lastAudit ? auditActorLabel(task.lastAudit)
+            : task.verifiedBy ? VERIFIED_BY[task.verifiedBy] || '验收方式未记录' : '验收方式未记录'}
           date={task.verifiedAt || undefined} /></li>)}</ul> : <p className="pb-flow__empty">暂无已完成的任务</p>}
     </section>
   </aside>;

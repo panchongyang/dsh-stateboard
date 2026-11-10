@@ -34,10 +34,10 @@ export function AuditDetail(props: AuditDetailProps) {
   const audit = props.audit;
   if (!audit) return null;
   const by = audit.by || {};
-  return <Section title="最近审计" id="pb-sec-audit">
+  return <Section title="最近验收记录" id="pb-sec-audit">
     <p className="pb-prose">{auditActorLabel(audit) + ' · ' + (audit.verdict === 'pass' ? '通过' : '驳回')}</p>
     <p className="pb-hint">{'by.kind=' + (by.kind || '?') + ' · ' + (by.sessionId || by.agentId || 'human') + ' · ' + formatDateTime(audit.at)}</p>
-    <p className="pb-prose">{audit.report || '未填写报告（人类可直接验收）'}</p>
+    {audit.report ? <p className="pb-prose">{audit.report}</p> : null}
     <ul className="pb-checks">
       {(audit.checklist || []).map(function(item, index) {
         return <li key={index}>{(item.ok ? '✓ ' : '× ') + item.item + (item.note ? ' — ' + item.note : '')}</li>;

@@ -174,7 +174,7 @@ test('raw intake tools reject obsolete and unknown gate intent before project cr
 
 // 责任：角色错误须保留子错误码及可执行 NEXT，服务端给出的 NEXT 优先。
 test('role errors preserve subcodes and actionable NEXT; server NEXT takes precedence', () => {
-  for (const reason of ['not-audit-gate', 'not-independent', 'worker-unknown', 'review-gate-locked', 'unassign-human-only', 'drift-human-only']) {
+  for (const reason of ['auditor-required', 'not-independent', 'worker-unknown', 'review-gate-locked', 'unassign-human-only', 'drift-human-only']) {
     const value = JSON.parse(fail(new BoardError('forbidden-role', reason, { status: 403, details: { reason } })).message);
     assert.equal(value.details.reason, reason);
     assert.ok(value.next.length > 30);

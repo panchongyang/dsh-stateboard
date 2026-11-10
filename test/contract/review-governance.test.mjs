@@ -126,13 +126,55 @@ test('independent agent explicit verify records pass, active digest, workers, ne
   assert.equal(checkState(f.h.state).ok, true);
 });
 
-// 责任：非审计门 agent 不得 verify；所有 worker/证据生产者包括 superseded 身份均禁止自审。
-test('non-gated agents cannot verify; every independence source, including superseded producers, blocks self audit', async (t) => {
+// 责任：普通验收保留显式状态转换和验收来源，冷开可重放，开发会话与其他会话均可通过。
+test('ordinary verification accepts either the worker or another agent without an audit report', async (t) => {
+  for (const actor of [worker, auditor]) {
+    const f = await fixture(t, { gated: false });
+    await f.denied('verify', {}, actor, 'illegal-transition');
+    await f.review();
+    assert.equal(f.task().state, 'review');
+    assert.equal(f.ops(worker.sessionId).verify.enabled, true);
+    assert.equal(f.ops(auditor.sessionId).verify.enabled, true);
+    await f.denied('verify', {}, { kind: 'system' }, 'forbidden-role', 'auditor-required');
+    const result = await f.act('verify', {}, actor);
+    const task = f.task();
+    assert.equal(task.state, 'done');
+    assert.equal(task.verifiedBy, 'agent');
+    assert.equal(task.lastAudit.gate, false);
+    assert.equal(task.lastAudit.report, '');
+    assert.equal(task.lastAudit.by.sessionId, actor.sessionId);
+    assert.equal(result.events[0].type, 'task/verified');
+    assert.equal(checkState(f.h.state).ok, true);
+    const meta = f.h.meta;
+    await f.svc.close();
+    const store = new JsonlStore(meta.dir, meta);
+    t.after(() => store.close());
+    const reopened = store.open().state;
+    assert.deepEqual(reopened.tasks[f.id], task);
+    assert.equal(checkState(reopened).ok, true);
+  }
+});
+
+test('ordinary verification still refuses unmet acceptance and hard drift without side effects', async (t) => {
+  const f = await fixture(t, { gated: false, file: true });
+  await f.review();
+  f.task().acceptance[0].met = false;
+  await f.denied('verify', {}, worker, 'acceptance-unmet');
+  f.task().acceptance[0].met = true;
+  fs.writeFileSync(path.join(f.ws, 'artifact.txt'), 'changed');
+  await f.denied('verify', {}, worker, 'evidence-drift');
+  await f.denied('verify', { acknowledgeDrift: true, reason: 'waive changed evidence' }, worker, 'forbidden-role', 'drift-human-only');
+  await f.act('verify', { acknowledgeDrift: true, reason: 'accept changed evidence' }, human);
+  assert.equal(f.task().verifiedBy, 'human');
+});
+
+// 责任：人类在 review 打开审计门后，所有 worker/证据生产者（含 superseded）均禁止自审。
+test('every independence source, including superseded producers, blocks self audit on a gated task', async (t) => {
   const f = await fixture(t, { gated: false });
   await f.review();
-  await f.denied('verify', { audit: { report } }, auditor, 'forbidden-role', 'not-audit-gate');
-  assert.equal(f.ops(auditor.sessionId).verify.enabled, false);
   await f.act('gate', { requiresAudit: true }, human);
+  assert.equal(f.ops(worker.sessionId).verify.enabled, false);
+  await f.denied('verify', {}, auditor, 'invalid-command');
   await f.denied('verify', { audit: { report } }, worker, 'forbidden-role', 'not-independent');
   const task = { assignee: null, workers: [], evidence: [] };
   assert.equal(auditIndependenceProblem(task, auditor), 'worker-unknown');

@@ -249,7 +249,7 @@ test('audit labels distinguish self-declared agent, human acceptance and unknown
   assert.equal(auditActorLabel({ by: { kind: 'agent' } }), 'AI审计（自述）');
   assert.equal(auditActorLabel({ by: { kind: 'human' } }), '人类验收记录');
   assert.equal(auditActorLabel({}), '审计记录（身份未知）');
-  assert.doesNotMatch(auditActorLabel({ by: { kind: 'agent' } }), /已核验|已人审/);
+  assert.equal(auditActorLabel({ by: { kind: 'agent' }, gate: false, verdict: 'pass' }), 'AI验收（自述）');
   assert.match(reasonText('not-independent'), /独立审计/);
   assert.match(reasonText('human only in review or to disable a gate'), /仅人类/);
 });

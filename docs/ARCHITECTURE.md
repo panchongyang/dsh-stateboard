@@ -85,6 +85,8 @@ lib/client.js
 lib/shared/contract.js
 lib/shared/events.js
 lib/shared/fixed-schema.js
+lib/shared/verification.js
+lib/shared/verification.d.ts
 lib/core/service.js
 lib/core/project-reader.js
 lib/core/project-reader-worker.js
