@@ -1,10 +1,15 @@
 # ProjectBoard · dsh-stateboard
 
-DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、任务、外置文档与结果材料。当前版本 **0.2.0**，许可证 [BSD-3-Clause](<./LICENSE>)。
+DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、任务、外置文档与结果材料。当前版本 **0.3.0**，许可证 [BSD-3-Clause](<./LICENSE>)。
 
 源码可从 [GitHub 仓库](https://github.com/panchongyang/dsh-stateboard) 下载。npm 安装使用公共 registry 上的同版本包，或使用已下载的同版本 tgz。
 
 导航：[支持环境](#支持环境) · [安装与首次运行](#安装与首次运行) · [约三分钟文字演示](#约三分钟文字演示) · [真实限制](#真实限制) · [备份回退与迁移](#备份回退与迁移) · [贡献与架构入口](#贡献与架构入口)
+
+## 0.3.0 更新
+
+- 可切换到推进视图，查看并行任务、验收队列和依赖线路。看板仍为默认视图。
+- 可选 MCP 新增开工上下文查询，以及受项目授权和现有审计规则约束的验收与驳回操作。
 
 ## 产品边界
 
@@ -16,7 +21,7 @@ DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、
 
 | 项目 | 支持口径与验证限制 |
 |---|---|
-| 产品 | `dsh-stateboard@0.2.0`，BSD-3-Clause |
+| 产品 | `dsh-stateboard@0.3.0`，BSD-3-Clause |
 | 操作系统 | Windows 11 x64；macOS / Linux 未测试、不承诺可用 |
 | DSH 支持带 | `0.2.1-rc.2` 至 `0.2.2-rc.1`；上界不自动跟随 latest 扩展 |
 | Web 宿主 Node | DSH `0.2.2-rc.1` 要求 **Node >=24.9**；其它支持带内版本仍须满足各自宿主要求 |
@@ -40,9 +45,9 @@ DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、
 
 ```text
 # 本地包（把占位路径替换为实际 Windows 绝对路径）
-dsh plugin --profile PROFILE add "D:\Packages\dsh-stateboard-0.2.0.tgz"
+dsh plugin --profile PROFILE add "D:\Packages\dsh-stateboard-0.3.0.tgz"
 # 从公共 npm registry 安装指定版本：
-dsh plugin --profile PROFILE add dsh-stateboard@0.2.0
+dsh plugin --profile PROFILE add dsh-stateboard@0.3.0
 ```
 
 **源码来源**。下载与目标版本对应的完整源码归档并解压。归档已含客户端产物，修改客户端时先构建。

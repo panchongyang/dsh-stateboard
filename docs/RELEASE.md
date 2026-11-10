@@ -4,7 +4,7 @@
 
 ## 1. 本地候选准备
 
-产品 `dsh-stateboard@0.2.0` 使用 BSD-3-Clause 许可证。源码在 [GitHub 仓库](https://github.com/panchongyang/dsh-stateboard) 公开，包的可用版本以 npm registry 为准。[支持矩阵](<../README.md#支持环境>)覆盖 Windows 11 x64 和 DSH `0.2.1-rc.2` 至 `0.2.2-rc.1`。DSH `0.2.2-rc.1` 要求 Node >=24.9，Node 22 是 core/client 基线，macOS 和 Linux 尚未测试。
+产品 `dsh-stateboard@0.3.0` 使用 BSD-3-Clause 许可证。源码在 [GitHub 仓库](https://github.com/panchongyang/dsh-stateboard) 公开，包的可用版本以 npm registry 为准。[支持矩阵](<../README.md#支持环境>)覆盖 Windows 11 x64 和 DSH `0.2.1-rc.2` 至 `0.2.2-rc.1`。DSH `0.2.2-rc.1` 要求 Node >=24.9，Node 22 是 core/client 基线，macOS 和 Linux 尚未测试。
 
 候选说明应列：基线与冻结提交、变更面、行为是否变化、兼容类别、定向/全量结果与 SKIP、安装来源、备份和匹配旧包、RPO、已知限制。事件/存储变更必须解释 additive/refuse/migration；schema v3 即使事件类型兼容，旧构建也可能静默丢失审计门，不能只看“能打开”。
 
