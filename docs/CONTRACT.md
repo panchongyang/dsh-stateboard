@@ -209,6 +209,7 @@ export class BoardError extends Error {
 | lease-expired | 409 | lease 过期 |
 | fencing-stale | 409 | token 不是当前 lease |
 | dependency-unmet | 409 | deps 未 done |
+| plan-stage-dependency | 409 | 写入会引入同阶段任务间的直接或间接依赖。details 含 planId、stepId、taskId、dependencyId，发布时 planId 为 null，任务用计划内 key 表示 |
 | acceptance-unmet | 422 | 验收未满足 |
 | missing-evidence | 422 | 没有合格 evidence |
 | evidence-drift | 409 | verify/submit/reconcile 时 file/doc 内容漂移或不可读；不包含命令执行结论 |
@@ -402,7 +403,7 @@ export class BoardError extends Error {
 
 | view | params | 返回 |
 |---|---|---|
-| brief | sessionId? | `{project, plans: {active, draft, archived, focusPlanId}, counts, session, focus, attention, next, health, rev}` |
+| brief | sessionId? | `{project, plans: {active, draft, archived, focusPlanId}, counts, session, focus, attention, next, stageWork, health, rev}` |
 | board | sessionId? | `{project, plan, focusPlanId, plans: PlanSummary[]（仅 active）, columns, attention, readyOrder, counts, rev}` |
 | task | taskId, sessionId? | `{task, acceptance, evidence, timeline, plan, allowedOps, rev}` |
 | plan | planId? | `{plan, head, steps, progress, rev}`；不带 planId 返回 focus；未知 planId 返回 `{plan:null}`（不抛错） |
@@ -425,6 +426,8 @@ export class BoardError extends Error {
 - `intent` 仅投影进行中任务的开放执行意图，包含最多 160 个 UTF-16 单元的单行摘要与开始时间（缺失时为 `null`）。会话身份继续取 `owner`。board 的进行中卡片另外携带 `leaseExpiresAt` 和 `leaseExpired`，由读取时的运行时租约与服务端时钟得出。无可观测的到期时间时两项均为 `null`。
 - `verifiedAt`、`verifiedBy` 来自任务的实际验收记录，缺失时为 `null`。`human` 表示人工验收，`agent` 表示 AI 验收（`lastAudit.gate:false`）或 AI 审计（`lastAudit.gate:true`），`policy` 表示历史自动验收。
 - `readyOrder` 是全部 ready 任务 ID，复用 brief 的派发排序（priority 升序，同优先级按 createdAt 升序）。brief 仍只返回前三项，board 列仍按原有顺序展示。
+
+`stageWork` 取当前任务所属的活动计划，无当前任务时取焦点计划。在其当前版本中，按 steps 顺序取首个仍有非终态任务的阶段。无匹配阶段时为 `null`。它包含 `planId`、`stepId`、`title`、`mode`、`remainingCount`、`readyCount`、`reviewCount`、`readyTaskIds`、`reviewTaskIds`。剩余量不计已提交 review 的任务和终态任务，两组 ID 各取最多五项。尚有 ready 或 in_progress 时为 `implement`，所有非终态任务均到 review 时为 `audit`，其余为 `waiting`。
 
 `TaskView` = 完整 Task + `allowedOps: [{op, enabled, reason?}]`。
 
@@ -466,6 +469,8 @@ export class BoardError extends Error {
 - `plan.adopt` / `plan.release` 都产生 version+1；adopt 接受 planRef=null 或指向本计划旧版本（orphaned）的任务，release 把 planRef 置空；跨计划移动走 release → adopt。
 - 计划标题项目内唯一（含 archived）；计划不删除。
 - `task.create` 不接受 planRef：成员关系只能通过计划版本变化（publish/revise/adopt/release）。
+- 发布、修订、归位或任务依赖编辑不得在当前计划版本内新增任何连接同阶段任务的直接或间接依赖路径。阶段成员以版本的 steps 为准。已有路径可以保留或解除，解除后不得重建。修订和归位可把有先后关系的任务拆到不同阶段。
+- agent 优先推进当前阶段的可执行任务并逐项提交，之后集中独立审查。同阶段未全部提交时可先处理阻塞，包括存量依赖需要先验收的任务。阶段提示不改变领取资格或单任务验收规则。
 - 并发：head 级命令用 expectedRev，版本级命令用 baseVersion，focus 用 projectRev。
 
 **依赖级联**
@@ -835,7 +840,7 @@ task/board/brief 的审计门摘要使用 `audit=1`，最近验收使用 `lastAu
 
 列表默认 30 条，上限 100，按 ID 排序。`nextCursor` 为下一页的 `after`，空值表示结束。每次读取独立取已验证水位。任务长字段和验收项数量有上限，`truncated` 标记裁剪。MCP 任务视图不公开 fencing token、运行时租约、工作区路径或证据正文。
 
-明确指定任务、续做已知项目或交付已有任务时，先使用 `get_work_context`。项目 ID 须由可信上下文提供或经 `list_projects` 确认。工具不按本地路径、标题或名称猜测归属。返回 `{projectId, projectRev, project:{name,phase}, task, candidates, candidateCount, nextAction}`。
+明确指定任务、续做已知项目或交付已有任务时，先使用 `get_work_context`。项目 ID 须由可信上下文提供或经 `list_projects` 确认。工具不按本地路径、标题或名称猜测归属。返回 `{projectId, projectRev, project:{name,phase}, task, candidates, candidateCount, nextAction, stageWork}`，阶段提示与 brief 同义。
 
 - 指定 `taskId` 时返回 `get_task` 的任务详情，加上 `requiresAudit` 和 `blocker`。阻塞信息来自当前任务记录，返回 `{code,note,truncated}` 或 `null`，code 上限 128、note 上限 400 个 UTF-16 代码单元。任务不存在返回 `not-found`。候选为空。
 - 只指定项目时 `task:null`。候选是最多 5 个未结任务的摘要，先按 interrupted、in_progress、review、blocked、ready、backlog 排序，同状态按最近更新、再按 ID 排序。即使只有一张候选也须确认它与用户请求一致。`candidateCount` 是全部未结任务数。

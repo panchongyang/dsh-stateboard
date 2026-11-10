@@ -31,6 +31,11 @@ const PLAN = {
     title: 'one',
     tasks: [
       { key: 't1', title: 'T1', acceptance: [{ text: 'artifact exists' }] },
+    ],
+  }, {
+    id: 's2',
+    title: 'two',
+    tasks: [
       { key: 't2', title: 'T2', deps: ['t1'], acceptance: [{ text: 'second' }] },
     ],
   }],

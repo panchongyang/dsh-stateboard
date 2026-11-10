@@ -231,7 +231,7 @@
   },
   {
     "name": "project_plan",
-    "description": "Manage versioned plans (plan = initiative, steps = phases, tasks = work). publish (a draft, or create+publish without planId), revise (version+1), create (draft), rename, adopt/release tasks, archive/unarchive. adopt/release bump the version and never delete tasks. focus is human-only.",
+    "description": "Manage versioned plans (plan = initiative, steps = phases, tasks = work). Keep tasks within a phase independent; split dependent tasks across phases. publish (a draft, or create+publish without planId), revise (version+1), create (draft), rename, adopt/release tasks, archive/unarchive. adopt/release bump the version and never delete tasks. focus is human-only.",
     "parameters": {
       "type": "object",
       "properties": {

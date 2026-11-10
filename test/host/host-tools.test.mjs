@@ -13,6 +13,7 @@ import { ProjectService } from '../../lib/core/service.js';
 
 const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-state-'));
 const wsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-ws-'));
+const unregisteredWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-fresh-ws-'));
 fs.writeFileSync(path.join(wsDir, 'artifact.txt'), 'hello tool');
 
 const tools = new Map();
@@ -57,6 +58,15 @@ try {
 
   // 分段职责：通过真实工具发布计划再领取/开始任务，响应渲染须带任务、验收和 token。
   const planTool = tools.get('project_plan');
+  await assert.rejects(planTool.execute({
+    op: 'publish', title: 'Invalid stage',
+    steps: [{ id: 's1', title: 'one', tasks: [
+      { key: 'a', title: 'A', acceptance: [{ text: 'ok' }] },
+      { key: 'b', title: 'B', deps: ['a'], acceptance: [{ text: 'ok' }] },
+    ] }],
+  }, { ...exec, agent: { id: 'session-first-publish', session: { header: { cwd: unregisteredWorkspace } } } }),
+  { code: 'plan-stage-dependency' });
+  assert.deepEqual(fs.readdirSync(unregisteredWorkspace), []);
   const published = await planTool.execute({
     op: 'publish',
     title: 'Tool plan',
@@ -360,4 +370,5 @@ try {
   for (const dispose of disposers) { try { dispose(); } catch { /* ignore */ } }
   fs.rmSync(stateDir, { recursive: true, force: true });
   fs.rmSync(wsDir, { recursive: true, force: true });
+  fs.rmSync(unregisteredWorkspace, { recursive: true, force: true });
 }
