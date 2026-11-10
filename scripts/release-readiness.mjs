@@ -412,6 +412,10 @@ function evaluateLicenseChecks(licenseFiles, entries, entryTypes) {
   return checks;
 }
 
+export function isValidPrivateField(value) {
+  return value === undefined || typeof value === 'boolean';
+}
+
 function evaluateMetadataChecks(pkg) {
   const checks = [];
   const add = (id, ok, message) => checks.push({ id, category: 'technical', status: ok ? 'pass' : 'fail', message });
@@ -543,7 +547,12 @@ export function evaluateReadiness({
   });
   const readme = evaluateReadmeChecks(readmeText, readmeError, entries);
   checks.push(...readme.checks);
-  if (packageJson) {
+  if (packageJson && !isValidPrivateField(packageJson.private)) {
+    checks.push({
+      id: 'private-field', category: 'technical', status: 'fail',
+      message: 'package.json private field must be a boolean when present',
+    });
+  } else if (packageJson) {
     checks.push({
       id: 'private-field', category: 'manual-gate', status: packageJson.private === true ? 'manual' : 'pass',
       message: packageJson.private === true

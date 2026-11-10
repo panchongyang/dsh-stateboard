@@ -22,7 +22,9 @@ test('purity checks runtime trees, metadata and legacy gate names', () => {
   assert.equal(checkMetadata(packageJson, license), true);
   assert.deepEqual(assertPureText('requiresAudit gate:audit 审计门'), { matches: 0 });
   for (const value of ['requiresHumanReview', 'gate:human']) assert.throws(() => assertPureText('runtime text: ' + value), /legacy gate names/);
-  for (const mutation of [{ name: 'fake' }, { version: '0.1.0' }, { private: false }, { license: 'MIT' }, { bin: 'bin/wt.mjs' }, { files: [...packageJson.files, 'scripts'] }]) {
+  assert.equal(checkMetadata({ ...packageJson, private: true }, license), true);
+  assert.equal(checkMetadata({ ...packageJson, private: false }, license), true);
+  for (const mutation of [{ name: 'fake' }, { version: '0.1.0' }, { private: 'false' }, { license: 'MIT' }, { bin: 'bin/wt.mjs' }, { files: [...packageJson.files, 'scripts'] }]) {
     assert.throws(() => checkMetadata({ ...packageJson, ...mutation }, license), /metadata|whitelist/);
   }
   assert.throws(() => checkMetadata({ ...packageJson, repository: 'https://example.com/fake' }, license), /repository/);
@@ -68,7 +70,7 @@ test('untrusted constructor escape PoC cannot read host process during identity 
 test('purity uses the readiness parser to block packaged README regressions, not the private gate', () => {
   const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
   assert.equal(assertPackedReadmeLinks(readme, base).relativeMissing, 0);
-  assert.equal(checkMetadata(packageJson, license), true); // private:true remains allowed here
+  assert.equal(checkMetadata({ ...packageJson, private: true }, license), true);
   for (const link of ['[source](<docs/INSTALL.md>)', '[source][s]\n\n[s]: docs/INSTALL.md', '[escape](../outside.md)', '[encoded](%2e%2e/outside.md)']) {
     assert.throws(() => assertPackedReadmeLinks(readme + '\n' + link, base), /missing or unsafe/, link);
   }

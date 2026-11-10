@@ -4,7 +4,7 @@
 
 ## 1. 本地候选准备
 
-产品 `dsh-stateboard@0.2.0`，BSD-3-Clause。包保持 `private:true`，registry 与公开源码尚未可用；repository 元数据不代表站点已公开。[支持矩阵](<../README.md#支持环境>)是唯一产品口径：Windows 11 x64，DSH `0.2.1-rc.2` 至 `0.2.2-rc.1`，不自动扩到 latest；DSH `0.2.2-rc.1` 的 Node >=24.9，Node22 仅 core/client 基线，macOS/Linux 未测。
+产品 `dsh-stateboard@0.2.0` 使用 BSD-3-Clause 许可证。源码在 [GitHub 仓库](https://github.com/panchongyang/dsh-stateboard) 公开，包的可用版本以 npm registry 为准。[支持矩阵](<../README.md#支持环境>)覆盖 Windows 11 x64 和 DSH `0.2.1-rc.2` 至 `0.2.2-rc.1`。DSH `0.2.2-rc.1` 要求 Node >=24.9，Node 22 是 core/client 基线，macOS 和 Linux 尚未测试。
 
 候选说明应列：基线与冻结提交、变更面、行为是否变化、兼容类别、定向/全量结果与 SKIP、安装来源、备份和匹配旧包、RPO、已知限制。事件/存储变更必须解释 additive/refuse/migration；schema v3 即使事件类型兼容，旧构建也可能静默丢失审计门，不能只看“能打开”。
 
@@ -25,7 +25,7 @@ npm run check:release:readiness
 
 - `npm run check:release` 实际 npm pack 后检查精确文件白名单、普通文件、元数据/BSD许可、敏感内容、旧门名、产品 Git 只读调用面和 README 包内相对链接。当前包仅交付 lib/src、README、docs/CONTRACT.md、LICENSE、package.json；不把其余 docs、scripts、test、内部档案或自用CLI装进 npm。
 - `npm run check:release:readiness` 用同一入口额外检查公开元数据、main/exports/client 与 README 语法/链接，输出 JSON 的 blockers/manualGates/readmeLinks/capability。`private:true` 是独立人工闸，ready:false/exit1 是预期；其余 technical blockers 必须逐项报告，不能被 private 掩盖。
-- 两种模式均可用 `-- --tarball <tgz>` 检查冻结包。技术纯度要求当前候选仍是 private；将来明确批准发布时，需同步审查这一断言与公开 metadata，不能擅自修改以骗绿。
+- 两种模式均可用 `-- --tarball <tgz>` 检查冻结包。纯度检查验证元数据和分发内容。readiness 另将 `private:true` 列为人工闸，发布授权仍按下文单独记录。
 - 链接解析复用声明的 Markdown 子集；未支持语法阻断，不校验 fragment 是否存在或外链可达性。不检查 Git 全历史、registry 线上可用性、法律合规或任意宿主版本兼容。
 
 README 的必要安装/演示/恢复说明自包含，不用未公开 GitHub 链接伪装修复 npm 断链。源码文档入口：[文档地图](<INDEX.md>) · [安装](<INSTALL.md>) · [演示](<DEMO.md>) · [备份/恢复](<RECOVERY.md>) · [迁移](<MIGRATION.md>) · [架构](<ARCHITECTURE.md>)。

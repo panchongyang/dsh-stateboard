@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { evaluateReadiness, findLicenseEntries, readinessFailure, resolveReadmeLinks } from './release-readiness.mjs';
+import { evaluateReadiness, findLicenseEntries, isValidPrivateField, readinessFailure, resolveReadmeLinks } from './release-readiness.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LEGACY = /requiresHumanReview|gate:human/g;
@@ -21,7 +21,8 @@ const GIT_CALLERS = new Map([
 const GIT_SPAWN = /\b(?:spawnSync|spawn|execFileSync|execFile|execSync)\s*\(/g;
 
 export function checkMetadata(metadata, licenseText) {
-  if (metadata?.name !== 'dsh-stateboard' || metadata.version !== '0.2.0' || metadata.private !== true || metadata.license !== 'BSD-3-Clause') throw new Error('Release metadata must be dsh-stateboard@0.2.0, private:true, BSD-3-Clause');
+  if (metadata?.name !== 'dsh-stateboard' || metadata.version !== '0.2.0' || metadata.license !== 'BSD-3-Clause') throw new Error('Release metadata must be dsh-stateboard@0.2.0, BSD-3-Clause');
+  if (!isValidPrivateField(metadata.private)) throw new Error('Release metadata private field must be a boolean when present');
   const url = typeof metadata.repository === 'string' ? metadata.repository : metadata.repository?.url;
   if (typeof url !== 'string' || !/^https:\/\/github\.com\/panchongyang\/dsh-stateboard(?:\.git)?\/?$/.test(url) || (metadata.repository && typeof metadata.repository === 'object' && metadata.repository.type !== 'git')) throw new Error('Release repository URL is missing or incorrect');
   if (metadata.bin != null || !Array.isArray(metadata.files) || metadata.files.join('|') !== 'lib/index.js|lib/cordis.patch.yml|lib/client.js|lib/client.js.map|lib/core|lib/host|lib/shared|src|README.md|docs/CONTRACT.md|LICENSE') throw new Error('Release files whitelist or bin registration is incorrect');

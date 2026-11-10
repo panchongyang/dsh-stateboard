@@ -1,7 +1,6 @@
 {
   "name": "dsh-stateboard",
   "version": "0.2.0",
-  "private": true,
   "license": "BSD-3-Clause",
   "author": "潘重阳",
   "homepage": "https://github.com/panchongyang/dsh-stateboard#readme",

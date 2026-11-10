@@ -1,8 +1,8 @@
 # ProjectBoard · dsh-stateboard
 
-DSH 的跨会话项目板：通过 **UI + agent 工具**管理项目、计划、任务、外置文档与结果材料。首发候选 **0.2.0**，许可证 [BSD-3-Clause](<./LICENSE>)。
+DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、任务、外置文档与结果材料。当前版本 **0.2.0**，许可证 [BSD-3-Clause](<./LICENSE>)。
 
-**尚未公开发布。** 包保持 `private:true`；registry 包名安装与公开源码下载只在维护者完成公开发布后可用。目前可使用经授权取得的本地 tgz 或源码目录，不能把本地包验证当作线上发布成功。
+源码可从 [GitHub 仓库](https://github.com/panchongyang/dsh-stateboard) 下载。npm 安装使用公共 registry 上的同版本包，或使用已下载的同版本 tgz。
 
 导航：[支持环境](#支持环境) · [安装与首次运行](#安装与首次运行) · [约三分钟文字演示](#约三分钟文字演示) · [真实限制](#真实限制) · [备份回退与迁移](#备份回退与迁移) · [贡献与架构入口](#贡献与架构入口)
 
@@ -22,7 +22,7 @@ DSH 的跨会话项目板：通过 **UI + agent 工具**管理项目、计划、
 | Web 宿主 Node | DSH `0.2.2-rc.1` 要求 **Node >=24.9**；其它支持带内版本仍须满足各自宿主要求 |
 | 插件 engines | `Node >=22` 只是 core/client 基线，**不是 Node 22 Web 宿主支持承诺** |
 | 验证范围 | 本地隔离宿主覆盖两来源装配、工具/HTTP/客户端包、首次建项目、无 Git 降级、重装重启；不代表逐一实测支持带内所有版本/Node组合 |
-| 未验证 | 在线 registry 安装、公开仓下载、浏览器真实交互、LLM 推理；Node 22 core 留有一次锁竞争失败记录；未覆盖组合不得视为通过 |
+| 未验证 | 在线 registry 的 DSH 安装、浏览器真实交互、LLM 推理；Node 22 core 留有一次锁竞争失败记录；未覆盖组合不得视为通过 |
 
 先安装兼容的 DSH Web 宿主，使 `dsh` 在 PATH。无需 pm2、固定端口、作者目录或固定 profile。profile 必须包含宿主 Web composition；仅有 agent composition 的环境没有看板 UI。
 
@@ -36,16 +36,16 @@ DSH 的跨会话项目板：通过 **UI + agent 工具**管理项目、计划、
 
 ### 2. 两种来源，任选其一
 
-**npm 产物来源**：未发布时从维护者取得本地候选 tgz，核对版本与提供的校验值；发布后才可直接用包名。
+**npm 产物来源**。选择公共 registry 上的指定版本，或使用同版本的本地 tgz 并核对校验值。
 
 ```text
-# 本地候选（把占位路径替换为实际 Windows 绝对路径）
+# 本地包（把占位路径替换为实际 Windows 绝对路径）
 dsh plugin --profile PROFILE add "D:\Packages\dsh-stateboard-0.2.0.tgz"
-# 仅在公共 registry 已发布后：
-dsh plugin --profile PROFILE add dsh-stateboard
+# 从公共 npm registry 安装指定版本：
+dsh plugin --profile PROFILE add dsh-stateboard@0.2.0
 ```
 
-**源码来源**：取得同一候选版本的源码归档或经授权的仓库副本（不要求 Git clone）。已提交客户端产物的完整源码可直接装配；修改了客户端才先构建：
+**源码来源**。下载与目标版本对应的完整源码归档并解压。归档已含客户端产物，修改客户端时先构建。
 
 ```text
 # 仅需要重建客户端时，在源码根目录执行：

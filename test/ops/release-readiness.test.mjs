@@ -205,6 +205,17 @@ test('private:true is a manual gate, not a technical blocker', () => {
   assert.ok(result.blockers.every((blocker) => blocker.category === 'technical'));
 });
 
+// 责任：非法 private 值必须阻断发布，显式 false 与缺省语义一致。
+test('private must be a boolean when present', () => {
+  assert.equal(evaluate({ packageJson: { ...PACKAGE, private: false } }).ready, true);
+  for (const value of ['false', null]) {
+    const result = evaluate({ packageJson: { ...PACKAGE, private: value } });
+    assert.equal(result.ready, false);
+    assert.ok(blockerIds(result).includes('private-field'));
+    assert.deepEqual(result.manualGates, []);
+  }
+});
+
 // 责任：README 相对目标须对打包清单检查，工作区里存在不能弥补包里缺失。
 test('README relative targets are checked against package entries, not the worktree', () => {
   const cases = [
@@ -294,7 +305,7 @@ test('current README link counts remain explicit against the synthetic packed en
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
   const result = resolveReadmeLinks(readme, ENTRIES);
   assert.deepEqual(result.summary, {
-    occurrencesTotal: 11,
+    occurrencesTotal: 12,
     relativeOccurrences: 2,
     relativeMissing: 0,
     relativeUniqueTargets: 2,
@@ -305,7 +316,7 @@ test('current README link counts remain explicit against the synthetic packed en
     angleMissing: 0,
     plainOccurrences: 0,
     plainMissing: 0,
-    externalOrAnchorOccurrences: 9,
+    externalOrAnchorOccurrences: 10,
     uniqueMissingTargets: [],
   });
   assert.deepEqual(result.unsupported, []);
