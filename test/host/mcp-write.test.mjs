@@ -291,6 +291,7 @@ async function submitForReview(mcp, projectId, task, evidence = { kind: 'note', 
   return { ...claim, requestId: 'review', expectedRev: submitted.taskRev };
 }
 
+// 责任：MCP 普通任务允许提交会话无报告验收，并持久化真实会话身份。
 test('MCP ordinary verification accepts the authenticated submitter without an audit report', async (t) => {
   const { svc, h } = await withProject(t);
   const task = await readyTask(h);
@@ -406,9 +407,6 @@ test('an ungated review keeps human acceptance and MCP rejection', { timeout: 12
   const review = await submitForReview(mcp, h.id, task);
   const { sessionToken } = await success(mcp, 'open_work_session', { projectId: h.id });
   const independent = { ...review, sessionToken };
-  denied(await mcp.call('verify_task', {
-    ...independent, audit: { report: 'Checked but this is not an audit gate.' },
-  }), 'forbidden-role');
   const rejected = await success(mcp, 'reject_task', { ...independent, reason: 'More evidence needed' });
   assert.equal(rejected.state, 'ready');
   assert.equal(h.state.tasks[task.id].lastAudit, null);

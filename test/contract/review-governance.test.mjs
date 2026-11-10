@@ -155,6 +155,7 @@ test('ordinary verification accepts either the worker or another agent without a
   }
 });
 
+// 责任：普通验收不能绕过验收项或证据漂移，拒绝必须保持零副作用。
 test('ordinary verification still refuses unmet acceptance and hard drift without side effects', async (t) => {
   const f = await fixture(t, { gated: false, file: true });
   await f.review();
