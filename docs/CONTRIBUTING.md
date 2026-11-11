@@ -1,6 +1,6 @@
 # 贡献指南
 
-产品是 `dsh-stateboard@0.2.0`（BSD-3-Clause）的 UI + agent 插件，不提供第三种 CLI 入口。先读 [README](<../README.md>) 的产品边界与[支持矩阵](<../README.md#支持环境>)，再读 [CONTRACT](<CONTRACT.md>)、[架构模块地图](<ARCHITECTURE.md>)。安装见 [安装入口](<INSTALL.md>)，备份/故障恢复见 [RECOVERY](<RECOVERY.md>)，搬迁/升级见 [MIGRATION](<MIGRATION.md>)。
+产品是 `dsh-stateboard@0.3.1`（BSD-3-Clause）的 UI + agent 插件，不提供第三种 CLI 入口。先读 [README](<../README.md>) 的产品边界与[支持矩阵](<../README.md#支持环境>)，再读 [CONTRACT](<CONTRACT.md>)、[架构模块地图](<ARCHITECTURE.md>)。安装见 [安装入口](<INSTALL.md>)，备份/故障恢复见 [RECOVERY](<RECOVERY.md>)，搬迁/升级见 [MIGRATION](<MIGRATION.md>)。
 
 ## 开工与环境
 
