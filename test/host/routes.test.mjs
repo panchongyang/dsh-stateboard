@@ -123,6 +123,19 @@ try {
   assert.equal(detail.value.plan.id, planId);
   assert.equal(detail.value.head.status, 'active');
 
+  const invalidStage = await call('POST', '/projects/' + projectId + '/commands', {
+    op: 'plan.publish',
+    title: 'Invalid stage',
+    steps: [{ id: 's1', title: 'one', tasks: [
+      { key: 'a', title: 'A', acceptance: [{ text: 'ok' }] },
+      { key: 'b', title: 'B', deps: ['a'], acceptance: [{ text: 'ok' }] },
+    ] }],
+  });
+  assert.equal(invalidStage.status, 409);
+  assert.equal(invalidStage.value.error.code, 'plan-stage-dependency');
+  assert.equal(invalidStage.value.error.details.stepId, 's1');
+  assert.equal((await call('GET', '/projects/' + projectId + '/board')).value.rev, board.value.rev);
+
   const health = await call('GET', '/projects/' + projectId + '/health');
   assert.equal(health.status, 200);
   assert.equal(health.value.ok, true);

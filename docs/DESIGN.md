@@ -99,7 +99,7 @@ append-only 事件是事实；看板、进度、digest 都是投影。投影可�
 
 拦截只决定“这一次能不能做”；可追溯才能回答“谁、依据什么、做了什么、后来谁接受了”。这条原则分两侧，不能混用：
 
-- **AI（worker）必须拦截**：agent 不能自证完成。submit/reconcile 进入 review 前，完整性错误与 freshness 漂移都直接打回（409、零落盘、lease 保留），review 期间 agent 不得改门；非门控 verify 仅 human，审计门可由独立 agent 带报告显式 verify。对 AI 的“可追溯”是证据链 + 拒绝理由，不是放任。
+- **Agent 不得豁免证据漂移**：submit/reconcile 进入 review 前，完整性错误与内容漂移直接打回（409、零落盘、lease 保留）；verify 时同样阻断。普通任务可由任意授权 agent 显式验收，包括 worker；审计门要求独立 agent 带报告，且 review 期间 agent 不得改门。两种通过均记录验收者与证据范围。
 - **人（owner/verifier）不以死路拦截**：人需要看到事实、知道谁能修、有哪些合法出路；面向人的硬底线只保留“记录会失真”的完整性问题，freshness 由人选择 refresh/waive/返工。严格度属于项目所有者，系统不替人做风险偏好。
 - 每个阻断都要留下可复核的记录，并给出至少一条非豁免的合法出路；没有出路的拦截只会训练人绕过系统，反而降低可追溯性。
 - 严格度应可声明、可审计、可回退；放宽不删除历史，放宽本身也是记录。
@@ -587,7 +587,7 @@ DSH 的 `agent/created` 是 serial + awaited 的，监听器抛错会导致创�
 
 - **状态目录不在工作区**，agent 的普通文件工具默认不会去改；改了也会被哈希链/fsck 发现。
 - **UI token**：进程启动时生成随机 token，通过 index 注入 `globalThis.__PROJECT_BOARD__`；所有写请求必须带 `x-project-board-token`。再校验 `Origin`/`Sec-Fetch-Site`，只允许同源。
-- **角色**：human（UI）保留最终兜底；任意 agent 可驳回 review（有 live lease 时仅持有者）；独立 agent 可对审计门带报告 verify。agent 在 review 不得改门，其他状态只能开不能关；unassign、漂移 refresh/ack、门控 cancel、reopen/override 仅 human。
+- **角色**：human（UI）保留最终兜底；任意授权 agent 可 verify 普通任务；审计门需独立 agent 带报告 verify。任意 agent 可驳回 review（有 live lease 时仅持有者）。agent 在 review 不得改门，其他状态只能开不能关；unassign、漂移 refresh/ack、门控 cancel、reopen/override 仅 human。
 - **审计范围**：lastAudit 的 taskRev 是不可变历史锚点（正整数且 ≤ 当前 rev），scopeDigest 则绑定标题/说明、依赖、验收项与覆盖、审计门、active evidence/来源及 worker 集合。planRef/orphaned/priority/weight/rev 等元数据不进入范围指纹；允许这些管理动作不代表重新审计。agent 审计 done 的实质 plan.revise 改动返回 audit-scope-locked（409），先由 human reopen，再返工、重提和验收。指纹只是范围一致性记录，不是正确性证明。
 - **输入意图不静默降级**：task.create/update/gate 与 plan.create/publish/revise 的顶层字段、嵌套 step/task 定义使用白名单；未知字段、非 boolean 的显式 requiresAudit、gate:* 命名空间内非 gate:audit 标签返回 invalid-command（400）。草稿写入前校验，publish 重验已存定义；不识别旧别名，也不宣称所有命令都使用严格白名单，无需新增人类技术审批。
 - **不执行看板里的任何内容**：文档按 markdown 渲染，禁用原始 HTML；URL evidence 不自动抓取；命令 evidence 只记录，不重放。
@@ -631,7 +631,7 @@ DSH 的 `agent/created` 是 serial + awaited 的，监听器抛错会导致创�
 
 - `project_board` 是唯一读工具；不提供 10 个 get_xxx。模型需要什么视图用 `view` 选。
 - 所有写操作都要求 `expectedRev`（新建除外）；工具描述里明确"先读再写，冲突就重读"。
-- `verify/reject/gate` 依状态与 allowedOps 授权；非门控 agent verify、参与者自审、review 改门分别给出可操作拒绝理由。独立性仅 session 级，不抵抗新 session/子代理血统绕过；报告为自述。
+- `verify/reject/gate` 依状态与 allowedOps 授权；审计门的参与者自审及 agent 在 review 改门分别给出可操作拒绝理由。独立性仅 session 级，不抵抗新 session/子代理血统绕过；报告为自述。
 - `project_task submit` 的 `evidence` 是数组，每项 `{kind, ref, hash?, summary}`；文件类 evidence 在服务端立即校验存在性与 hash。`file` 的 `ref` 默认相对 workspace 解析，服务端拒绝逃逸到 workspace 外的路径（除非 policy 显式允许）；`command` 在 v1 是 self-reported，v1.5 由工具钩子自动采集。
 - `project_doc get` 默认返回全文，但有 `maxBytes` 上限；超限返回 rev/hash + 截断标记，模型可分段读。`project_board view=doc` 只返回摘要，避免把大文档塞进上下文。
 - 工具返回永远是"结构化的下一步"：成功给新 rev + 建议；失败给错误码 + 当前状态 + 可行动作。不要只返回 "error"。
@@ -663,7 +663,7 @@ DSH 的 `agent/created` 是 serial + awaited 的，监听器抛错会导致创�
 | `dependency-unmet` | 409 | 依赖未完成 | 先做依赖或 block |
 | `acceptance-unmet` | 422 | 验收项未满足 | 补证据或改 acceptance（需修订） |
 | `missing-evidence` | 422 | 没有合格证据 | 先产出证据 |
-| `verification-required` | 403 | 需要获授权验收者 | 请人类，或审计门的独立 agent 带报告显式 verify |
+| `verification-required` | 403 | 需要获授权验收者 | 普通任务由人类或授权 agent 显式 verify，审计门的 agent 还需独立并带报告 |
 | `forbidden-role` | 403 | 角色不允许 | 换操作或请人类 |
 | `project-inactive` | 409 | paused/archived | 请人类恢复 |
 | `not-found` | 404 | 实体不存在 | 重读 board |
@@ -913,8 +913,8 @@ M0 必须先做，因为它验证的是"DSH 到底让不让第三方插件这么
 你要哪一种？还是"内部存 + 自动镜像到仓库"的双写？
 
 **Q4. 谁能把任务置为 done？**
-提交只进入 review；human 可验收任何 review。requiresAudit / gate:audit 的审计门还允许独立 agent 带 audit.report 显式 verify；报告为自述，lastAudit 记录证据/worker 快照。agent 仅在非 review 开门，不能关门；门控任务仅 human cancel。
-human verify 报告可空，无需额外配置；漂移 refresh/acknowledge 仅 human。非门控 agent verify 仍 403。
+提交只进入 review；human 可验收任何 review，普通任务可由任意授权 agent 显式 verify。requiresAudit / gate:audit 的审计门要求 agent 独立并提供 audit.report；lastAudit 记录验收者与证据/worker 快照。agent 仅在非 review 开门，不能关门；门控任务仅 human cancel。
+普通任务的 agent verify 和所有 human verify 均无需报告或额外配置；漂移 refresh/acknowledge 仅 human。
 
 **Q5. 子智能体能否并行写？**
 推荐：默认只读 + 显式 grant；同一任务同一时刻只有一个写者。

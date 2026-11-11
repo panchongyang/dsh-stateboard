@@ -13,6 +13,7 @@ import { ProjectService } from '../../lib/core/service.js';
 
 const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-state-'));
 const wsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-ws-'));
+const unregisteredWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-fresh-ws-'));
 fs.writeFileSync(path.join(wsDir, 'artifact.txt'), 'hello tool');
 
 const tools = new Map();
@@ -57,6 +58,15 @@ try {
 
   // 分段职责：通过真实工具发布计划再领取/开始任务，响应渲染须带任务、验收和 token。
   const planTool = tools.get('project_plan');
+  await assert.rejects(planTool.execute({
+    op: 'publish', title: 'Invalid stage',
+    steps: [{ id: 's1', title: 'one', tasks: [
+      { key: 'a', title: 'A', acceptance: [{ text: 'ok' }] },
+      { key: 'b', title: 'B', deps: ['a'], acceptance: [{ text: 'ok' }] },
+    ] }],
+  }, { ...exec, agent: { id: 'session-first-publish', session: { header: { cwd: unregisteredWorkspace } } } }),
+  { code: 'plan-stage-dependency' });
+  assert.deepEqual(fs.readdirSync(unregisteredWorkspace), []);
   const published = await planTool.execute({
     op: 'publish',
     title: 'Tool plan',
@@ -337,8 +347,6 @@ try {
   const auditText = taskTool.output.render({ op: 'verify' }, verifiedAudit)[0].text;
   assert.match(auditText, /AI审计（自述）/);
   assert.match(auditText, /by.kind=agent/);
-  const notGated = await taskTool.execute({ op: 'verify', taskId, expectedRev: submitted.task.task.rev, audit }, auditor).then(() => null, error => error);
-  assert.equal(JSON.parse(notGated.message).details.reason, 'not-audit-gate');
   const unassignDenied = await taskTool.execute({ op: 'reject', taskId, expectedRev: submitted.task.task.rev, reason: 'rework synthetic evidence', unassign: true }, auditor).then(() => null, error => error);
   assert.equal(JSON.parse(unassignDenied.message).details.reason, 'unassign-human-only');
   const rejectedAudit = await taskTool.execute({ op: 'reject', taskId, expectedRev: submitted.task.task.rev, reason: 'rework synthetic evidence', audit }, auditor);
@@ -346,9 +354,21 @@ try {
   assert.equal(rejectedAudit.task.task.lastAudit.verdict, 'fail');
   assert.equal(rejectedAudit.task.task.lastAudit.by.sessionId, auditor.agent.id);
 
+  const ordinaryClaimed = rejectedAudit.task.lease ? rejectedAudit
+    : await taskTool.execute({ op: 'claim', taskId, expectedRev: rejectedAudit.task.task.rev }, exec);
+  const fencingToken = ordinaryClaimed.task.lease.token;
+  const ordinaryBegun = await taskTool.execute({ op: 'begin', taskId, expectedRev: ordinaryClaimed.task.task.rev, fencingToken, summary: 'ordinary rework' }, exec);
+  const ordinarySubmitted = await taskTool.execute({ op: 'submit', taskId, expectedRev: ordinaryBegun.task.task.rev, fencingToken,
+    evidence: [{ kind: 'note', ref: 'reworked evidence', acceptanceId: ordinaryBegun.task.task.acceptance[0].id }] }, exec);
+  const verifiedOrdinary = await taskTool.execute({ op: 'verify', taskId, expectedRev: ordinarySubmitted.task.task.rev }, exec);
+  assert.equal(verifiedOrdinary.task.task.state, 'done');
+  assert.equal(verifiedOrdinary.task.task.lastAudit.by.sessionId, exec.agent.id);
+  assert.match(taskTool.output.render({ op: 'verify' }, verifiedOrdinary)[0].text, /AI验收（自述）/);
+
   console.log('PASS host-tools: plan/claim/begin/submit/board/doc/audit/agent-reject');
 } finally {
   for (const dispose of disposers) { try { dispose(); } catch { /* ignore */ } }
   fs.rmSync(stateDir, { recursive: true, force: true });
   fs.rmSync(wsDir, { recursive: true, force: true });
+  fs.rmSync(unregisteredWorkspace, { recursive: true, force: true });
 }

@@ -358,13 +358,16 @@ test('orphaned task keeps its old planRef until adopted again', async () => {
   await h.command(cmd('plan.revise', {
     planId: head.id,
     baseVersion: 1,
-    steps: [{ id: 's1', title: 'first', tasks: [{ key: 'keep', taskId: t1.id, title: 'T1', acceptance: [{ text: 'artifact exists' }] }] }],
+    steps: [
+      { id: 's1', title: 'first', tasks: [{ key: 'keep', taskId: t1.id, title: 'T1', acceptance: [{ text: 'artifact exists' }] }] },
+      { id: 's2', title: 'second' },
+    ],
   }));
   assert.equal(h.state.planHeads[head.id].currentVersion, 2);
   assert.equal(h.state.tasks[t2.id].orphaned, true);
   assert.equal(h.state.tasks[t2.id].planRef.version, 1);
 
-  await h.command(cmd('plan.adopt', { planId: head.id, baseVersion: 2, taskIds: [t2.id], stepId: 's1' }));
+  await h.command(cmd('plan.adopt', { planId: head.id, baseVersion: 2, taskIds: [t2.id], stepId: 's2' }));
   assert.equal(h.state.tasks[t2.id].orphaned, false);
   assert.equal(h.state.tasks[t2.id].planRef.version, 3);
   await svc.close();

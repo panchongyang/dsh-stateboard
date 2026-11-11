@@ -1,5 +1,6 @@
 // 状态、操作和证据的展示词汇表：只翻译已有结果，不把观测提升为正确性结论。
 import type { Actor, Evidence, Plan, CommandResult, ApiError } from './types.ts';
+import { isOrdinaryAgentAcceptance } from '../../../lib/shared/verification.js';
 
 export const STATE_LABELS: Record<string, string> = {
   backlog: '待办', ready: '就绪', in_progress: '进行中', review: '评审中',
@@ -111,7 +112,6 @@ export const REASON_LABELS: Record<string, string> = {
   'only a human can cancel a gated task': '已开启审计的任务只能由人类取消',
   'project is paused/archived': '项目已暂停或归档',
   'not available': '当前不可用',
-  'not-audit-gate': '非门控任务需要人类验收；agent 不能在评审中开门',
   'not-independent': '参与过实现，请交给独立审计会话或人类',
   'worker-unknown': '实现者未知，请由人类验收',
   'human only in review or to disable a gate': '评审中改门、关闭审计门仅人类可操作',
@@ -122,9 +122,10 @@ export const REASON_LABELS: Record<string, string> = {
 };
 
 // 未知审计身份不能显示成人类验收，代理报告始终标注自述。
-export function auditActorLabel(audit: { by?: Actor }): string {
+export function auditActorLabel(audit: { by?: Actor; gate?: boolean; verdict?: string }): string {
   const kind = audit && audit.by && audit.by.kind;
-  return kind === 'agent' ? 'AI审计（自述）' : kind === 'human' ? '人类验收记录' : '审计记录（身份未知）';
+  if (kind === 'agent') return isOrdinaryAgentAcceptance(audit) ? 'AI验收（自述）' : 'AI审计（自述）';
+  return kind === 'human' ? '人类验收记录' : '审计记录（身份未知）';
 }
 
 export function stateLabel<T extends string | undefined>(value: T): string | T { return STATE_LABELS[value!] || value; }

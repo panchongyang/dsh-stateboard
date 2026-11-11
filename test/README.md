@@ -6,7 +6,7 @@
 
 ## 规模
 
-- `119` 个 tracked `.mjs` 文件，含 `96` 个 `.test.mjs` 入口、host preflight、worker、helpers/fixtures 与 manifest；测试接线和预算的唯一来源是 [suite-manifest.mjs](<suite-manifest.mjs>)；discovery 比较 Git tracked 清单，新增入口必须显式登记，未跟踪文件不执行。
+- `125` 个 tracked `.mjs` 文件，含 `102` 个 `.test.mjs` 入口、host preflight、worker、helpers/fixtures 与 manifest；测试接线和预算的唯一来源是 [suite-manifest.mjs](<suite-manifest.mjs>)；discovery 比较 Git tracked 清单，新增入口必须显式登记，未跟踪文件不执行。
 - 中文注释 checker 递归检查入口与 worker；helpers/fixtures 不算入口。
 - 静态 `test()` 调用点含 `skip`/`todo`，不等于运行展开后的 pass 数；运行数量以各层 TAP 汇总为准。
 - 没有浏览器自动化探针；客户端以纯逻辑测试和离线 bundle 冒烟为主。
@@ -69,6 +69,7 @@
 | [core-matrix.test.mjs](core/core-matrix.test.mjs) | 确保默认门禁在最小隔离环境的子进程中运行 R3 核心矩阵。 | `test:core` |
 | [task-lifecycle.test.mjs](core/task-lifecycle.test.mjs) | 约束任务发布、领取、交付、驳回与归属恢复。 | `test:core` |
 | [plan-lifecycle.test.mjs](core/plan-lifecycle.test.mjs) | 约束计划草案、发布、版本、焦点与成员。 | `test:core` |
+| [plan-stages.test.mjs](core/plan-stages.test.mjs) | 约束阶段内依赖写闸、存量回放与阶段审查提示。 | `test:core` |
 | [store-integrity.test.mjs](core/store-integrity.test.mjs) | 守住日志重放、完整性、单写者与项目搬迁。 | `test:core` |
 | [lease-edit.test.mjs](core/lease-edit.test.mjs) | 约束租约身份、证据边界、轻编辑与创建者来源。 | `test:core` |
 | [delivery.test.mjs](core/delivery.test.mjs) | 约束交付摘要中的身份尾码、时间线裁剪、检查点和文本净化。 | `test:core` |

@@ -1,15 +1,16 @@
 # ProjectBoard · dsh-stateboard
 
-DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、任务、外置文档与结果材料。当前版本 **0.3.0**，许可证 [BSD-3-Clause](<./LICENSE>)。
+DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、任务、外置文档与结果材料。当前版本 **0.3.1**，许可证 [BSD-3-Clause](<./LICENSE>)。
 
 源码可从 [GitHub 仓库](https://github.com/panchongyang/dsh-stateboard) 下载。npm 安装使用公共 registry 上的同版本包，或使用已下载的同版本 tgz。
 
 导航：[支持环境](#支持环境) · [安装与首次运行](#安装与首次运行) · [约三分钟文字演示](#约三分钟文字演示) · [真实限制](#真实限制) · [备份回退与迁移](#备份回退与迁移) · [贡献与架构入口](#贡献与架构入口)
 
-## 0.3.0 更新
+## 0.3.1 更新
 
-- 可切换到推进视图，查看并行任务、验收队列和依赖线路。看板仍为默认视图。
-- 可选 MCP 新增开工上下文查询，以及受项目授权和现有审计规则约束的验收与驳回操作。
+- 普通任务提交后，任意有项目权限的 agent（含提交者）都可以显式验收，无需报告。审计门仍要求独立 agent 提交报告。
+- 计划禁止新增同阶段任务之间的直接或间接依赖，已有依赖可保留。DSH 简报和 MCP 开工上下文提供当前阶段的推进和集中审查提示。
+- 升级沿用现有存储格式。升级前请备份。旧构建无法正确检查新产生的普通 agent 验收记录，回退时请按备份与恢复流程操作。
 
 ## 产品边界
 
@@ -21,7 +22,7 @@ DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、
 
 | 项目 | 支持口径与验证限制 |
 |---|---|
-| 产品 | `dsh-stateboard@0.3.0`，BSD-3-Clause |
+| 产品 | `dsh-stateboard@0.3.1`，BSD-3-Clause |
 | 操作系统 | Windows 11 x64；macOS / Linux 未测试、不承诺可用 |
 | DSH 支持带 | `0.2.1-rc.2` 至 `0.2.2-rc.1`；上界不自动跟随 latest 扩展 |
 | Web 宿主 Node | DSH `0.2.2-rc.1` 要求 **Node >=24.9**；其它支持带内版本仍须满足各自宿主要求 |
@@ -45,9 +46,9 @@ DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、
 
 ```text
 # 本地包（把占位路径替换为实际 Windows 绝对路径）
-dsh plugin --profile PROFILE add "D:\Packages\dsh-stateboard-0.3.0.tgz"
-# 从公共 npm registry 安装指定版本：
-dsh plugin --profile PROFILE add dsh-stateboard@0.3.0
+dsh plugin --profile PROFILE add "D:\Packages\dsh-stateboard-0.3.1.tgz"
+# 对应版本在公共 npm registry 可用后：
+dsh plugin --profile PROFILE add dsh-stateboard@0.3.1
 ```
 
 **源码来源**。下载与目标版本对应的完整源码归档并解压。归档已含客户端产物，修改客户端时先构建。
@@ -134,7 +135,7 @@ bearer_token_env_var = "PROJECT_BOARD_MCP_WRITE_TOKEN"
 
 在 Codex 聊天中用 `open_work_session` 开始该项目的工作会话。可以读取已有卡片，或用 `create_task` 建卡、`update_task` 编辑、`ready_task` 将满足条件的待办置为就绪。随后用 `claim_task` 领取、`begin_task` 记录执行意图、`submit_task` 附证据提交审查。工作会话 token 保留在当前聊天内。写入默认关闭。停用写入口或轮换凭据后重新加载插件，既有会话失效。工具参数、续接与异常处理见随包的实现契约 §3.7。
 
-独立的工作会话可在检查证据后用 `verify_task` 为审计门任务记录通过，或按权限用 `reject_task` 带理由退回返工。普通任务仍可在网页人工验收。MCP 与原生工具的覆盖差异见随包实现契约 §3.7.3。
+检查证据后，用 `verify_task` 显式验收普通任务（提交者也可以，无需报告）。审计门任务需要独立会话和报告；所有任务也可在网页人工验收。可按权限用 `reject_task` 带理由退回返工。MCP 与原生工具的覆盖差异见随包实现契约 §3.7.3。
 
 ## 约三分钟文字演示
 
@@ -172,7 +173,7 @@ bearer_token_env_var = "PROJECT_BOARD_MCP_WRITE_TOKEN"
 
 `3` 与 `1` 都必须换成实际最新 rev/token。无 Git 时 doc 材料会显式 current-only，附 fixedReason；核心流程照常进入 review。
 
-5. **2:35 人工完成判定。** 人打开任务抽屉，阅读材料和验收项，选择 verify 或 reject。不是由提交 agent 自称 done。若证据提交后变化，先调查；可刷新的 file 漂移可由 human refresh，其它情形 human 可填理由 acknowledge，留痕不等于材料正确。独立 agent 只可在开启审计门的任务显式带审计报告 verify，session 级独立性不是信任保证。
+5. **2:35 人工完成判定。** 人打开任务抽屉，阅读材料和验收项，选择 verify 或 reject。普通任务也可由提交 agent 显式 verify；审计门任务要求独立 agent 带报告。若证据提交后变化，先调查；可刷新的 file 漂移可由 human refresh，其它情形 human 可填理由 acknowledge，留痕不等于材料正确。
 
 **可选 Git 镜头**：若示例文件恰在主绑定仓库中、已经干净提交且对象本地可得，沿用上一步带 `acceptanceId` 的 doc 材料提交，就会自动记录只读 Git 版本引用。不需额外 approval；UI/材料可显示 fixedState。项目板不替你 commit，不切分支，不 fetch，不进入其它 worktree 复验。首次 pin 失败降为 current-only；已有历史 fixed 引用缺对象时保持原引用并报告不可观测，绝不用当前正文冒充历史。
 

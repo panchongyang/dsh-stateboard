@@ -231,7 +231,7 @@
   },
   {
     "name": "project_plan",
-    "description": "Manage versioned plans (plan = initiative, steps = phases, tasks = work). publish (a draft, or create+publish without planId), revise (version+1), create (draft), rename, adopt/release tasks, archive/unarchive. adopt/release bump the version and never delete tasks. focus is human-only.",
+    "description": "Manage versioned plans (plan = initiative, steps = phases, tasks = work). Keep tasks within a phase independent; split dependent tasks across phases. publish (a draft, or create+publish without planId), revise (version+1), create (draft), rename, adopt/release tasks, archive/unarchive. adopt/release bump the version and never delete tasks. focus is human-only.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -428,7 +428,7 @@
   },
   {
     "name": "project_task",
-    "description": "Drive one task through the state machine. Read project_board view=task first for rev and allowedOps. claim/begin/submit need a live lease; begin writes an intent before irreversible work; submit attaches evidence and only enters review. verify records acceptance, not correctness: human may verify any review task; an independent agent may verify only an audit gate with audit.report (20–4000 characters). Reports are self-declared; no evidence commands are executed. Any agent may reject review with reason (a live lease requires its owner); unassign remains human-only. Doc evidence is automatic: {kind:\"doc\", ref:docId} is pinned when the path is committed and clean, otherwise it degrades silently to current-only evidence (fixedState/fixedReason); no repository approval or version confirmation is needed. renew extends a lease (max 2 without progress). gate with requiresAudit:true enables third-party audit (agents can only enable it outside review; human may enable/disable; no lease needed). With an open intent, block/release/cancel/reject must pass intent:{outcome:\"stopped\",sideEffects:[...]}; if the outcome is unknown, interrupt then reconcile. On stale-revision or fencing-stale, re-read instead of forcing.",
+    "description": "Drive one task through the state machine. Read project_board view=task first for rev and allowedOps. claim/begin/submit need a live lease; begin writes an intent before irreversible work; submit attaches evidence and only enters review. verify records acceptance, not correctness: any authorized agent (including the submitter) may verify ordinary tasks without a report; audit gates require an independent agent with audit.report (20–4000 characters). Humans may verify either. Reports are self-declared; no evidence commands are executed. Any agent may reject review with reason (a live lease requires its owner); unassign remains human-only. Doc evidence is automatic: {kind:\"doc\", ref:docId} is pinned when the path is committed and clean, otherwise it degrades silently to current-only evidence (fixedState/fixedReason); no repository approval or version confirmation is needed. renew extends a lease (max 2 without progress). gate with requiresAudit:true enables third-party audit (agents can only enable it outside review; human may enable/disable; no lease needed). With an open intent, block/release/cancel/reject must pass intent:{outcome:\"stopped\",sideEffects:[...]}; if the outcome is unknown, interrupt then reconcile. On stale-revision or fencing-stale, re-read instead of forcing.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -610,12 +610,12 @@
         },
         "audit": {
           "type": "object",
-          "description": "Self-declared verify/reject report; required for agent verify, optional for human. Never executes evidence.",
+          "description": "Self-declared verify/reject report; required only for agent verify on audit-gated tasks. Never executes evidence.",
           "additionalProperties": false,
           "properties": {
             "report": {
               "type": "string",
-              "description": "20–4000 trimmed characters for agent verify; human verify does not require a report."
+              "description": "20–4000 trimmed characters when an audit object is provided."
             },
             "checklist": {
               "type": "array",

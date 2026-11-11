@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import { createServer, request } from 'node:http';
 import path from 'node:path';
 import test from 'node:test';
-import { agentAuditValid } from '../../lib/core/audit.js';
+import { agentVerificationValid } from '../../lib/core/audit.js';
 import { JsonlStore } from '../../lib/core/store.js';
 import { mountProjectMcp } from '../../lib/host/mcp.js';
 import { faultFs, ioError } from '../helpers/fault-fs.mjs';
@@ -291,6 +291,22 @@ async function submitForReview(mcp, projectId, task, evidence = { kind: 'note', 
   return { ...claim, requestId: 'review', expectedRev: submitted.taskRev };
 }
 
+// 责任：MCP 普通任务允许提交会话无报告验收，并持久化真实会话身份。
+test('MCP ordinary verification accepts the authenticated submitter without an audit report', async (t) => {
+  const { svc, h } = await withProject(t);
+  const task = await readyTask(h);
+  const mcp = await listener(t, svc, writes([h.id]));
+  const review = await submitForReview(mcp, h.id, task);
+  const worker = h.store.commits.at(-1).actor;
+  const verified = await success(mcp, 'verify_task', review);
+  assert.equal(verified.state, 'done');
+  const record = h.state.tasks[task.id].lastAudit;
+  assert.equal(record.gate, false);
+  assert.deepEqual(record.by, worker);
+  assert.equal(record.report, '');
+  assert.ok(agentVerificationValid(h.state.tasks[task.id]));
+});
+
 // 责任：同一 MCP 会话不可自审，独立会话可验收，失败重试与并发只提交一次。
 test('MCP gated verification uses distinct authenticated identities and commits once', { timeout: 12000 }, async (t) => {
   let faults;
@@ -310,6 +326,7 @@ test('MCP gated verification uses distinct authenticated identities and commits 
   const { commitsFile } = h.store;
   const before = fs.readFileSync(commitsFile);
   denied(await mcp.call('verify_task', { ...review, audit }), 'forbidden-role');
+  denied(await mcp.call('verify_task', { ...review, sessionToken }), 'invalid-command');
   denied(await mcp.call('verify_task', { ...verify, sessionId: worker.sessionId }), 'invalid-command');
   denied(await mcp.call('verify_task', { ...verify, acknowledgeDrift: false }), 'invalid-command');
   denied(await mcp.call('verify_task', { ...verify, audit: { report: '   too short   ' } }), 'invalid-command');
@@ -332,7 +349,7 @@ test('MCP gated verification uses distinct authenticated identities and commits 
   assert.notEqual(record.by.agentId, worker.agentId);
   assert.notEqual(record.by.sessionId, worker.sessionId);
   assert.deepEqual(record.checklist, audit.checklist);
-  assert.ok(agentAuditValid(h.state.tasks[task.id]));
+  assert.ok(agentVerificationValid(h.state.tasks[task.id]));
   const log = fs.readFileSync(commitsFile, 'utf8');
   assert.ok(!log.includes(sessionToken) && !log.includes(review.sessionToken));
 
@@ -341,7 +358,7 @@ test('MCP gated verification uses distinct authenticated identities and commits 
   const { svc: reopened } = await makeService(t, { rootDir: stateDir });
   const replayed = (await reopened.open(h.id)).state.tasks[task.id];
   assert.deepEqual(replayed.lastAudit, record);
-  assert.ok(agentAuditValid(replayed));
+  assert.ok(agentVerificationValid(replayed));
 });
 
 // 责任：兼容旧 MCP 归因；漂移由 core 拦截；驳回按原规则返工且不发放 MCP 租约。
@@ -390,9 +407,6 @@ test('an ungated review keeps human acceptance and MCP rejection', { timeout: 12
   const review = await submitForReview(mcp, h.id, task);
   const { sessionToken } = await success(mcp, 'open_work_session', { projectId: h.id });
   const independent = { ...review, sessionToken };
-  denied(await mcp.call('verify_task', {
-    ...independent, audit: { report: 'Checked but this is not an audit gate.' },
-  }), 'forbidden-role');
   const rejected = await success(mcp, 'reject_task', { ...independent, reason: 'More evidence needed' });
   assert.equal(rejected.state, 'ready');
   assert.equal(h.state.tasks[task.id].lastAudit, null);

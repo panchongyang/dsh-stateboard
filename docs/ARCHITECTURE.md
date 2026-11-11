@@ -85,6 +85,8 @@ lib/client.js
 lib/shared/contract.js
 lib/shared/events.js
 lib/shared/fixed-schema.js
+lib/shared/verification.js
+lib/shared/verification.d.ts
 lib/core/service.js
 lib/core/project-reader.js
 lib/core/project-reader-worker.js
@@ -92,6 +94,7 @@ lib/core/project-reader-projection.js
 lib/core/handle.js
 lib/core/lease.js
 lib/core/normalize.js
+lib/core/plan-stages.js
 lib/core/contracts.js
 lib/core/evidence.js
 lib/core/audit.js
@@ -354,7 +357,7 @@ npm run build:client          # 产物可复现（需 tools/build 已安装）
 |---|---|
 | project | 一个工作区对应的看板，状态在 `~/.dsh/project-board/projects/<id>/` |
 | plan | initiative / 交付目标；有版本，成员变化 = 新版本 |
-| step | 计划内的阶段，只分组，无状态机 |
+| step | 计划内的有序推进和集中审查单元，无独立状态机 |
 | task | 唯一工作单元，8 状态，可 claim/submit/verify |
 | lease | 任务租约，带 TTL 与 fencing token |
 | handle | 一个已打开项目的命令入口（`ProjectHandle`） |

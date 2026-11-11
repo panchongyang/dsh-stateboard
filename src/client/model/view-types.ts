@@ -9,6 +9,7 @@ export interface Card extends Task {
   leaseExpiresAt?: string | null;
   verifiedAt?: string | null;
   verifiedBy?: 'human' | 'agent' | 'policy' | null;
+  lastAudit?: Audit | null;
 }
 export interface Column { key: string; label: string; hint: string }
 export interface Attention { blocked?: Card[]; interrupted?: Card[] }
@@ -28,7 +29,7 @@ export interface PlanHead extends PlanSummary { goal?: string; assumptions?: str
 export interface PlanDetail { plan?: PlanHead; head?: PlanHead; steps?: PlanStep[]; progress?: { done: number; total: number; percent: number } }
 export interface AcceptanceItem { id?: string; text: string; met?: boolean; requiredKinds?: string[] }
 export interface EvidenceItem extends Evidence { id?: string }
-export interface Audit { by?: Actor & { agentId?: string }; verdict?: string; at?: string; report?: string; checklist?: { ok: boolean; item: string; note?: string }[]; evidence?: { count?: number; digest?: string }; taskRev?: number; warnings?: (string | Warning)[] }
+export interface Audit { by?: Actor & { agentId?: string }; verdict?: string; gate?: boolean; at?: string; report?: string; checklist?: { ok: boolean; item: string; note?: string }[]; evidence?: { count?: number; digest?: string }; taskRev?: number; warnings?: (string | Warning)[] }
 export interface Warning { code?: string; message?: string }
 export interface TaskDetail extends Task { lastAudit?: Audit }
 export interface TimelineEvent { seq?: number; type?: string; actor?: Actor; at?: string }

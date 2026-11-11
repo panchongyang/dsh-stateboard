@@ -77,7 +77,7 @@ test('work context prioritizes continuity and never selects a candidate', async 
   const empty = await reader.getWorkContext({ projectId });
   assert.deepEqual(empty, {
     projectId, projectRev: h.rev, project: { name: 'Context fixture', phase: 'active' },
-    task: null, candidates: [], candidateCount: 0, nextAction: 'no_open_task',
+    task: null, candidates: [], candidateCount: 0, nextAction: 'no_open_task', stageWork: null,
   });
   const blockedId = await addTask(h, 'Blocked task', { requiresAudit: true });
   const human = { kind: 'human', via: 'test' };

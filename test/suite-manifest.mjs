@@ -49,6 +49,7 @@ export const suites = {
     'test/core/plan-acceptance.test.mjs',
     'test/core/plan-concurrency.test.mjs',
     'test/core/plan-lifecycle.test.mjs',
+    'test/core/plan-stages.test.mjs',
     'test/core/project-reader.test.mjs',
     'test/core/restart-expiry-audit.test.mjs',
     'test/core/state-machine.test.mjs',
