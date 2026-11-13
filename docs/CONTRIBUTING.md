@@ -37,7 +37,7 @@ npm run check:release:readiness
 | host | 工具/HTTP 参数与错误翻译 | 复制领域守卫 |
 | client | React UI、纯逻辑、样式 | Node/core/host、innerHTML |
 
-机器校验清单见[架构 §2.1](<ARCHITECTURE.md#21-机器可校验的清单arch-map>)。文件 ≤450行、普通函数 ≤80行、组件 ≤200行；新增运行时依赖需先讨论，不直接加入。后端阅读链、每个函数的中文用途说明口径及分批范围见[后端可读性基线](<BACKEND-READABILITY.md>)；参数/返回/数据形状的 TS 类型说明随中文用途同批渐进补，复杂逻辑另说明不变量、副作用与失败路径。类型说明不替代中文用途，也不等于授权重构、改变生产加载或 emit。
+机器校验清单见[架构 §2.1](<ARCHITECTURE.md#21-机器可校验的清单arch-map>)。文件 ≤450行、普通函数 ≤80行、组件 ≤200行；新增运行时依赖需先讨论，不直接加入。注释写法见[项目框架约束 · 注释准则](<CONSTRAINTS.md#33-注释准则>)；后端阅读链、注释细则及分批范围见[后端可读性基线](<BACKEND-READABILITY.md>)；参数/返回/数据形状的 TS 类型说明随中文用途同批渐进补，复杂逻辑另说明不变量、副作用与失败路径。类型说明不替代中文用途，也不等于授权重构、改变生产加载或 emit。
 
 加任务命令：共享契约 → core allowedOps/命令守卫/注册表 → host 工具参数 → client transport/视图；同步 [CONTRACT](<CONTRACT.md>)、schema 快照与正负路径测试。事件顺序和 command 返回形状也是契约。不要在 UI 拼接另一套命令白名单。
 
