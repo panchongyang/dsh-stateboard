@@ -852,12 +852,12 @@ task/board/brief 的审计门摘要使用 `audit=1`，最近验收使用 `lastAu
 
 - 写入需同时启用 MCP 和 `mcp.write.enabled: true`，并设置 `mcp.write.projectIds` 为非空项目 ID 数组。另在启动环境提供独立的 `PROJECT_BOARD_MCP_WRITE_TOKEN`，同为 32 字节随机密钥的小写十六进制表示。缺失、格式错误或与读凭据相同均只关闭写入。每个凭据只发现和调用本类工具。网页与 DSH 工具沿用各自的授权。
 - 写操作始终使用显式 `projectId`。项目授权、参数白名单、工作会话及其项目范围均在打开 writer 前校验。有效写请求打开冷项目时，沿用现有的 writer 恢复流程。工作区绑定继续负责目录发现和文件证据边界。
-- `open_work_session({projectId})` 签发该项目的 `{sessionToken, expiresAt}`。每个 Agent 工作会话分别申请并保留自己的 token，同一工作会话处理任务和审查时复用它。它是会话凭据，24 小时内可重连，插件重新加载或 DSH 重启时失效。签发不打开项目或写入日志。首次成功领取将 `session/bound` 与任务事件写在同一 commit。服务端根据签发的工作会话生成 `actor`，归因为 `kind:agent`、`via:mcp` 及该会话独有的 `codex:mcp:<id>`。既有 `codex:mcp` 归因随历史保留。请求不可提供 actor、session ID 或角色。
+- `open_work_session({projectId})` 签发该项目的 `{sessionToken, expiresAt}`。每个 Agent 工作会话分别申请并保留自己的 token，同一工作会话处理任务和审查时复用它。它是会话凭据，24 小时内可重连，插件重新加载或 DSH 重启时失效。签发不打开项目或写入日志。首次成功领取或对账恢复将 `session/bound` 与任务事件写在同一 commit。服务端根据签发的工作会话生成 `actor`，归因为 `kind:agent`、`via:mcp` 及该会话独有的 `codex:mcp:<id>`。既有 `codex:mcp` 归因随历史保留。请求不可提供 actor、session ID 或角色。
 - 禁用写开关、从授权清单移除项目或轮换写凭据后重新加载插件，既有工作会话失效。已经提交的记录保留，现有租约由 core 到期或重启恢复流程收口。归因粒度为共享此写凭据的 Codex 集成及其服务端工作会话。
 
 #### 3.7.2 任务写操作
 
-下列工具均接受 `projectId`、`sessionToken` 和 `requestId`，可选 `projectRev` 用于项目 CAS。已有任务的操作还需要 `taskId` 和当前任务 `rev`（参数 `expectedRev`）。每次新操作给一个新的 `requestId`（1 至 128 个字母、数字、点、下划线或连字符）。`begin_task`、`submit_task`、`release_task` 和 `interrupt_task` 要求领取返回的 `fencingToken`。
+下列工具均接受 `projectId`、`sessionToken` 和 `requestId`，可选 `projectRev` 用于项目 CAS。已有任务的操作还需要 `taskId` 和当前任务 `rev`（参数 `expectedRev`）。每次新操作给一个新的 `requestId`（1 至 128 个字母、数字、点、下划线或连字符）。`begin_task`、`submit_task`、`release_task`、`interrupt_task`、`renew_task` 和 `block_task` 要求领取返回的 `fencingToken`。
 
 | 工具 | 额外参数 | 结果 |
 |---|---|---|
@@ -866,29 +866,32 @@ task/board/brief 的审计门摘要使用 `audit=1`，最近验收使用 `lastAu
 | `ready_task` | — | 验收项齐全且依赖完成时将 `backlog` 置为 `ready`。 |
 | `claim_task` | — | 领取既有可领任务，返回 `lease: {fencingToken, expiresAt}`。 |
 | `begin_task` | `summary`, `plannedSteps?`, `expectedArtifacts?` | 执行前写入 open intent。 |
-| `submit_task` | `evidence` | 沿用 core 证据校验，成功进入 `review`。 |
-| `verify_task` | `audit?` | 普通任务允许任意授权 Agent（含提交者）在 `review` 记录通过；审计门要求独立 Agent 并提供 `audit`。成功后进入 `done`。 |
+| `submit_task` | `evidence`, `note?` | 沿用 core 证据校验，成功进入 `review`。 |
+| `verify_task` | `audit?`, `note?`, `reason?` | 普通任务允许任意授权 Agent（含提交者）在 `review` 记录通过；审计门要求独立 Agent 并提供 `audit`。成功后进入 `done`。 |
 | `reject_task` | `reason`, `audit?`, `fencingToken?`, `intent?` | 驳回 `review`，沿用 core 的租约、意图和返工规则。持有活动租约时须携带该租约的 token。 |
 | `release_task` | `note?`, `intent?` | 放回 `ready`。有 open intent 时传 `intent: {outcome:"stopped", sideEffects, note?}`。 |
-| `interrupt_task` | `note`, `sideEffects?` | 执行结果未知时进入 `interrupted`，由现有入口对账。 |
+| `interrupt_task` | `note`, `sideEffects?` | 执行结果未知时进入 `interrupted`。 |
+| `gate_task` | `requiresAudit: true` | 按 Agent 规则启用审计门。 |
+| `renew_task` | — | 续租并返回当前会话的 `lease`。同一租约的同一进度周期内，原样重试复用已成功的续租。续租不写日志。 |
+| `block_task` | `code?`, `note?`, `intent?` | 租约持有者登记阻塞。有未结意图时须声明已停止和已观察到的副作用。 |
+| `unblock_task` | `note?` | 解除阻塞。MCP 会话按既有规则重新领取可领任务。 |
+| `reconcile_task` | `choice`（`resume`、`completed`、`discard`）、`note`, `evidence?`, `fencingToken?` | 对账进入执行、审查或就绪。恢复逾期且未结的意图需要原租约令牌。选择 `resume` 时返回该次提交授予调用会话的 `lease`。 |
+| `cancel_task` | `reason?`, `intent?`, `fencingToken?` | 按 Agent 规则取消普通任务。有活动租约时须由持有者提供 token。 |
 
 MCP 审查沿用 §2.6 的 `audit={report,checklist?:[{item,ok,note?}]}`、验收项和证据漂移校验。审计门的独立性按会话和既有 worker 记录判断，无法识别由同一操作者另开的会话。Agent 的验收和审计报告均为自述。人类可验收所有任务。漂移时可驳回返工或交给人类处理。MCP 不接受漂移刷新、豁免或清除委派参数。
 
-成功返回 `{projectId, taskId, projectRev, taskRev, state, deduped}`，版本和状态是响应时可见的已提交状态。提交和验收回执可包含仅带错误码和严重程度的证据警告。原样重试同一工作会话、工具和参数会去重。创建重试返回原任务 ID。改动参数会产生新命令并重新校验版本与租约。领取重试只有在原授予的租约仍可用时才返回其 token，其他情况返回 `lease:null`。收到 `lease:null`、`stale-revision` 或 `fencing-stale` 时先重新读卡。出现 `log-write-uncertain` 或工作会话失效时，先核对日志和实际副作用再继续。租约沿用项目 TTL 与宽限期，超期或重启后按 §2.6 回收。驳回、解阻或重开可以产生待重新领取的任务，系统不向 MCP 会话隐式发放新租约。MCP 工具错误仅返回稳定错误码和安全提示。
+成功返回 `{projectId, taskId, projectRev, taskRev, state, deduped}`，版本和状态是响应时可见的已提交状态。提交和验收回执可包含仅带错误码和严重程度的证据警告。原样重试同一工作会话、工具和参数会去重。创建重试返回原任务 ID。主动续租的去重范围是同一进程、租约和进度周期。改动参数会产生新命令并重新校验版本与租约。领取重试只有在原授予的租约仍可用时才返回其 token，其他情况返回 `lease:null`。收到 `lease:null`、`stale-revision` 或 `fencing-stale` 时先重新读卡。出现 `log-write-uncertain` 或工作会话失效时，先核对日志和实际副作用再继续。租约沿用项目 TTL 与宽限期，超期或重启后按 §2.6 回收。驳回、解阻或重开可以产生待重新领取的任务，系统不向 MCP 会话隐式发放新租约。MCP 工具错误仅返回稳定错误码和安全提示。
 
-#### 3.7.3 与 DSH 原生 Agent 工具的差异
+#### 3.7.3 计划、文档、会话与完整视图
 
-MCP 按上面的读、写凭据分别提供目录，使用显式项目 ID。DSH 原生工具按已绑定的工作区解析项目。两端的 Agent 操作均受领域守卫约束。以下能力仍使用原生工具或已授权的网页入口。
+以下工具使用写连接的项目授权和工作会话。每次变更提供 `projectId`、`sessionToken`、`requestId`，可选 `projectRev`。原样重试已提交的变更时返回当前已提交版本及 `deduped:true`。
 
-| 原生工具 | MCP 已覆盖 | 仍缺的原生能力 |
-|---|---|---|
-| `project_board` | 项目和任务列表、任务详情、只读开工上下文 | 会话级租约和交付摘要、完整看板及任务 `allowedOps`、时间线和证据详情、计划/文档/事件/健康视图 |
-| `project_task` | 建卡、编辑、就绪、领取、开始、提交、验收、驳回、释放、中断 | 独立的审计门调整、主动续租、阻塞/解阻、对账、取消、重开 |
-| `project_plan` | — | 计划草稿、发布、版本管理、焦点和任务归属 |
-| `project_doc` | — | 文档查询、登记、管理、定位和固定内容读取 |
-| `project_session` | 项目工作会话签发 | 工作区初始化、检查点、交接 |
+- `manage_plan` 支持 `create`、`publish`、`revise`、`rename`、`archive`、`unarchive`、`adopt`、`release`。发布已有草稿时传 `planId` 和 `expectedRev`，按保存的草稿发布。创建并发布时传标题及阶段定义。修改计划和成员沿用原生工具的计划头版本和 `baseVersion` 规则。返回 `{projectId,projectRev,planId,planRev,version,status,deduped}`。
+- `manage_document` 支持外置文档 `register`、`update_meta`、`relocate`、`confirm`、`unregister`，以及沿用现有项目策略的内嵌档案 `put`、`link`。外置文档沿用绑定、路径和 `expectedMetaRev` 校验。返回 `{projectId,projectRev,docId,docRev,deduped}`。
+- `checkpoint_work_session` 和 `handoff_work_session` 接受 `note` 与可选 `nextActions`，记录当前会话说明。返回 `{projectId,projectRev,deduped}`。
+- `get_project_view` 接受 `projectId`、`sessionToken` 和 `view`。支持 `brief`、`board`、`task`（`taskId`）、`plans`、`plan`（`planId?`）、`docs`（`query?`）、`doc`（`docId`、`maxBytes?`）、`list_external`（`includeUnregistered?`）、`inspect`（`docId`、`preview?`）、`get_fixed`（`docId` 和 `fixed` 或 `commitOid` 与 `pathAtCommit`、`bindingId?`）、`events`（`limit?`、`after?`）和 `health`。返回 `{projectId,projectRev,view,...}`。视图通过受限 worker 读取且不获取 writer。有同进程 writer 时使用已发布状态及其运行时租约，冷读时实时租约资格标记为不可用。诊断返回代码和计数，视图不返回租约令牌或绑定根目录。固定 Git 读取仅在绑定内的仓库中进行。文档正文与预览最多 24 KiB，截断时有 `truncated` 标记。超出输出上限时返回 `result-too-large`，可改用单实体或分页视图。
 
-MCP 评审者通过已获授权的工作区或原生工具获取证据材料。人工验收继续使用网页入口。
+工作区初始化依赖 DSH 已验证的工作区上下文。计划焦点、人工重开、漂移豁免和人工验收沿用原生授权入口。
 
 ## 4. Client（浏览器半）
 

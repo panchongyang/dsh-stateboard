@@ -90,6 +90,7 @@ lib/shared/verification.d.ts
 lib/core/service.js
 lib/core/project-reader.js
 lib/core/project-reader-worker.js
+lib/core/project-reader-views.js
 lib/core/project-reader-projection.js
 lib/core/handle.js
 lib/core/lease.js
@@ -231,7 +232,7 @@ UI 事件
 
 本机 MCP 的读取链为 `lib/host/mcp.js → mcp-http.js → mcp-tools.js → lib/core/project-reader.js`。HTTP 传输和凭据归 host，项目列表复用 service 的只读列表。同进程已有 writer 时读取它已发布的状态，其余任务读取在受限的 worker 中回放可验证的日志前缀。两条路径使用同一任务投影。插件卸载关闭 MCP 监听及读取工作，再关闭 service。
 
-MCP 写入由 `mcp-write.js` 校验项目授权、签发工作会话并适配允许的任务命令。core 继续负责串行提交、原子会话绑定、领取资格、租约和证据。写入使用独立凭据和工具目录。插件卸载先停止写请求准入，等待已接纳的写请求完成。
+MCP 写入由 `mcp-write.js` 校验项目授权、签发工作会话并适配允许的任务、计划、文档与会话命令。完整视图经同一工作会话授权后由受限读 worker 生成，复用 core 查询，并移除租约令牌、绑定根目录和原始诊断文本。core 继续负责串行提交、原子会话绑定、领取资格、租约和证据。写入使用独立凭据和工具目录。插件卸载先停止写请求准入，等待已接纳的写请求完成。
 
 ## 4. 关键不变量
 

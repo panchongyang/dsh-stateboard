@@ -116,6 +116,7 @@ export const suites = {
     'test/host/mcp-http.test.mjs',
     'test/host/mcp-lifecycle.test.mjs',
     'test/host/mcp-write.test.mjs',
+    'test/host/mcp-parity.test.mjs',
     'test/host/routes.test.mjs',
   ] },
   perf: { budgetMs: 300000, files: [
