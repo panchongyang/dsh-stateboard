@@ -53,8 +53,8 @@
 
 **update**
 
-- 无租约也能改的前提：任务属于 backlog/ready 且没有 live lease（agent 重排队列/修前置不必先认领）。
-- in_progress / review / blocked 仍然必须持租约（否则 lease-held）；terminal 状态一律拒绝（reopen 才是回头路）。
+- 无租约也能改的前提：agent 在 backlog/ready 且无 live lease 时可改（重排队列/修前置不必先认领）；human 无租约可改任意非终态。
+- agent 在 in_progress / review / blocked 必须持租约（否则 lease-held）；terminal 状态一律拒绝（reopen 才是回头路）。
 - deps 校验：未知 id / 自依赖 / 成环 → 400 invalid-command；加未完成前置会让 ready 降回 backlog（ready→backlog 是唯一的自动降级方向，反向升级仍走 task.ready）。
 - requiresAudit：agent 只能在非 review 打开、不能关闭（forbidden-role）；review 中 agent 不得通过字段或标签改变门。human 可开关。
 - 事件：`task/updated`；有实际字段变化时再追加 `task/meta-edited {taskId, by, fields[], reason, at}`。
@@ -149,7 +149,7 @@
 
 **reopen**
 
-- done/canceled → ready；仅 human；reason；清 verified/owner/work/lastAudit。
+- done/canceled → in_progress/ready/backlog：仅 human；reason。deps 满足且原 assignee 仍可恢复（绑定存在且未分离、epoch 匹配、非 explicit-claim、未超 TTL+宽限、会话未满额）时重授租约回 in_progress；deps 满足但不能恢复则 ready；deps 不满足则 backlog。清 verified/owner/work/lastAudit/blocker/canceledReason/rejection。
 
 **过期 / 恢复**
 
