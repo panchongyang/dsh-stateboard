@@ -17,7 +17,7 @@
                              │ HTTP /project-board/api（token + JSON）
 ┌────────────────────────────▼─────────────────────────────────┐
 │ lib/host              DSH 适配层（入口在 lib/index.js，不在 host/ 下） │
-│   tools/*（5 个工具） routes/*（REST） lifecycle prompt auth util│
+│   tools/*（7 个工具） routes/*（REST） lifecycle prompt auth util│
 │   只做翻译：参数 → 命令，错误 → HTTP；不做领域判断               │
 └────────────────────────────┬─────────────────────────────────┘
                              │ command(op, actor, expected) / query(view)
@@ -84,6 +84,7 @@ lib/index.js
 lib/client.js
 lib/shared/contract.js
 lib/shared/events.js
+lib/shared/knowledge.js
 lib/shared/fixed-schema.js
 lib/shared/verification.js
 lib/shared/verification.d.ts
@@ -92,6 +93,8 @@ lib/core/project-reader.js
 lib/core/project-reader-worker.js
 lib/core/project-reader-views.js
 lib/core/project-reader-projection.js
+lib/core/project-read-handle.js
+lib/core/knowledge/*.js
 lib/core/handle.js
 lib/core/lease.js
 lib/core/normalize.js
@@ -153,6 +156,7 @@ lib/host/mcp.js
 lib/host/mcp-http.js
 lib/host/mcp-tools.js
 lib/host/mcp-write.js
+lib/host/mcp-knowledge.js
 lib/host/util.js
 src/client/index.ts
 src/client/styles.css
@@ -234,6 +238,10 @@ UI 事件
 
 MCP 写入由 `mcp-write.js` 校验项目授权、签发工作会话并适配允许的任务、计划、文档与会话命令。完整视图经同一工作会话授权后由受限读 worker 生成，复用 core 查询，并移除租约令牌、绑定根目录和原始诊断文本。core 继续负责串行提交、原子会话绑定、领取资格、租约和证据。写入使用独立凭据和工具目录。插件卸载先停止写请求准入，等待已接纳的写请求完成。
 
+历史知识有两个同名工具入口：DSH `tools/knowledge.js → knowledge/reader.js` 从受信会话 cwd 经 `resolveWorkspace` 确认项目；MCP `mcp-knowledge.js → project-reader.js → knowledge/reader.js` 复用项目工作会话授权。两侧均不打开 writer、不领取任务或 touch 租约，共用 `knowledge/worker.js` 与宿主单并发预算；原生读取器由注册器持有并经 `ctx.effect` 关闭，不依赖 MCP 开关。专用 worker 不占现有视图 worker 名额；完成、超时或关闭后释放。`snapshot` 校验日志并固定已发布水位，`records/content` 提取来源与重读原文，`build/sqlite-index` 维护根目录下独立的 `knowledge-cache/`，`search/read/relations` 负责有界交付与已有关系。共享业务 schema、描述、上限与工具名在 `lib/shared/knowledge.js`；DSH 直接注册 JSON Schema ToolDefinition，领域输入校验仍归 core，输出完整有界 JSON。索引没有 writer 回调，不参与命令提交；SQLite 不可用时有界扫描降级。模型联想与累计搜索流程留给调用 Agent。
+
+原生适配器将 DSH PTC 不支持的范围 schema 关键字机械转为参数说明，保持业务字段/必填/枚举一致，core 继续执行全部范围守卫。DSH `exec.signal` 作为读取器第二参数中的内部执行选项传入，取消单次 worker 并等待退出；取消、完成、超时与关闭均清理监听和名额，不把信号塞入业务输入或 workerData。
+
 ## 4. 关键不变量
 
 | # | 不变量 | 位置 | 破坏后果 |
@@ -313,6 +321,8 @@ src/client/** ──esbuild（仅开发期）──▶ lib/client.js + lib/clien
 ---
 
 ## 7. 改动指南（我该动哪里？）
+
+面向 Agent 新增或变更业务能力时，同步检查 `tools/*` 与 `mcp-*.js` 的注册、参数映射和输出；两侧共用 core 守卫。业务契约、来源/覆盖及领域错误语义保持一致，身份与传输差异写入 CONTRACT；用两侧实际注册和调用回归防止漏接一端。
 
 | 我要…… | 动这些地方 |
 |---|---|

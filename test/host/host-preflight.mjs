@@ -1,6 +1,6 @@
 /**
  * 测试职责：保证插件在宿主冷启动时完整注册工具，并等待 webServer 后补挂路由和 token。
- * 典型流程：合成 ctx 先不提供 webServer → apply → 注入延迟 webCtx → 检查五工具 schema、路由及全局 token。
+ * 典型流程：合成 ctx 先不提供 webServer → apply → 注入延迟 webCtx → 检查七工具 schema、路由及全局 token。
  * 覆盖边界：覆盖 注册契约和延迟依赖装配；不覆盖真实 DSH 服务启动或实际 HTTP 请求。
  * 外部前置：需要 DSH peer 可导入；只使用临时 store 和合成宿主对象。
  */
@@ -47,8 +47,8 @@ try {
   apply(ctx, { rootDir: root });
   await new Promise((resolve) => setTimeout(resolve, 50));
 
-  // 分段职责：apply 后必须恰注册五个工具，并保留 board/task 必要参数与输出函数。
-  const expected = ['project_board', 'project_plan', 'project_task', 'project_doc', 'project_session'];
+  // 分段职责：apply 后必须恰注册七个工具，并保留 board/task 必要参数与输出函数。
+  const expected = ['project_board', 'project_plan', 'project_task', 'project_doc', 'project_session', 'search_project_knowledge', 'read_project_knowledge'];
   for (const name of expected) {
     assert.ok(tools.has(name), 'missing tool ' + name);
   }

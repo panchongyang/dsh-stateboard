@@ -19,7 +19,7 @@
 - 证据：file hash 与 doc 内容由服务端观测；command/test/note/url 只登记提交者材料，不执行、不探测、不判定成败。
 - 崩溃：intent WAL；重启后 in_progress → interrupted/ready；reconcile 三种选择。
 - 并发：进程内单写者；expectedRev CAS；lease + fencing token；cmdId 幂等。
-- 模型面：5 个工具；per-agent digest（scoped section）。
+- 模型面：7 个工具；per-agent digest（scoped section）。
 - 界面：`main` 整页看板 + `sidebar.panellist` 图标 + `project_board` 内联 toolview；HTTP 轮询。
 - 测试：core 单测/重放/并发/幂等；client bundle 冒烟；host 预检。
 
@@ -718,7 +718,7 @@ export function apply(ctx, config) { ... }
 
 ### 3.3 工具
 
-5 个，按域在 `lib/host/tools/*.js` 注册（`lib/host/tools.js` 是兼容壳；运行时经
+7 个，按域在 `lib/host/tools/*.js` 注册（`lib/host/tools.js` 是兼容壳；运行时经
 `lib/index.js` → `lib/host/tools/index.js` 注册）：
 
 | 工具 | 关键参数 |
@@ -728,13 +728,18 @@ export function apply(ctx, config) { ... }
 | `project_task` | op: create/update/gate/ready/claim/begin/renew/submit/verify/reject/block/interrupt/unblock/release/reconcile/cancel/reopen; taskId?; expectedRev?; requiresAudit?; audit?; unassign?（human-only）; intent?; sideEffects?; ... |
 | `project_doc` | op: get/put/list/link + register/inspect/update_meta/relocate/confirm/unregister/list_external; docId?; title?; kind?; body?; baseRev?; links?; maxBytes?; bindingId?; relPath?; expectedMetaRev?; expectedContentHash?; status?; reason?; includeUnregistered?; fresh?; preview? |
 | `project_session` | op: init/checkpoint/handoff; name?; note; nextActions? |
+| `search_project_knowledge` | query; kinds?; limit?; cursor?; relatedLimit?; historyRef?; discovery? |
+| `read_project_knowledge` | refs; mode?; maxBytes?; cursor?; relatedLimit? |
 
+- **双入口一致性**：面向 Agent 的业务能力在 DSH 与 MCP 同步交付，共享 core 守卫和业务契约，禁止只注册一端。已有聚合工具可通过 MCP 独立工具映射；知识工具两侧同名并共用 `lib/shared/knowledge.js` 的业务 schema 与描述。业务参数、来源/覆盖、分页及领域错误语义一致；身份校验与协议错误封装按各自入口执行，不互相授予额外权限。变更需覆盖两侧实际注册、schema 和调用回归。
+- DSH PTC 的 schema 类型渲染只支持结构子集：知识工具适配器把共享 schema 的数值/长度/数量范围机械转换为字段 description，保留字段、必填、枚举与对象结构；范围仍由同一 core 强制，MCP 保留原范围关键字。测试覆盖真实 DSH TypeScript/Python SDK 渲染，不能仅凭注册成功判定模型能看到参数。
 - 解析 cwd：`exec.agent.session.header.cwd`；无 agent → 抛错。
-- `handle.touch(exec.agent.id)` 续租。
+- 五个管理工具通过 handle 读取/写入，并调用 `handle.touch(exec.agent.id)` 续租。两个知识工具只经 `resolveWorkspace` 确认项目，不 open writer、不 touch、不自动创建项目或绑定。
+- 知识工具传递 DSH `exec.signal`；取消只结束该次请求，等待 worker 退出并释放全局读取名额，不关闭其他请求或禁用后续读取。取消信号是内部执行选项，不进入业务参数或来源引用；缓存可能已产生可重建进度，取消不构成权威写入或完整读取证明。
 - actor：`{kind:'agent', sessionId: exec.agent.id, agentId: exec.agent.id, callId: exec.callId, via:'tool'}`。
 - `project_plan publish` 在无项目时用 cwd 创建。
 - 工具错误：把 `BoardError` 转成 `new Error(JSON.stringify({code,message,details,next}))`。
-- `output.schema` 用宽松 `{type:'object'}`；`output.render` 返回一段短文本；`presentCall` 返回 `{card:'generic', title, kind:'other', rawInput:args}`。
+- 管理工具 `output.schema` 用宽松 `{type:'object'}`；`output.render` 返回一段短文本；`presentCall` 返回 `{card:'generic', title, kind:'other', rawInput:args}`。知识工具输出完整的有界结果 JSON，禁止再次摘要截掉原文、引用、游标或覆盖情况。
 - 工具描述必须写清：先读后写、expectedRev、submit 不带 done；普通任务可由任意授权 agent verify（含提交者）；审计门需独立 agent 带 audit.report，human 始终可验收。
 
 ### 3.4 Prompt
@@ -1021,7 +1026,7 @@ node scripts/repair-log.mjs --root <absolute root> --project <id> --truncate-to-
 补充入口：
 
 - `node test/client/client-smoke.mjs`：见 §4（bundle 冒烟 + 4 slot + `__test`/`__ui` + 冻结断言）。
-- `node test/host/host-preflight.mjs`：fake ctx 注册 5 个工具，断言名称和 schema 存在。
+- `node test/host/host-preflight.mjs`：fake ctx 注册 7 个工具，断言名称和 schema 存在。
 - `node --test test/ops/architecture-map.test.mjs`：ARCHITECTURE 的 arch-map 与磁盘零缺失。
 - 不依赖本机 DSH junction 的 CI 子集：`npm run test:ci`（core + client）。
 
@@ -1049,7 +1054,7 @@ node scripts/repair-log.mjs --root <absolute root> --project <id> --truncate-to-
 - `npm run audit:check` 零违规（规模 / 分层 / 环）。
 - `npm run check:architecture` 零缺失（ARCHITECTURE §2.1 ↔ 磁盘）。
 - `node scripts/migrate-plans.mjs --project <id|dir> --dry-run` 在真实 store 副本上输出派生 planHeads、计划外/orphan 计数与 health 摘要，`sourceUnchanged: true`（用法见 MIGRATION.md）。
-- 本机装配（`node scripts/install.mjs`）后，模型工具清单出现 5 个工具。
+- 本机装配（`node scripts/install.mjs`）后，模型工具清单出现 7 个工具。
 - 看板能从空项目创建一个 plan，显示任务；能 claim/begin/submit；人类能 verify。
 - 崩掉/重启后，in_progress 任务变 interrupted，digest 顶部出现 RESUME CHECKLIST。
 - 现有 DSH Web 功能不被破坏；回滚只需删 patch 行 + 链接。
@@ -1069,6 +1074,30 @@ node scripts/repair-log.mjs --root <absolute root> --project <id> --truncate-to-
 - 任何跨面接口变更先改本文件，再改代码。
 
 ## 8. 历史读模型 · 送达面与摘要规则
+
+### 8.1 历史知识读取与检索
+
+知识读取是独立派生读模型，来源限定任务板已保留的任务、计划、事件、登记文档、证据、审查和已有关系。外置正文通过登记/证据引用进入；不扫描工作区、不执行证据命令、不抓取任意 URL、不另存外置正文副本。仅对实际保留且仍可读取的材料重建，未记录/未保留的历史不补造；手动重置基线不在本版范围。
+
+DSH 原生工具与 MCP 项目授权通道均提供 `search_project_knowledge` 与 `read_project_knowledge`。DSH 从受信 agent 会话 cwd 按既有项目身份规则解析项目，不接受调用参数指定项目或路径；MCP 另需 `projectId/sessionToken`，沿用工作会话和项目范围授权，概览 read token 不获得正文权限。两侧均不要求任务租约或写入 intent，MCP 两工具 `readOnlyHint=true`；核心无权威写入，独立缓存可写且可失效。原生注册不依赖 MCP 开关，卸载时关闭其读取器；两侧共用宿主知识 worker 并发上限。
+
+- search 业务参数：`query`；可选 `kinds[]/limit/cursor/relatedLimit/historyRef`。带修订或内容版本的任务、计划和文档记录按实体折叠，重复出现的证据或审查按记录身份折叠。活动事件独立保留。每组展示最新匹配来源，按组内最佳相关性排序。可用该组的 `ref` 作为 `historyRef`，带相同查询和类型条件列出匹配的历史来源。原有引用仍可直接回读。扫描降级在当前窗口内折叠。可选 `discovery:{parents[],reason}` 仅说明调用 Agent 的扩展搜索线索，标为 caller-suggested，不落项目关系。`related` 附带明确记录关系，`via.fromHit` 为本页 `hits` 的零基下标。历史相邻事件在 read 的 context 模式中展开。Agent 可以自由提出新关键词、跨概念继续搜索，不设置累计联想轮数、总跳数或搜索方向门禁。
+- 优先执行完整词项查询。已索引范围或扫描窗口零命中时，才尝试有界词组放宽；`queryMatch` 标明搜索阶段，放宽命中带 `matchedGroups/missingGroups`。显式词组最多 6 个；连续短中文可用相邻双字作为词组。至少匹配两个词组且匹配数超过半数；完整标识符照常作为单组匹配。放宽结果不是语义推断或拼写纠正。
+- read 业务参数：`refs[]`；可选 `mode=source|context/maxBytes/cursor/relatedLimit`。每个来源返回公开原始字段或正文范围、来源身份与状态、续读游标；context 在同一预算内列出已有关系，不自动递归或裁决适用性。
+- 来源引用带版本标记、项目、commit seq/hash、事件位置、字段选择及必要正文 hash；不使用数据库行号作为身份。重建不改变同源引用；伪造、跨项目及身份不匹配拒绝。记录 hash、commit hash、正文 hash 标明计算域。响应不公开租约令牌、本机根目录或绝对文件引用。
+- 正文当前观测与固定历史分别读取。metaRev 不代表正文版本；原文变化、缺失、撤销登记、绑定失效、超限或不可解码均显式返回，不用当前字节替代历史。原文默认/最多 24 KiB 一块，分页不截断 UTF-8；单次最多 8 个引用、总响应 256 KiB。
+- 搜索默认 20 条、最多 50 条；默认附带最多 10 条关联、上限 20，均计入总条数。为直接命中保留至少一半位置，可用直接命中补足未使用的关联名额。查询最长 500 字符/64 词项。游标绑定查询、历史范围、索引代与水位，代改变拒绝旧页。FTS 续页读取原索引代，本次不推进派生索引。原文续读游标绑定引用与内容身份。
+- coverage 分别说明已验证/已索引日志水位、已知材料范围、外置观测/不可用/未索引数量、返回截断。`coverage.log.unterminatedTail` 表示源日志末行未结束，读取不修尾；`coverage.relatedBodies` 记录上下文正文的尝试/可用/不可用数量。`relatedUnavailable` 给出未能展开的来源记录引用、关系理由与可用性，不把“读不到正文”伪装成“没有关联”。完整只相对于声明范围成立；零命中不证明无约束，BM25 与关联理由不表示事实权威性或约束有效性。
+- 独立 worker 按需建索引与追赶，索引不参与任务提交、验收、快照或恢复事务，不获取 writer 锁。FTS5 contentless 索引只持久化词项、来源定位与进度；不可用时使用有界关键词扫描并标记降级。缓存失效/损坏/不可写、超时或 worker 失败只影响检索，不能使任务操作失败。
+- 同一宿主最多一个知识读取 worker；30 秒请求截止时间，完成或取消后释放。每个索引观测批次最多处理 4000 条记录、32 份/32 MiB 正文；超出返回未覆盖范围并可后续追赶。命中回读、上下文和直接原文读取另受数量、既有单文件 16 MiB 及请求时限限制，32 MiB 不表示全请求总 I/O 上限。关联正文另有 32 MiB 批次预算。每次验证源日志，文件上限 64 MiB；超过返回资源限制，不宣称已读取完整历史。预算不等于容量或性能承诺。
+
+搜索返回业务原文字段的摘录及可回读 `ref`。折叠组的 `historyCount` 表示本次范围内匹配的来源数量。`version` 为已记录内容版本，`revision` 为实体修订，`state` 仅表示该来源当时保存的状态。read 返回完整来源定位、actor 和 `contentHash/hashDomain`，外置正文另有 `observedAt`。这些字段都不表示约束至今有效。`records[].content` 是原始公开事件 JSON 或正文块，`range/nextCursor` 说明本次范围。记录投影剔除了内部字段，不能声称它等于整个内部 commit。
+
+搜索游标用于同一查询继续取结果；索引落后时重复查询可追赶。扫描降级的 `coverage.scanWindow` 与游标用于继续遍历未扫描窗口，即使当前页零命中也可能有下一页。只按调用产生实际观测；不会捕获两次调用之间被覆盖且未留存的外置正文。
+
+传统历史读计划暂停，通用 asOf、/history 与旧分段阈值不作为此版交付条件。
+
+### 8.2 历史送达与归属规则
 
 - digest 三段（顺序固定在 `NEXT READY` 之后、`RULES` 之前）：
   - `LAST CHECKPOINT <seq> <at> <note≤160>`

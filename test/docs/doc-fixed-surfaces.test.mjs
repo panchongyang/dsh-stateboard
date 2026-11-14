@@ -17,7 +17,7 @@ catch (error) {
 }
 import { bootstrapPin, command, repository, temp } from '../helpers/fixed-fixture.mjs';
 
-async function setup() {
+async function setup(t) {
   const { root, oid } = repository();
   const service = new ProjectService({ rootDir: temp() });
   await service.init();
@@ -31,6 +31,7 @@ async function setup() {
     tools: { register(tool) { tools.set(tool.name, tool); } },
     webServer: { register(route) { handler = route.handler; return () => {}; } },
     on() { return () => {}; }, logger: { error() {} },
+    effect(fn) { t.after(fn()); },
   };
   registerTools(ctx, runtime);
   registerRoutes(ctx, runtime);
@@ -49,7 +50,7 @@ async function setup() {
 // 责任：工具 get_fixed 须返回显式历史字节且不涨版本，task submit 只给 docId 即自动固定并停在 review。
 test('project_doc get_fixed reads explicit Git bytes and project_task accepts auto doc evidence', async (t) => {
   if (!registerTools) return t.skip('DSH tool peer is unavailable');
-  const s = await setup();
+  const s = await setup(t);
   const doc = s.tools.get('project_doc');
   const task = s.tools.get('project_task');
   assert.ok(doc.parameters.properties.op.enum.includes('get_fixed'));
@@ -78,7 +79,7 @@ test('project_doc get_fixed reads explicit Git bytes and project_task accepts au
 // 责任：HTTP fixed 查询须返回 schemaVersion=1 且零证据写入，坏鉴权报 403、坏引用在 open 前报 400。
 test('HTTP external/:docId/fixed returns schemaVersion=1 without generating evidence; rejects bad references before open', async (t) => {
   if (!registerTools) return t.skip('DSH tool peer is unavailable');
-  const s = await setup();
+  const s = await setup(t);
   const before = fs.readFileSync(s.h.store.commitsFile);
   const fixedBefore = structuredClone(s.h.state.fixedContents);
   const result = await s.call({ schemaVersion: 1, commitOid: s.oid, pathAtCommit: 'docs/spec.md' });

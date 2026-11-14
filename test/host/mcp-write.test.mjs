@@ -110,7 +110,8 @@ test('MCP claim, intent and evidence submission use the existing task workflow a
     ['open_work_session', 'create_task', 'update_task', 'ready_task', 'claim_task', 'begin_task', 'submit_task',
       'verify_task', 'reject_task', 'release_task', 'interrupt_task', 'gate_task', 'renew_task', 'block_task',
       'unblock_task', 'reconcile_task', 'cancel_task', 'manage_plan', 'manage_document',
-      'checkpoint_work_session', 'handoff_work_session', 'get_project_view']);
+      'checkpoint_work_session', 'handoff_work_session', 'get_project_view',
+      'search_project_knowledge', 'read_project_knowledge']);
   const claim = await startWork(mcp, h.id, task);
   const before = h.rev;
   denied(await mcp.call('claim_task', { ...claim, projectRev: h.rev + 1 }), 'stale-revision');

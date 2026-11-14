@@ -16,7 +16,7 @@ DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、
 
 项目板记录谁提交了什么、引用来自哪里、内容是否变化；**不替材料背书**。命令/测试由人或 agent 在外部执行，成功和失败都可作为材料记录；项目板不执行、不重跑、不验签这些结果。未漂移不等于结论正确，未观测不等于未漂移。`submit` 只进入 review，`verify` 是验收裁决而非系统正确性证明。
 
-两种安装来源装配相同的 `dsh-stateboard` bundle，包含 UI、五个 DSH agent 工具及可选本机 MCP，不附赠 CLI、worktree 编排或运维工具。DSH 是硬依赖，Git 是可选的只读增强；**没有 Git 也能完整使用核心流程**。
+两种安装来源装配相同的 `dsh-stateboard` bundle，包含 UI、七个 DSH agent 工具及可选本机 MCP，不附赠 CLI、worktree 编排或运维工具。DSH 是硬依赖，Git 是可选的只读增强；**没有 Git 也能完整使用核心流程**。
 
 ## 支持环境
 
