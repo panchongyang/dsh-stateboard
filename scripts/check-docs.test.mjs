@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { anchors, checkDocuments, leaks, links, prose, slug } from './check-docs.mjs';
+import { newId } from '../lib/core/util.js';
 
 function fixture(contents) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-docs-check-'));
@@ -88,6 +89,19 @@ test('privacy checks real identifiers, sessions, absolute paths and both private
   const source = ['prj_1234567890abcdef', 'tsk_abcdef0123456789', 'session-12345678-1234-1234-1234-123456789abc', 'D:\\Secret\\file.md', '/home/alice/file.md', '192.168.3.4', '10.24.3.4', '```', '10.0.0.2', '```'].join('\n');
   assert.equal(leaks(source).length, 8);
   assert.equal(leaks('prj_<id> tsk_EXAMPLE session-<uuid> ABSOLUTE_STORE 127.0.0.1 110.2.3.4').length, 0);
+});
+
+test('privacy checks the live newId shape and keeps public-scope integration honest', () => {
+  const ids = [newId('prj'), newId('tsk')];
+  assert.equal(leaks(ids.join(' ')).length, 2);
+  assert.equal(leaks('prj_<id> tsk_EXAMPLE prj_1234567890abcdef').length, 1);
+  const { root, files } = fixture({
+    'docs/INDEX.md': '# Map\n\n' + ids.join(' '),
+    'test/README.md': newId('prj'),
+  });
+  const result = checkDocuments(root, files);
+  assert.equal(result.counts.leaks, 2);
+  assert.ok(result.errors.every((error) => error.startsWith('docs/INDEX.md')));
 });
 
 test('only reasoned same-line exemptions apply; the next line and short reasons still fail', () => {

@@ -124,7 +124,8 @@ export function links(text) {
   return found;
 }
 const leakPatterns = [
-  ['real-id', /\b(?:prj_|tsk_)[0-9a-f]{16}\b/ig],
+  // Legacy IDs were 16 hex; newId() is prefix + base36 timestamp + 12 hex (currently 20 body chars).
+  ['real-id', /\b(?:prj_|tsk_)(?:[0-9a-z]{6,12}[0-9a-f]{12}|[0-9a-f]{16})\b/ig],
   ['session-id', /\bsession-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/ig],
   ['drive-path', /\b[A-Za-z]:[\\/][^\s"'`<>]*/g],
   ['home-path', /\/home\/[^\s"'`<>]*/g],
