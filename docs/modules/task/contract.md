@@ -91,7 +91,7 @@ human 的刷新和豁免按[L1 verify](<../../CONTRACT.md#12-任务状态机>)�
 完整 code/status 见[L1 错误码](<../../CONTRACT.md#错误码>)。
 调用方分别处理参数拒绝、非法转移、依赖/CAS、租约/角色、材料覆盖与内容漂移。
 forbidden-role 的 details.reason 可区分 worker-unknown/not-independent；不要误当租约冲突。
-submit/reconcile 漂移拒绝保留已提交租约，修正内容后在合法执行权内重提。
+submit/reconcile 漂移拒绝不发布任务或租约变化；修正内容后按当前合法状态重提。
 租约恢复提示优先使用服务端 details.next/hint，不自动补新 token 或绕过 intent。
 
 ## 8. 隐含契约与已知实现边界

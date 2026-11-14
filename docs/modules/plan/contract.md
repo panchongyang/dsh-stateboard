@@ -36,7 +36,8 @@ create/publish/revise 经[shape 准入](<../../../lib/core/command-shape.js>)，
 - 发布新任务必须有标题和验收项；复用 taskId 的修订可继承原验收项。
 - 初次发布的 deps 是计划内 key；active revise 还可引用本项目已有 taskId。
 - 未知 taskId 不能默默当成新任务；不存在的依赖不能自动创建。
-- normalizeSteps 会给省略的 key/step id、priority/weight 赋默认值，调用方不要据此推断“省略即保留所有旧字段”。
+- active revise 是完整定义重建，不是逐字段 patch；normalizeSteps 对省略的 priority/weight/deps 使用 100/1/[]，不要推断省略即保留。
+- description 可继承，acceptance 按文本合并；title 仍需非空。精确归一化见[normalizeSteps](<../../../lib/core/normalize.js>)。
 - 同阶段直接/间接新增路径检查在发布与总线出口执行，不只看 deps 是否直接相邻。
 
 key 唯一、成员单归属和无环是[L1 不变量](<../../CONTRACT.md#14-不变量>)，不能以底层结构容忍某输入为新授权。
@@ -70,6 +71,7 @@ revise 移除则 orphaned=true 并保留旧 planRef，不是 release。
 
 未变成员可能保留旧 planRef.version；当前阶段以当前版本 steps 为准。
 归属不能用任务指针版本号与 head.currentVersion 必须相等的简化判断。
+active revise 未给计划 title 时采用旧版本标题；若此前只 rename head，调用方应显式传入当前标题，见[revisedTitle](<../../../lib/core/commands/plan-life.js>)。
 计划内 task 的生命周期仍由 task 模块负责，不从计划是否“完成”强制推 task 状态。
 
 ## 6. 副作用、提交与审计范围
