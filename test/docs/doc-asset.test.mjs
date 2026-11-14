@@ -49,6 +49,8 @@ function fixture() {
     '![dir](directory.png)',
     '![txt](plain.txt)', '',
     '\u0060\u0060\u0060text', '![fenced](fenced.png)', '\u0060\u0060\u0060', '',
+    // 带 info 的围栏行在围栏内只是代码内容，不能提前关闭围栏。
+    '\u0060\u0060\u0060js', '\u0060\u0060\u0060text', '![nested](nested.png)', '\u0060\u0060\u0060', '',
   ].join('\n'));
   return { root, state, binding, handle, request, openedCount() { return opened; }, put(relPath, bytes) { fs.writeFileSync(path.join(root, relPath), bytes); } };
 }
@@ -88,6 +90,7 @@ test('image asset refusals use the documented status and error envelope', async 
   fs.mkdirSync(path.join(f.root, 'docs', 'directory.png'));
   f.put('docs/plain.txt', Buffer.from('text'));
   f.put('docs/fenced.png', Buffer.from([1]));
+  f.put('docs/nested.png', Buffer.from([1]));
   f.put('docs/hidden.png', Buffer.from([1]));
   const cases = [
     ['../../escape.png', 'doc_test', 403, 'outside-root'],
@@ -98,6 +101,7 @@ test('image asset refusals use the documented status and error envelope', async 
     ['a/\u0000b.png', 'doc_test', 403, 'security-rejected'],
     ['hidden.png', 'doc_test', 404, 'not-found'],
     ['fenced.png', 'doc_test', 404, 'not-found'],
+    ['nested.png', 'doc_test', 404, 'not-found'],
     ['plain.txt', 'doc_test', 415, 'unsupported-format'],
     ['missing.png', 'doc_test', 404, 'not-found'],
     ['pic.png', 'doc_inline', 404, 'not-found'],
