@@ -128,8 +128,9 @@ const leakPatterns = [
   ['real-id', /\b(?:prj_|tsk_)(?:[0-9a-z]{6,12}[0-9a-f]{12}|[0-9a-f]{16})\b/ig],
   ['session-id', /\bsession-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/ig],
   ['drive-path', /\b[A-Za-z]:[\\/][^\s"'`<>]*/g],
-  ['home-path', /\/home\/[^\s"'`<>]*/g],
-  ['private-address', /\b(?:192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/g],
+  ['home-path', /(?:\/home\/|\/Users\/)[^\s"'`<>]*/g],
+  ['unc-path', /\\\\[A-Za-z0-9._-]+\\[^\s"'`<>]*/g],
+  ['private-address', /\b(?:192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b/g],
 ];
 
 export function leaks(text) {

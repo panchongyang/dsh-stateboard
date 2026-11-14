@@ -104,6 +104,15 @@ test('privacy checks the live newId shape and keeps public-scope integration hon
   assert.ok(result.errors.every((error) => error.startsWith('docs/INDEX.md')));
 });
 
+test('privacy covers RFC1918 172.16/12, UNC and macOS home paths without overmatching neighbours', () => {
+  const source = ['172.16.2.3', '172.31.255.254', '\\\\example-server\\private-share\\doc.md', '/Users/alice/file.md', '172.15.0.1', '172.32.0.1'].join('\n');
+  const found = leaks(source);
+  assert.equal(found.filter((item) => item.kind === 'private-address').length, 2);
+  assert.equal(found.filter((item) => item.kind === 'unc-path').length, 1);
+  assert.equal(found.filter((item) => item.kind === 'home-path').length, 1);
+  assert.equal(found.some((item) => /^172\.(?:15|32)\./.test(item.value)), false);
+});
+
 test('only reasoned same-line exemptions apply; the next line and short reasons still fail', () => {
   assert.equal(leaks('C:/x.md <!-- docs-check-allow: synthetic absolute-path rejection example, not a host path -->').length, 0);
   assert.equal(leaks('C:/x.md <!-- docs-check-allow: example -->').length, 1);
