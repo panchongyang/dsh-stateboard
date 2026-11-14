@@ -1,7 +1,7 @@
 /**
  * 测试职责：独占图片分块、相对资源 URL 及带头鉴权的字节传输。
  * 典型流程：真实 parser/transport → 合成文本与 fetch → 对照 block、URL、headers。
- * 覆盖边界：无 DOM/浏览器；不覆盖图片解码、CSP 或视觉布局。
+ * 覆盖边界：覆盖 独占图片分块、相对资源 URL 与带头鉴权字节传输；不覆盖 图片解码、CSP 或视觉布局。
  * 外部前置：hook 用例使用仓库 tools/build 的既有 esbuild；只用合成页面配置。
  */
 import assert from 'node:assert/strict';
