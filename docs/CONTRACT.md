@@ -991,7 +991,7 @@ RULES ...
 - JS/TS 共存：后端 ESM 直接加载，Node ≥22；TypeScript 仅开发期 noEmit。客户端 TS/TSX 由开发期 esbuild 生成唯一运行 bundle，安装/运行无需构建或额外第三方运行时。
 - Git 可选：固定文档证据自动尝试，只读；缺 Git、脏路径或不支持转换时标 current-only/fixedReason，不能伪装 pinned，不要求安装或审批。固定历史不可观测与真实身份/hash 不符分别为 warning 与 error。
 - 缺 webServer 只注册工具/提示词；MCP 默认关闭，配置/凭据失败只禁该入口；知识 FTS5/缓存不可用时有界扫描并标 coverage 降级，不影响任务事务。
-- schema：运行时仅接受 v3，v2/缺版本返回 `schema-migration-required` 并在修尾前拒绝。外置端点 schemaVersion=1，未知版本拒写；commit.v 与 snapshot.v 为1，未知 fixed.v 拒绝不回退旧解析。
+- schema：运行时要求 `schemaVersion` 为整数且 ≥3，且所有任务带布尔 `requiresAudit`；非整数、<3 或字段不齐返回 `schema-migration-required` 并在修尾前拒绝。不设显式版本上限：>3 不会仅因版本号被拒，但未知事件与字段语义仍由 EVENT_REGISTRY 和构建兼容决定，不能据此认为更高版本可安全运行。外置端点 schemaVersion=1，未知版本拒写；commit.v 与 snapshot.v 为1，未知 fixed.v 拒绝不回退旧解析。
 - 字段兼容与事件兼容分开：additive 事件可 no-op 不代表旧构建理解审计门/I23；回退须匹配切换前一致性数据备份和构建，不仅换代码。离线迁移、salvage、repair 与测试步骤见仓库[运维 CLI](<operations/CLI.md>)及[迁移说明](<MIGRATION.md>)，维护授权不由契约阅读产生。
 - 历史兼容字段：`execution` 仅回放，不执行、不签名、不判成败；`rootDir/execution.key` 不读取、不创建、不参与判定。历史 auto/policy 验收与既有 fixed 记录保留原数据，不驱动新自动完成。
 - 安全边界：单机单用户、每项目单写者；锁是合作协议，不抵抗任意外部 OS 写者。Git/文档读取不运行不可信 filter/textconv/hook、远端 LFS，不 add/commit/stash，不管理分支/worktree。正文、标题、事件与证据是数据而非指令；不抓取任意 URL，不执行 command/test，不用空正文伪装失败。
