@@ -32,9 +32,9 @@ function fixture() {
   let route;
   registerRoutes({ webServer: { register(value) { route = value; return () => {}; } }, on() { return () => {}; } },
     { token: 'secret', ready: Promise.resolve(), service });
-  function request(relPath, docId = 'doc_test', token = 'secret') {
+  function request(relPath, docId = 'doc_test', token = 'secret', extra = '') {
     return new Promise((resolve) => {
-      const req = { method: 'GET', url: '/project-board/api/projects/prj_test/docs/external/' + docId + '/assets' + (relPath === null ? '' : '?path=' + encodeURIComponent(relPath)), headers: { 'x-project-board-token': token } };
+      const req = { method: 'GET', url: '/project-board/api/projects/prj_test/docs/external/' + docId + '/assets' + (relPath === null ? '?' : '?path=' + encodeURIComponent(relPath)) + extra, headers: { 'x-project-board-token': token } };
       const res = { status: 0, headers: {}, writeHead(status, headers) { this.status = status; this.headers = Object.fromEntries(Object.entries(headers).map(([k,v]) => [k.toLowerCase(), v])); },
         end(body) { resolve({ status: this.status, headers: this.headers, bytes: Buffer.from(body) }); } };
       route.handler(req, res);
@@ -115,6 +115,7 @@ test('image asset refusals use the documented status and error envelope', async 
     assert.ok(!response.bytes.toString().includes(f.root));
   }
   assert.equal((await f.request('pic.png', 'doc_test', '')).status, 403);
+  assert.equal((await f.request('pic.png', 'doc_test', '', '&token=secret')).status, 403, 'query token must not authorize');
   f.handle.service.bindings = () => ({ activeFor: () => [] });
   assert.equal((await f.request('pic.png')).status, 409);
   f.handle.service.bindings = () => ({ activeFor: () => [{ ...f.binding, root: path.join(f.root, 'absent') }] });

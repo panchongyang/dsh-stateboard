@@ -8,7 +8,8 @@ export function useDocImages(projectId: string, docId: string, body: string): (s
   const key = JSON.stringify([projectId, docId, body]);
   React.useEffect(() => {
     const controller = new AbortController();
-    const urls: Record<string, string> = {};
+    // 用无原型对象存 src，避免 __proto__ 之类的键读到原型值。
+    const urls: Record<string, string> = Object.create(null);
     const sources = new Set(markdownBlocks(body).filter((block) => block.type === 'image').map((block) => block.src));
     for (const src of sources) {
       // 只接受相对引用；协议、盘符、绝对路径与反斜杠绝不触发请求。
@@ -24,5 +25,5 @@ export function useDocImages(projectId: string, docId: string, body: string): (s
       for (const url of Object.values(urls)) URL.revokeObjectURL(url);
     };
   }, [key]);
-  return (src) => images.key === key ? images.urls[src] || null : null;
+  return (src) => images.key === key && Object.prototype.hasOwnProperty.call(images.urls, src) ? images.urls[src] : null;
 }
