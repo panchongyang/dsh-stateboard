@@ -19,6 +19,7 @@ export interface MarkdownProps {
   scope?: string;
   empty?: string;
   toc?: boolean;
+  imageUrl?: (src: string) => string | null;
 }
 
 
@@ -244,6 +245,13 @@ export function Markdown(props: MarkdownProps) {
     {blocks.map(function(block, index) {
       const key = 'md-' + index;
       // markdownBlocks supplies each kind's fields; the type guards retain that parser contract.
+      if (block.type === 'image') {
+        const url = props.imageUrl?.(block.src);
+        return url ? <figure key={key} className="pb-md__figure">
+          <img className="pb-md__img" src={url} alt={block.alt} loading="lazy" />
+          <figcaption>{block.alt}</figcaption>
+        </figure> : <p key={key} className="pb-md__p">{'![' + block.alt + '](' + block.src + ')'}</p>;
+      }
       if (block.type === 'heading') {
         const tag = 'h' + Math.min(4, block.level! + 1);
         return React.createElement(tag, { key, id: scope + '-h-' + index, className: 'pb-md__h' }, inline(block.text));

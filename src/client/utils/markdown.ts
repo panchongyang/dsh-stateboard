@@ -6,6 +6,7 @@ export type MarkdownBlock =
   | { type: 'heading'; level: number; text: string }
   | { type: 'quote' | 'paragraph'; text: string }
   | { type: 'hr' }
+  | { type: 'image'; alt: string; src: string }
   | { type: 'table'; align: string[]; header: string[]; rows: string[][] }
   | { type: 'list'; ordered: boolean; start: number; items: string[] };
 export interface DocDraft { docId?: string | null; title?: string; kind?: string; body?: string }
@@ -205,6 +206,12 @@ export function markdownBlocks(body: unknown): MarkdownBlock[] {
       index = list.next;
       continue;
     }
+    const image = line.match(/^\s{0,3}!\[([^\]]*)\]\(([^)\s]+)\)\s*$/);
+    if (image) {
+      blocks.push({ type: 'image', alt: image[1], src: image[2] });
+      index += 1;
+      continue;
+    }
     const paragraph = [];
     while (index < lines.length && !/^\s*$/.test(lines[index])
       && !/^\s{0,3}#{1,4}\s+/.test(lines[index])
@@ -213,6 +220,7 @@ export function markdownBlocks(body: unknown): MarkdownBlock[] {
       && !/^\s{0,6}([-*+])\s+/.test(lines[index])
       && !/^\s{0,6}\d+[.)]\s+/.test(lines[index])
       && !/^\s{0,3}([-*_])(\s*\1){2,}\s*$/.test(lines[index])
+      && !/^\s{0,3}!\[([^\]]*)\]\(([^)\s]+)\)\s*$/.test(lines[index])
       && !isTableStart(lines, index)) {
       paragraph.push(lines[index]);
       index += 1;

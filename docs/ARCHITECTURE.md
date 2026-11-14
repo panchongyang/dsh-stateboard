@@ -133,6 +133,7 @@ lib/core/util.js
 lib/core/git-exec.js
 lib/core/documents/locate.js
 lib/core/documents/read.js
+lib/core/documents/assets.js
 lib/core/documents/external-model.js
 lib/core/documents/external-observe.js
 lib/core/documents/external-git.js

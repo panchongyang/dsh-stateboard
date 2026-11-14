@@ -820,7 +820,7 @@ events / health / projects / commands / shared）。
 | POST | /projects/:id/docs/external/:docId/unregister | 解除登记墓碑（doc.external.unregister） |
 | POST | /projects/:id/docs/external/:docId/fixed | 只读固定 Git 正文；fixed 或完整 commitOid/pathAtCommit，bindingId?；schemaVersion=1，不生成证据 |
 
-外置端点登记在 `lib/shared/contract.js` 的 `API_PATHS`（`docsExternal`、`docsExternalDoc`）。外置接口的返回带 `schemaVersion:1`；写入 body 必须是 JSON 对象，字段白名单是 `DOC_EXTERNAL_WRITE_FIELDS` + 信封字段 `cmdId`/`schemaVersion`，未知字段、非 1 的 `schemaVersion`、与 URL 不一致的 `docId` 都在 `service.open` 之前以 `invalid-command`(400) 拒绝，因此 400 不会触发冷项目恢复写入。`GET /projects/:id/docs/:docId` 仍只解析内嵌正文，访问外置记录返回 `external-doc-operation-required`(409)；`GET /projects/:id/docs` 两种来源都列，行内 `source` 为 `inline`/`external`，外置行没有 `hash`/`size`。`assets` 是唯一返回非 JSON 的文档端点：成功时响应体是原始字节，`Content-Type` 按扩展名给出（`.svg` 为 `image/svg+xml`），并带 `Content-Length` 与 `Cache-Control: no-store`；失败仍走统一 JSON error envelope。它只读、不登记写入面、不产生事件或证据。
+外置端点登记在 `lib/shared/contract.js` 的 `API_PATHS`（`docsExternal`、`docsExternalDoc`、`docsExternalAsset`）。外置接口的返回带 `schemaVersion:1`；写入 body 必须是 JSON 对象，字段白名单是 `DOC_EXTERNAL_WRITE_FIELDS` + 信封字段 `cmdId`/`schemaVersion`，未知字段、非 1 的 `schemaVersion`、与 URL 不一致的 `docId` 都在 `service.open` 之前以 `invalid-command`(400) 拒绝，因此 400 不会触发冷项目恢复写入。`GET /projects/:id/docs/:docId` 仍只解析内嵌正文，访问外置记录返回 `external-doc-operation-required`(409)；`GET /projects/:id/docs` 两种来源都列，行内 `source` 为 `inline`/`external`，外置行没有 `hash`/`size`。`assets` 是唯一返回非 JSON 的文档端点：成功时响应体是原始字节，`Content-Type` 按扩展名给出（`.svg` 为 `image/svg+xml`），并带 `Content-Length` 与 `Cache-Control: no-store`；失败仍走统一 JSON error envelope。它只读、不登记写入面、不产生事件或证据。
 
 返回：成功 `{ok:true, ...}`；失败 HTTP status + `{ok:false, error:{code,message,details}}`。
 

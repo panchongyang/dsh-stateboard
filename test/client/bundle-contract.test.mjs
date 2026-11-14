@@ -112,6 +112,7 @@ test("shared API and external dependency contract", () => {
     '/projects/:id/docs/:docId',
     '/projects/:id/docs/external',
     '/projects/:id/docs/external/:docId',
+    '/projects/:id/docs/external/:docId/assets',
     '/projects/:id/health',
     '/projects/:id/commands',
   ];
