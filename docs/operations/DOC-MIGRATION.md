@@ -9,7 +9,7 @@ D6 是显式离线工具，不发现用户 home 或默认真实 store。默认�
 人工必须分别确认：
 
 1. 可读取/导出哪些真实数据；哪些内容公开、私有或归档（D7）。报告和正文默认 private。
-2. 迁移期间所有看板写入已停止，并完成**整个看板根目录**的一致性全量备份（项目日志/快照/blob、身份与绑定注册表、密钥/认证等），在隔离副本上恢复演练。固定 Git 证据另按[对象保留与备份](<DOC-EXTERNAL-EVIDENCE.md#6-保留备份与回退>)保留所引用对象；当前文件不能代替历史对象。
+2. 迁移期间所有看板写入已停止，并完成**整个看板根目录**的一致性全量备份（项目日志/快照/blob、身份与绑定注册表、密钥/认证等），在隔离副本上恢复演练。固定 Git 证据另按[对象保留与备份](<../modules/evidence/contract.md>)保留所引用对象；当前文件不能代替历史对象。
 3. 每个 sourceDocId/sourceRev/sourceHash 和目标 locator；目标文件内容与编码/换行/BOM 均正确。
 4. 真实写入的项目/备份绝对路径及授权；不可恢复项的处理；是否开启本项目新增 inline 写封锁。
 
@@ -24,7 +24,7 @@ node scripts/doc-migration.mjs --export-bodies
 
 默认只读合成 fixture：两个文档、多 rev、link-only rev、历史证据、缺 blob。不打开真实 store。
 
-[只读 API](<../lib/core/documents/migration-inventory.js>)：`inventoryInlineDocuments({state, commits, readBlob, destinations?, includeBodies?, bindingRoots?})`。返回可 JSON 序列化的 `schemaVersion:1`：
+[只读 API](<../../lib/core/documents/migration-inventory.js>)：`inventoryInlineDocuments({state, commits, readBlob, destinations?, includeBodies?, bindingRoots?})`。返回可 JSON 序列化的 `schemaVersion:1`：
 
 | 字段 | 逐项内容 |
 |---|---|
@@ -41,7 +41,7 @@ node scripts/doc-migration.mjs --export-bodies
 真实数据必须先获上述授权与一致性备份，再显式执行：
 
 ```text
-node scripts/doc-migration.mjs --store "D:\Authorized\board\projects\prj_example" --authorized-read --export-bodies
+node scripts/doc-migration.mjs --store "ABSOLUTE_PROJECT_STORE" --authorized-read --export-bodies
 ```
 
 只读入口使用 `JsonlStore` 的 `lock:false`：不写锁/心跳、不修补日志尾、不写快照、不产生事件或 blob。项目目录必需显式给出；无隐式 home 降级。可用 `--destinations <JSON文件>` 输入 `[{"docId":"doc_…","locator":{"bindingId":"bnd_…","relPath":"docs/spec.md"}}]` 作去向冲突检查。
@@ -51,10 +51,10 @@ node scripts/doc-migration.mjs --store "D:\Authorized\board\projects\prj_example
 ## 3. 一致性备份检查（工具不会创建备份）
 
 ```text
-node scripts/doc-migration.mjs --store "D:\Authorized\board\projects\prj_example" --authorized-read --check-backup --backup "D:\Backup\projects\prj_example" --restore-tested
+node scripts/doc-migration.mjs --store "ABSOLUTE_PROJECT_STORE" --authorized-read --check-backup --backup "ABSOLUTE_PROJECT_BACKUP" --restore-tested
 ```
 
-[检查器](<../lib/core/documents/migration-backup.js>)实际读取备份，要求：项目 ID 一致；日志完整且 hash 链有效；备份为当前来源的前缀；其中全部内嵌历史 blob 的原字节 SHA-256 正确；来源在该备份之后只有已完成的迁移事件。备份目录不能是 live store 自身。其他看板写入推进来源后必须重新做一致性备份。
+[检查器](<../../lib/core/documents/migration-backup.js>)实际读取备份，要求：项目 ID 一致；日志完整且 hash 链有效；备份为当前来源的前缀；其中全部内嵌历史 blob 的原字节 SHA-256 正确；来源在该备份之后只有已完成的迁移事件。备份目录不能是 live store 自身。其他看板写入推进来源后必须重新做一致性备份。
 
 `--restore-tested` / API `backup.restoreTested:true` 是**人工已做恢复演练的声明**，不是工具自动做过演练。检查器只检查所选项目的日志、项目身份和内嵌 blob，不宣称验证整个看板根目录、跨文件原子性、Git对象保留或实际恢复演练。全量备份与停止写者仍是人必须确认的前置条件。缺失、损坏或不匹配的备份拒绝写入。
 
@@ -68,16 +68,16 @@ node scripts/doc-migration.mjs --store "D:\Authorized\board\projects\prj_example
 ```
 
 ```text
-node scripts/doc-migration.mjs --apply --board "D:\Authorized\board" --project prj_example --backup "D:\Backup\projects\prj_example" --mappings "D:\Authorized\mappings.json" --authorized-read --authorized-migrate --restore-tested
+node scripts/doc-migration.mjs --apply --board "ABSOLUTE_BOARD_ROOT" --project prj_example --backup "ABSOLUTE_PROJECT_BACKUP" --mappings "ABSOLUTE_MAPPINGS_JSON" --authorized-read --authorized-migrate --restore-tested
 ```
 
 `--apply` 的 board/backup 必须是绝对路径且项目已存在；授权参数缺失时不打开写句柄。读模式永不升级为写模式。执行期间不得让另一个服务同时写该 store；锁失效/只读则停止，不绕过锁。需要手动停止/重启主服务时只能由人操作，代码工具不运行服务管理命令。
 
-核心入口：[migrateInlineDocuments](<../lib/core/documents/migration.js>)；单条命令 `handle.command({op:'doc.external.migrate',cmdId,actor:{kind:'human'},authorized:true,backup:{directory,restoreTested:true},sourceDocId,sourceRev,sourceHash,locator})`。只允许 human/system，工具 agent 不能调用迁移命令。
+核心入口：[migrateInlineDocuments](<../../lib/core/documents/migration.js>)；单条命令 `handle.command({op:'doc.external.migrate',cmdId,actor:{kind:'human'},authorized:true,backup:{directory,restoreTested:true},sourceDocId,sourceRev,sourceHash,locator})`。只允许 human/system，工具 agent 不能调用迁移命令。
 
 单文档原子 commit，批次逐文档推进。原 docId/title/kind/任务与计划 links 保持，rev 从 sourceRev 加 1，当前来源变成 external、管理状态 draft、baseline 未确认。不会自动采用、确认或生成 Git fixed 证据。
 
-`doc/external-migrated` 是[现有事件注册表](<../lib/shared/events.js>)中的 applied 类型：
+`doc/external-migrated` 是[现有事件注册表](<../../lib/shared/events.js>)中的 applied 类型：
 
 - 事件顶层 `sourceDocId/sourceRev/sourceHash`，与 `data.migration` 内的同名字段严格一致。
 - `data` 是完整 external 记录，`data.migration = {v:1,sourceDocId,sourceRev,sourceHash,target,history}`。
@@ -100,11 +100,11 @@ node scripts/doc-migration.mjs --apply --board "D:\Authorized\board" --project p
 | commit 已持久化、响应/close acknowledgement 丢失 | store 只读，关闭后冷开；日志已含映射则重跑返回同一映射，不重复写 |
 | 批次已完成 A、B 不可恢复或进程退出 | A 保留；按原数组重跑时 A 幂等，B 显式报错/续跑。不要人工删除已完成映射或清理 store blob |
 
-[可复现合成测试](<../test/docs/doc-migration-write.test.mjs>)提供三个中断序列：写入前 17 字节后 EIO → 尾部回滚 → 重跑；成功 fsync 后 close 丢 ack → 冷开 → 重跑；只保留计划 commit 前 41 字节模拟崩溃 → 冷开 → 两次重跑。断言原/最终日志字节、完整 hash 链、事件数、docId集合与映射一致；无需手工清理。文件全部位于临时合成 board/workspace/backup，绝不访问默认 store。
+[可复现合成测试](<../../test/docs/doc-migration-write.test.mjs>)提供三个中断序列：写入前 17 字节后 EIO → 尾部回滚 → 重跑；成功 fsync 后 close 丢 ack → 冷开 → 重跑；只保留计划 commit 前 41 字节模拟崩溃 → 冷开 → 两次重跑。断言原/最终日志字节、完整 hash 链、事件数、docId集合与映射一致；无需手工清理。文件全部位于临时合成 board/workspace/backup，绝不访问默认 store。
 
 ## 6. 兼容读取与 inline 写封锁
 
-[readInlineArchive(handle,docId,sourceRev)](<../lib/core/documents/migration-archive.js>) 返回 `source:'inline-archive',readOnly:true,gitManaged:false,domain:'inline-utf8'` 与原 hash/body。只读清单同样标明档案来源；旧 inline endpoint 不猜 external 正文。
+[readInlineArchive(handle,docId,sourceRev)](<../../lib/core/documents/migration-archive.js>) 返回 `source:'inline-archive',readOnly:true,gitManaged:false,domain:'inline-utf8'` 与原 hash/body。只读清单同样标明档案来源；旧 inline endpoint 不猜 external 正文。
 
 旧 persisted docId@rev 与无 fixed 的历史 hash 证据仍按原 blob 审计；迁移文档的历史 @rev 新引用也按映射取原 hash，不解释为当前文件。裸 docId 的新证据走 external 自动固定/降级；既有 fixed Git 证据原样保留，不改为 workspace 或 inline 域。历史缺 blob 仍明确报错。
 
@@ -121,7 +121,7 @@ node scripts/doc-migration.mjs --apply --board "D:\Authorized\board" --project p
 
 新项目创世记录即带 `inlineWritesDisabled:true`；没有该字段的旧项目按禁用处理（只有显式 `false` 放行）。宿主入口（`project_doc` 工具、`POST /commands`）在**打开项目之前**先用与 core 同一套形态校验（title 的 `String` 强制转换、body 长度、link 归一化），再用无锁只读重放 peek 已持久化的项目记录做策略判定：注定被拒的内嵌写入不会创建新项目，也不会触发冷开恢复写入；peek 读不到时回落到正常打开，由 core 的同一道闸兜底。`project_doc put` 不再隐式创建项目，新工作区应先发布计划。迁移工具本身不受开关影响，是唯一的内嵌→外置转换通道。
 
-合成夹具需要制造内嵌档案覆盖兼容读取时，用 `ProjectService({privilegedInlineWrites:true})` 构造（仅测试/seed 代码路径，HTTP、agent 工具与环境变量都触达不到）；见 [TEST-ENV](<TEST-ENV.md>)。
+合成夹具需要制造内嵌档案覆盖兼容读取时，用 `ProjectService({privilegedInlineWrites:true})` 构造（仅测试/seed 代码路径，HTTP、agent 工具与环境变量都触达不到）；见 [TEST-ENV](<../governance/TEST-ENV.md>)。
 
 ## 7. 回退、RPO 与门禁
 
@@ -131,8 +131,8 @@ node scripts/doc-migration.mjs --apply --board "D:\Authorized\board" --project p
 4. **数据回退**：全量恢复匹配的 store/元数据/绑定/密钥，先在隔离副本核对项目、任务、文档数、关联、hash链与历史证据，再由人决定切换。恢复操作和服务重启不属于工具自动授权。
 5. **RPO＝所恢复的一致性备份时点**。备份之后的所有看板写入（含非文档写入）都会丢失；外部工作区/Git 文件与其他副作用不会回滚，须单独核对。没有零数据丢失承诺。
 
-现有 [stores-replay 门禁](<../scripts/stores-replay.mjs>)继续要求投影文档数等于创建身份数：doc/created 与 doc/external-registered 各创建一个 docId；migrated 仅转换既有身份，**不能计作创建**。只统计 doc/created 会误拒合法外置登记；把 migrated 加进创建数则会掩盖重复身份，故明确不计。合成测试反向断言迁移前后 docId 集合/数量完全相同，并独立登记一个 external 后才允许文档总数加一。旧注册表拒读测试维持，不放松未知事件门禁。
+现有 [stores-replay 门禁](<../../scripts/stores-replay.mjs>)继续要求投影文档数等于创建身份数：doc/created 与 doc/external-registered 各创建一个 docId；migrated 仅转换既有身份，**不能计作创建**。只统计 doc/created 会误拒合法外置登记；把 migrated 加进创建数则会掩盖重复身份，故明确不计。合成测试反向断言迁移前后 docId 集合/数量完全相同，并独立登记一个 external 后才允许文档总数加一。旧注册表拒读测试维持，不放松未知事件门禁。
 
-测试入口均接入 test:core：[只读矩阵](<../test/docs/doc-migration.test.mjs>)、[写入/恢复矩阵](<../test/docs/doc-migration-write.test.mjs>)。阶段实现门禁为 audit:check、test-discovery 与这两套测试，以及既有 doc-external*/doc-fixed*/replay-snapshot/event-compat/stores-replay*。最终隔离候选、真实数据授权副本核对和独立审查由主控执行；本文不宣称已完成真实迁移或人工验收。
+测试入口均接入 test:core：[只读矩阵](<../../test/docs/doc-migration.test.mjs>)、[写入/恢复矩阵](<../../test/docs/doc-migration-write.test.mjs>)。阶段实现门禁为 audit:check、test-discovery 与这两套测试，以及既有 doc-external*/doc-fixed*/replay-snapshot/event-compat/stores-replay*。最终隔离候选、真实数据授权副本核对和独立审查由主控执行；本文不宣称已完成真实迁移或人工验收。
 
 delegation: no — 受限实现子代理直接完成，未再委派。

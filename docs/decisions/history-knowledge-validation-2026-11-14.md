@@ -1,5 +1,7 @@
 # 历史知识读取与检索验证记录
 
+> 状态：已替代（现行语义见[实现契约](<../CONTRACT.md>)；正文保留方案或决策时的语境）。
+
 > 日期：2026-11-14；性质：本阶段工程验证档案，不替代现行契约。
 > 结论：统一 MCP 搜索与按引用回读链路已实现，隔离严格门禁、架构检查和独立代码审查通过。本阶段不包含宿主部署或真实项目试测。
 
@@ -8,7 +10,7 @@
 - 风险 R3：新增历史来源读取、派生缓存、证据内容适配和 MCP 正文入口。实现与验证均在专用分支 `codex/history-knowledge-read-model` 的独立工作树进行。
 - 基线 `3737a09e0d12fbd2d511bc050e1b03edb1856179`；最终代码与测试候选 `87b4b8b9dd4e18bcc803ed4ca11619a12aa4c07a`。随后的文档整理不改变运行时代码、测试或构建产物。
 - Windows x64、Node v24.22.2；宿主开发 peer 为 cordis 4.1.0、dsh-home-paths / dsh-tools 0.2.2-rc.1。使用独立安装的仓库 TypeScript/esbuild 开发依赖，无新增产品运行依赖，未修改依赖清单或锁文件。
-- 仅使用合成 fixture；按[隔离测试环境](../TEST-ENV.md)由系统变量白名单启动，隔离 HOME、USERPROFILE、DSH、XDG、npm 配置/cache 与 TEMP，不继承生产凭据或真实迁移 opt-in。离线 fixture 位于 Git 工作树之外的独立临时根，日志保留在候选工作树的 `.test-env/`；未启动真实宿主。
+- 仅使用合成 fixture；按[隔离测试环境](<../governance/TEST-ENV.md>)由系统变量白名单启动，隔离 HOME、USERPROFILE、DSH、XDG、npm 配置/cache 与 TEMP，不继承生产凭据或真实迁移 opt-in。离线 fixture 位于 Git 工作树之外的独立临时根，日志保留在候选工作树的 `.test-env/`；未启动真实宿主。
 - 实现由主控完成；按 R3 要求由非实现者独立审查。delegation: yes — 仅委派独立审查，没有并行代码实现。
 
 本次未改 UI、客户端产物、权威存储格式或任务写入语义。`lib/client.js` SHA-256 为 `d68cc21ac2a569898d8a8997f8cf65821a7c8db5abac5cd3d2e805c2a87123d7`，与基线一致。
@@ -21,7 +23,7 @@
 
 FTS5 contentless 派生索引按需追赶；SQLite 不可用或缓存故障时有界扫描降级。来源范围仅为留存记录、登记文档与证据引用。索引不归档外置正文，不进入 claim、submit、verify、快照或恢复的成功条件。精确回读直接校验来源，不依赖索引中曾有命中。
 
-用法见[使用说明](../runbooks/projectboard-usage.md)，完整边界见[实施方案](../design/history-knowledge-read-model.md)与[CONTRACT §8.1](../CONTRACT.md#81-历史知识读取与检索)。
+用法见[使用说明](<../operations/runbooks/projectboard-usage.md>)，完整边界见[实施方案](<../modules/knowledge/design.md>)与[CONTRACT §8.1](<../CONTRACT.md#81-历史知识读取与检索>)。
 
 ## 自动门禁结果
 
@@ -48,11 +50,11 @@ FTS5 contentless 派生索引按需追赶；SQLite 不可用或缓存故障时�
 
 | 测试入口 | 场景 |
 |---|---|
-| [knowledge.test](../../test/core/knowledge.test.mjs) | 快照前任务历史、原文与 hash、权威文件不变、派生缓存重建、增量去重、依赖关联与自由联想分离、外置内容变化、UTF-8 续读、扫描降级、中英连续标识符 |
-| [knowledge-sources.test](../../test/core/knowledge-sources.test.mjs) | 不可变计划、内嵌文档历史、会话附加记录、精确 doc rev、旧证据与审查、file hash、撤销登记、固定 Git 内容与对象缺失 |
-| [knowledge-faults.test](../../test/core/knowledge-faults.test.mjs) | 分批落后、零命中窗口续扫、索引代失效、损坏/未结束日志、回退与同 seq 替换、未发布尾部、事务失败回放、缓存损坏/不可写、超时、正文轮询、关闭与并发槽释放、关联缺口、冷读期间出现 writer |
-| [mcp-knowledge.test](../../test/host/mcp-knowledge.test.mjs) | 仅授权通道暴露正文工具、无需任务租约、完整搜索到原文链路、会话与项目隔离 |
-| [knowledge-performance.test](../../test/ops/knowledge-performance.test.mjs) | FTS5 冷/热查询、并发完整任务周期、事件循环、RSS、派生缓存与响应大小 |
+| [knowledge.test](<../../test/core/knowledge.test.mjs>) | 快照前任务历史、原文与 hash、权威文件不变、派生缓存重建、增量去重、依赖关联与自由联想分离、外置内容变化、UTF-8 续读、扫描降级、中英连续标识符 |
+| [knowledge-sources.test](<../../test/core/knowledge-sources.test.mjs>) | 不可变计划、内嵌文档历史、会话附加记录、精确 doc rev、旧证据与审查、file hash、撤销登记、固定 Git 内容与对象缺失 |
+| [knowledge-faults.test](<../../test/core/knowledge-faults.test.mjs>) | 分批落后、零命中窗口续扫、索引代失效、损坏/未结束日志、回退与同 seq 替换、未发布尾部、事务失败回放、缓存损坏/不可写、超时、正文轮询、关闭与并发槽释放、关联缺口、冷读期间出现 writer |
+| [mcp-knowledge.test](<../../test/host/mcp-knowledge.test.mjs>) | 仅授权通道暴露正文工具、无需任务租约、完整搜索到原文链路、会话与项目隔离 |
+| [knowledge-performance.test](<../../test/ops/knowledge-performance.test.mjs>) | FTS5 冷/热查询、并发完整任务周期、事件循环、RSS、派生缓存与响应大小 |
 
 既有 host 测试继续严格核对完整有序工具目录，仅新增两个知识工具名称；原有凭据隔离、状态守卫和持久去重断言保留。既有文档路径、Git、恢复及并发回归均进入同一严格门禁。
 

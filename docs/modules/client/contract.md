@@ -116,5 +116,5 @@ slot/导出/加载外壳、路由与 CSS 标识变化须检查冻结断言；内
 - [竞态](<../../../test/client/client-races.test.mjs>)、[页面生命周期](<../../../test/client/unit/page-lifecycle.test.mjs>)、[导航](<../../../test/client/unit/page-navigation.test.mjs>)：身份与迟到响应。
 - [外置文档纯逻辑](<../../../test/client/unit/external-docs.test.mjs>)、[文档视图](<../../../test/client/unit/doc-view.test.mjs>)：schema、表单与状态显示。
 - [图片逻辑](<../../../test/client/unit/doc-images.test.mjs>)与[服务端资源](<../../../test/docs/doc-asset.test.mjs>)：相对引用、拒绝、资源释放与零写边界。
-- [样式契约](<../../../test/client/styles-contract.test.mjs>)、[人工清单](<../../DOCS-UI-CHECKLIST.md>)：机械检查与人工交互分开。
+- [样式契约](<../../../test/client/styles-contract.test.mjs>)、[人工清单](<../../operations/DOCS-UI-CHECKLIST.md>)：机械检查与人工交互分开。
 - 分层运行 npm run check:client-layers；综合门禁 npm run audit:check 不代替构建产物一致性验证。

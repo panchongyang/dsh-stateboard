@@ -33,7 +33,7 @@ npm run test:types:client
 
 ## 客户端（前端）接入与 spike 结论
 
-客户端 model/utils/api 的 23 个实现模块使用 `.ts` 与真实参数/返回/字段类型，共享的最小 Task/Plan/Board/Doc/Session 投影在 `src/client/model/types.ts`，类型导入用 `import type`；不把整个领域对象写成 any。未知 JSON 字段用 `unknown`，并在现有运行时字段检查处收窄；不增加运行时校验或改写响应。`strict:true` 与 `allowJs:false` 覆盖全部前端 TS/TSX。pages/components 的 23 个视图模块使用 `.tsx` 与 classic JSX；每个组件的参数由命名 `XxxProps` 接口描述，`children` 与可选参数标 `?`。视图投影接口在 `src/client/model/view-types.ts`，React/DOM 最小声明在零依赖的 `src/client/react.d.ts`，不引入 `@types/react`。hooks 与根入口为 `.ts`。静态 DOM 与组件结构使用 JSX；动态标签/图标的 5 个 `React.createElement` 调用集中登记于[前端分层基线 §5.4](<design/frontend-layering.md#54-classic-jsx-与动态标签登记>)。构建与类型入口：`scripts/build-client.mjs` 接受 `.ts/.tsx` 并使用 classic JSX，`tsconfig.client.json` + `npm run typecheck:client` 做 `noEmit` 检查，前端不纳管 JS，TS/TSX 由 `strict:true` 检查；后端仍允许 JS/TS 混用。以下是 spike（分支 `spike/frontend-tsx`，样例在 `spike/frontend-tsx/`，不随包发布）的实测结论，作为后续迁移依据。
+客户端 model/utils/api 的 23 个实现模块使用 `.ts` 与真实参数/返回/字段类型，共享的最小 Task/Plan/Board/Doc/Session 投影在 `src/client/model/types.ts`，类型导入用 `import type`；不把整个领域对象写成 any。未知 JSON 字段用 `unknown`，并在现有运行时字段检查处收窄；不增加运行时校验或改写响应。`strict:true` 与 `allowJs:false` 覆盖全部前端 TS/TSX。pages/components 的 23 个视图模块使用 `.tsx` 与 classic JSX；每个组件的参数由命名 `XxxProps` 接口描述，`children` 与可选参数标 `?`。视图投影接口在 `src/client/model/view-types.ts`，React/DOM 最小声明在零依赖的 `src/client/react.d.ts`，不引入 `@types/react`。hooks 与根入口为 `.ts`。静态 DOM 与组件结构使用 JSX；动态标签/图标的 5 个 `React.createElement` 调用集中登记于[前端分层基线 §5.4](<../modules/client/design.md>)。构建与类型入口：`scripts/build-client.mjs` 接受 `.ts/.tsx` 并使用 classic JSX，`tsconfig.client.json` + `npm run typecheck:client` 做 `noEmit` 检查，前端不纳管 JS，TS/TSX 由 `strict:true` 检查；后端仍允许 JS/TS 混用。以下是 spike（分支 `spike/frontend-tsx`，样例在 `spike/frontend-tsx/`，不随包发布）的实测结论，作为后续迁移依据。
 
 ### Node 直接跑 `.ts` 单测
 
@@ -72,7 +72,7 @@ node tools/build/node_modules/esbuild/bin/esbuild spike/frontend-tsx/entry.tsx \
 - 纯逻辑与数据层用 `.ts`，单测直接 import `.ts`，不引入 loader/emit。
 - 组件用 `.tsx` + classic JSX；组件不进入 `node --test`，靠 esbuild 产物 + `client-smoke`/渲染覆盖。
 - 回退：若目标环境 Node <22.18，纯逻辑保留 `.js` + JSDoc/`checkJs`，组件仍 `.tsx`；不采用测试期 loader，避免多一套运行时。
-- 本结论证明工具链可行且已接入构建/类型入口，客户端纯逻辑/API 已类型化，视图使用 TSX/classic JSX，hooks、根入口与样式注入均使用 TS，行为冻结面见[前端分层基线](<design/frontend-layering.md>)。
+- 本结论证明工具链可行且已接入构建/类型入口，客户端纯逻辑/API 已类型化，视图使用 TSX/classic JSX，hooks、根入口与样式注入均使用 TS，行为冻结面见[前端分层基线](<../modules/client/design.md>)。
 
 ## 测试侧类型检查
 

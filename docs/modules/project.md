@@ -34,5 +34,5 @@ service 装配 [command](<command.md>) 与 [store](<store.md>)；身份发现调
 ## 关键不变量与读图指针
 
 - 项目身份与本机目录绑定分开；只读端口不通过 service.open 获取 writer，工作区发现也不等于授权创建项目。
-- [读图](<../diagrams/context.svg>)：上下文图区分宿主身份、core 与工作区；绑定细节入口见[项目身份](<../IDENTITY.md>)。
+- [读图](<../diagrams/context.svg>)：上下文图区分宿主身份、core 与工作区；绑定细节入口见[项目身份](<project/contract.md>)。
 - 全局文件清单与依赖规则见[架构地图](<../ARCHITECTURE.md#21-机器可校验的清单arch-map>)；领域不变量见[CONTRACT §1.4](<../CONTRACT.md#14-不变量>)。

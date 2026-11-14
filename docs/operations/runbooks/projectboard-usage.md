@@ -12,7 +12,7 @@
 
 ## 外部 Agent 的历史知识读取
 
-DSH 原生工具与项目授权 MCP 连接均提供同名的 `search_project_knowledge` 与 `read_project_knowledge`，业务参数与返回的来源、原文、游标和覆盖信息一致。DSH 自动从当前会话工作目录确认项目，不需要启用 MCP，也不传 `projectId/sessionToken`；MCP 传项目 ID 并复用 `open_work_session` 返回的工作会话。两侧纯读均不需要领取任务或写 intent。概览 read 连接不提供历史正文。入口授权差异见 [实现契约](../CONTRACT.md)。
+DSH 原生工具与项目授权 MCP 连接均提供同名的 `search_project_knowledge` 与 `read_project_knowledge`，业务参数与返回的来源、原文、游标和覆盖信息一致。DSH 自动从当前会话工作目录确认项目，不需要启用 MCP，也不传 `projectId/sessionToken`；MCP 传项目 ID 并复用 `open_work_session` 返回的工作会话。两侧纯读均不需要领取任务或写 intent。概览 read 连接不提供历史正文。入口授权差异见 [实现契约](<../../CONTRACT.md>)。
 
 1. 搜索当前任务的关键词或标识符，按需用 `kinds` 缩小来源类型。先看 `hits` 的原文片段、版本和 `coverage`，同时查看 `related` 的已有关系理由。
 2. 选取返回的 `ref` 调用 `read_project_knowledge`；`mode=context` 可附带所属记录、明确版本的目标、已有关系和前后历史。正文分块有 `nextCursor`，继续读时传同一个引用与游标。

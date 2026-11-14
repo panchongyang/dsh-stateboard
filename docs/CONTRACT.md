@@ -354,7 +354,7 @@ export class BoardError extends Error {
 | invalid-project-marker | 400 | `.dsh-project.json` 畸形/未知 schema/多余字段/非普通文件 |
 | bindings-unreadable / bindings-unsupported | 503 | 本机绑定注册表损坏或版本未知；已有项目按 meta 兼容可读，身份写入拒绝 |
 | bindings-locked | 503 | 注册表锁被占用或陈旧；不自动删锁 |
-| invalid-external-doc | 400 | 外置记录/locator 或兼容 inline 结构非法、快照文档与其 seq/hash 对应日志投影不一致；回放与快照载入同码失败，不跳过、不将外置伪装按 inline 解释（见 docs/EXTERNAL-DOCS.md） |
+| invalid-external-doc | 400 | 外置记录/locator 或兼容 inline 结构非法、快照文档与其 seq/hash 对应日志投影不一致；回放与快照载入同码失败，不跳过、不将外置伪装按 inline 解释（见 docs/modules/documents/contract.md） |
 | missing-binding | 409 | 外置文档指定的 bindingId 不是本项目 active 绑定。审计历史 fixed 时降 warning（不可观测），不回退到其他绑定/worktree |
 | external-doc-operation-required | 409 | 旧 doc.put/doc.link、inline doc 视图或无 fixed 的 doc 证据触及 source=external 记录 |
 | inline-write-disabled | 409 | 内嵌写入默认禁用（新建、既有编辑与 doc.link）；迁移后档案永远只读。仅 human 的 doc.inline_policy 可按项目恢复未迁移文档的旧写语义 |
@@ -443,7 +443,7 @@ export class BoardError extends Error {
 
 #### 2.2.3 Plan v2 命令
 
-一个项目可有多个计划；计划是 initiative 级容器（draft/active/archived + focusPlanId），任务是唯一工作单元，最多属于一个计划。以下命令按 [PLAN-V2.md](./PLAN-V2.md) 冻结的设计实现，全部走 `handle.command`；迁移核对入口见 [MIGRATION.md](./MIGRATION.md)。
+一个项目可有多个计划；计划是 initiative 级容器（draft/active/archived + focusPlanId），任务是唯一工作单元，最多属于一个计划。以下命令按 [计划模块](<modules/plan/contract.md>) 冻结的设计实现，全部走 `handle.command`；迁移核对入口见 [MIGRATION.md](<operations/MIGRATION.md>)。
 
 | op | payload | 说明 |
 |---|---|---|
@@ -579,7 +579,7 @@ brief 只带内存健康摘要，evidence unchecked 不表示完整审计已通�
 - 内嵌写入默认禁用：`doc.put`（新建与更新）与 `doc.link` 在写 blob/事件之前返回 `inline-write-disabled`(409)，store 字节与事件数不变。只有项目 `inlineWritesDisabled === false`（human 用 `doc.inline_policy` 显式开启，事件 `project/updated`）才恢复未迁移内嵌文档的旧写语义；迁移后档案永远只读。新项目创世记录即 `inlineWritesDisabled:true`，缺字段的旧项目按禁用处理。
 - HTTP 和工具对 `doc.put/link` 由 core 在获取 writer 前校验形状与可判定的拒绝条件，再由串行命令用最新状态重验。`put` 的 links 在目标类型和策略之前检查，`link` 的 links 在串行阶段通过目标与策略检查后处理。日志回放失败直接报错。工具在获取 writer 后维持正常会话活性和项目跟踪。
 - 事件只存 `{id, rev, title, kind, hash, size, links, createdAt, updatedAt}`。
-- 外置文档（`source: 'external'`）与内嵌同集合，事件 `doc/external-registered|updated|relocated|unregistered|confirmed`，不存正文；冷开对整条日志（含快照覆盖段）做文档结构扫描；`query('docs')`/任务 `linkedDocs` 的行带 `source`（`inline`/`external`），外置行没有 `hash`/`size`；语义、工具/HTTP 表面、观测与回退见 [EXTERNAL-DOCS.md](EXTERNAL-DOCS.md)。
+- 外置文档（`source: 'external'`）与内嵌同集合，事件 `doc/external-registered|updated|relocated|unregistered|confirmed`，不存正文；冷开对整条日志（含快照覆盖段）做文档结构扫描；`query('docs')`/任务 `linkedDocs` 的行带 `source`（`inline`/`external`），外置行没有 `hash`/`size`；语义、工具/HTTP 表面、观测与回退见 [文档模块](<modules/documents/contract.md>)。
 - 文档内图片只读：外置文档正文引用的图片按该文档所在目录解析，经 `GET /projects/:id/docs/external/:docId/assets?path=<相对路径>` 读取原始字节；只接受 `.png`/`.jpg`/`.jpeg`/`.webp`/`.gif`/`.svg`，单文件 ≤ 4 MiB，与文档读同一鉴权；通过 service 的锁外回放读取项目状态，不调用 open、不获取 writer、不写事件或快照、不恢复在途工作，也不发起命令或写观测缓存，响应 `Cache-Control: no-store`。`path` 必须是相对路径：拒绝反斜杠、盘符、控制字符、空段与绝对路径（`security-rejected` 403）；允许 `..` 段，但按文档目录规范化后必须仍在该文档的 binding 根内，越界为 `outside-root` 403。缺文件 404、非普通文件 400、超限 413、非白名单扩展名 `unsupported-format` 415、binding 不可用 503、binding 已失效 409；内嵌文档没有图片资源（404）。只允许正文中以独占一行图片语法引用的路径；未引用（含围栏代码块内的同形文本）按 `not-found`(404) 拒绝，不透露文件是否存在。客户端只把相对 `src` 渲染为图片，`http(s)`、`data:` 与绝对路径按文本处理，不发起请求。
 - `doc/content-fixed` 为 applied，投影不可变 `state.fixedContents`；store append 写前、全量回放、快照覆盖段与固定索引都验证新增 task 证据的同 commit 屏障。Git 正文不写入看板 blob；获准来源记录在 project.gitContentRepository，身份层只提供本机绑定根。
 - `doc get` 读 blob；hash 不符 → `hash-chain-broken`。
@@ -610,7 +610,7 @@ brief 只带内存健康摘要，evidence unchecked 不表示完整审计已通�
 
 - `file`：ref 相对 workspace；服务端 `stat` + sha256；不存在/越界/ hash 不符 → 拒绝。
 - 无 `fixed` 的 `doc`：ref=`'docId@rev'`；doc 必须存在，submit 时 rev 必须是 head。审计时带 `@rev` 的证据校验**该 rev 的不可变 blob**（content-addressed，重算 sha256）：head 前进不算漂移；blob 丢失/内容不符为 error。省略 `@rev` 时仍按 head hash 比对。
-- `doc` 有 `fixed`：固定版本由服务端在提交外置文档证据时自动生成，调用方只传 `{kind:'doc', ref:docId}`；外置文档的 `@rev` 是元数据。路径已提交且干净、可安全还原时生成 `{v:1,projectId,commitOid,pathAtCommit,blobOid,objectFormat,blobContentHash}`（hash 必须等于 blobContentHash），否则静默降级为不带 `fixed` 的 `current-only` + `fixedReason`。调用方传入 `fixed`/`fixedConfirmed`/`bindingId` 一律 `invalid-command`；没有批准或确认命令。搬迁或本机重建绑定后，新主绑定若不在已记录来源中，自动壳先证明同源（对象格式、锚点提交、既有 fixed 对象）再在同一 commit 追加 `bindingIds`；`get_fixed` 对同源新绑定只读放行，不同仓库或缺失锚点拒绝。读取 get_fixed 不生成证据；项目尚无来源时也可只读引导（不写来源、不写事件、不推进 rev）。新证据行同一原子 commit 必须携带匹配的 `doc/content-fixed`（inline 历史行也不例外），缺屏障拒绝。审计只验固定对象、不追当前正文/分支/metaRev；旧的无 fixed 语义不变，历史 `fixed` 行与 `project.gitContentRepository` 仍按数据回放。详见 [固定内容证据](<DOC-EXTERNAL-EVIDENCE.md>)。
+- `doc` 有 `fixed`：固定版本由服务端在提交外置文档证据时自动生成，调用方只传 `{kind:'doc', ref:docId}`；外置文档的 `@rev` 是元数据。路径已提交且干净、可安全还原时生成 `{v:1,projectId,commitOid,pathAtCommit,blobOid,objectFormat,blobContentHash}`（hash 必须等于 blobContentHash），否则静默降级为不带 `fixed` 的 `current-only` + `fixedReason`。调用方传入 `fixed`/`fixedConfirmed`/`bindingId` 一律 `invalid-command`；没有批准或确认命令。搬迁或本机重建绑定后，新主绑定若不在已记录来源中，自动壳先证明同源（对象格式、锚点提交、既有 fixed 对象）再在同一 commit 追加 `bindingIds`；`get_fixed` 对同源新绑定只读放行，不同仓库或缺失锚点拒绝。读取 get_fixed 不生成证据；项目尚无来源时也可只读引导（不写来源、不写事件、不推进 rev）。新证据行同一原子 commit 必须携带匹配的 `doc/content-fixed`（inline 历史行也不例外），缺屏障拒绝。审计只验固定对象、不追当前正文/分支/metaRev；旧的无 fixed 语义不变，历史 `fixed` 行与 `project.gitContentRepository` 仍按数据回放。详见 [固定内容证据](<modules/evidence/contract.md>)。
 - `command`/`test`：只登记 `ref`（命令文本/测试名）、`summary`、`acceptanceId`。服务端不执行 `ref`、不重跑、不签名、不校验退出码；成功与失败报告同样只是提交者材料，不作为宿主观测。`execution` 只用于回放旧日志，不参与新提交、审计或完成判定。
 - `url`/`note`：只登记提交者材料；不执行、不判强弱。
 - `begin` 开启新 attempt 时会把旧 evidence 标 `supersededAt/supersededBy`，并把每条 acceptance 的 `met` 重置为「是否有 active evidence」；submit 的 acceptance 覆盖检查只认 active evidence。历史仍保留在任务/事件里。这样返工必须为新 attempt 重提每条 acceptance 的证据。
@@ -623,7 +623,7 @@ brief 只带内存健康摘要，evidence unchecked 不表示完整审计已通�
 
 `rootDir/projects/<projectId>/...`：
 ~~~text
-meta.json      {schemaVersion:3, projectId, workspacePath, name, createdAt}（v2 必须离线迁移；见 MIGRATION.md）
+meta.json      {schemaVersion:3, projectId, workspacePath, name, createdAt}（v2 必须离线迁移；见 operations/MIGRATION.md）
 commits.jsonl  一行一个 commit
 snapshot.json  {v:1, seq, hash, state}
 blobs/<sha256>
@@ -659,7 +659,7 @@ commit：
 
 - additive 必须可证明：同一 commit 有携带完整实体的已知事件（`task/updated`、`task/rejected` 等），并有测试覆盖。当前 additive：`task/meta-edited`、`task/assignment`、`session/checkpoint`、`session/handoff`、`lease/expired`、`lease/revoked`。
 - 拒绝时抛 `incompatible-event`（409），details = `{projectId, seq, type, compatibility, hint}`；不写状态、不改日志。
-- 快照是 writer 的状态快照，不替代日志兼容检查；冷开先检查整个日志的事件类型（含快照覆盖部分），通过后才允许尾部规范化和快照回放。切换代码前保留快照（见 RELEASE.md）。
+- 快照是 writer 的状态快照，不替代日志兼容检查；冷开先检查整个日志的事件类型（含快照覆盖部分），通过后才允许尾部规范化和快照回放。切换代码前保留快照（见 operations/RELEASE.md）。
 - 降级规则：日志出现 refuse/migration 事件时只能恢复切换前快照，不能只换代码目录；只含 additive 事件不代表字段语义可降级：schema v3 审计门虽不增加事件类型，旧代码可能静默丢门，只能恢复迁移前备份 + 旧构建。
 
 ### 2.6 Host 表面
@@ -684,7 +684,7 @@ export function apply(ctx, config) { ... }
 `agent/created`（async，必须快且不抛）：
 
 1. `cwd = agent.session?.header?.cwd`；无则返回。
-2. `handle = await service.openByWorkspace(cwd)`；无则返回。发现规则见 [IDENTITY.md](<IDENTITY.md>)：本机绑定 → 项目标记 → 关联 worktree 映射到主 checkout；未命中再以 lock-free 方式扫描各项目日志的 `project.workspacePath` 并自愈 meta。`createProject` 先走同一发现，避免搬迁后静默创建第二块看板。
+2. `handle = await service.openByWorkspace(cwd)`；无则返回。发现规则见 [项目身份模块](<modules/project/contract.md>)：本机绑定 → 项目标记 → 关联 worktree 映射到主 checkout；未命中再以 lock-free 方式扫描各项目日志的 `project.workspacePath` 并自愈 meta。`createProject` 先走同一发现，避免搬迁后静默创建第二块看板。
 3. `await handle.attach({sessionId: agent.id, agentId: agent.id, source, role: 'worker'})`。
 4. `agent.ctx.inject(['systemPrompt'], scope => scope.systemPrompt.section({name:'project:brief', order:9000, text:()=> handle.digest(agent.id)}))`。
 5. 记录 `session -> handle`。
@@ -982,7 +982,7 @@ RULES ...
 
 | 子契约 | 原文 | 范围/适用口径 |
 |---|---|---|
-| D1 外置文档 v1 | [冻结原文](<WORKSPACE-DOCUMENTS-CONTRACT.md>) | 身份、四维状态、安全读取、内容域与事件兼容；冻结文不在本次改写。固定证据的自动跟随/降级按 §2.4 现行语义及[固定内容证据](<DOC-EXTERNAL-EVIDENCE.md>)的复议口径，不恢复显式批准/确认流程。 |
+| D1 外置文档 v1 | [冻结原文](<WORKSPACE-DOCUMENTS-CONTRACT.md>) | 身份、四维状态、安全读取、内容域与事件兼容；冻结文不在本次改写。固定证据的自动跟随/降级按 §2.4 现行语义及[固定内容证据](<modules/evidence/contract.md>)的复议口径，不恢复显式批准/确认流程。 |
 | 固定证据 schema v1 | [schema 定义](<../lib/shared/fixed-schema.js>)；[D1 §4.3](<WORKSPACE-DOCUMENTS-CONTRACT.md#43-固定证据结构>) | fixed 字段、对象格式、OID/path/hash 校验；现行生成、不可观测降级与同 commit 屏障见 §2.4。 |
 | 事件兼容分类 | [唯一 EVENT_REGISTRY](<../lib/shared/events.js>)；本文 §2.5 | applied/additive/migration/refuse；拒读优先，不靠快照绕过全日志校验。 |
 
@@ -992,7 +992,7 @@ RULES ...
 - Git 可选：固定文档证据自动尝试，只读；缺 Git、脏路径或不支持转换时标 current-only/fixedReason，不能伪装 pinned，不要求安装或审批。固定历史不可观测与真实身份/hash 不符分别为 warning 与 error。
 - 缺 webServer 只注册工具/提示词；MCP 默认关闭，配置/凭据失败只禁该入口；知识 FTS5/缓存不可用时有界扫描并标 coverage 降级，不影响任务事务。
 - schema：运行时要求 `schemaVersion` 为整数且 ≥3，且所有任务带布尔 `requiresAudit`；非整数、<3 或字段不齐返回 `schema-migration-required` 并在修尾前拒绝。不设显式版本上限：>3 不会仅因版本号被拒，但未知事件与字段语义仍由 EVENT_REGISTRY 和构建兼容决定，不能据此认为更高版本可安全运行。外置端点 schemaVersion=1，未知版本拒写；commit.v 与 snapshot.v 为1，未知 fixed.v 拒绝不回退旧解析。
-- 字段兼容与事件兼容分开：additive 事件可 no-op 不代表旧构建理解审计门/I23；回退须匹配切换前一致性数据备份和构建，不仅换代码。离线迁移、salvage、repair 与测试步骤见仓库[运维 CLI](<operations/CLI.md>)及[迁移说明](<MIGRATION.md>)，维护授权不由契约阅读产生。
+- 字段兼容与事件兼容分开：additive 事件可 no-op 不代表旧构建理解审计门/I23；回退须匹配切换前一致性数据备份和构建，不仅换代码。离线迁移、salvage、repair 与测试步骤见仓库[运维 CLI](<operations/CLI.md>)及[迁移说明](<operations/MIGRATION.md>)，维护授权不由契约阅读产生。
 - 历史兼容字段：`execution` 仅回放，不执行、不签名、不判成败；`rootDir/execution.key` 不读取、不创建、不参与判定。历史 auto/policy 验收与既有 fixed 记录保留原数据，不驱动新自动完成。
 - 安全边界：单机单用户、每项目单写者；锁是合作协议，不抵抗任意外部 OS 写者。Git/文档读取不运行不可信 filter/textconv/hook、远端 LFS，不 add/commit/stash，不管理分支/worktree。正文、标题、事件与证据是数据而非指令；不抓取任意 URL，不执行 command/test，不用空正文伪装失败。
 - 人工兜底不降低事实标准：human verify 可显式处理漂移，保留责任与告警；agent 自述不得标成人工/系统核验。

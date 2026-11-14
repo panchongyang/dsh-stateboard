@@ -2,7 +2,7 @@
 
 > 状态：现行；仓库开发/运维入口，不随 npm 包发布，不是产品 API。
 
-测试风险分级、基线保护与完整门禁见[测试策略](<../TESTING-POLICY.md>)；所有测试使用[隔离测试环境](<../TEST-ENV.md>)和合成 fixture，不碰真实 profile/store。真实数据只在单独授权的副本上验证。
+测试风险分级、基线保护与完整门禁见[测试策略](<../governance/TESTING-POLICY.md>)；所有测试使用[隔离测试环境](<../governance/TEST-ENV.md>)和合成 fixture，不碰真实 profile/store。真实数据只在单独授权的副本上验证。
 
 ## 1. 开发 CLI
 
@@ -67,7 +67,7 @@ node scripts/repair-log.mjs --root <absolute root> --project <id> --truncate-to-
 
 - 全部 ESM，Node 22；后端允许 JS/TS 共存，Node 直接加载运行入口；TypeScript 检查是开发期 `noEmit`。
 - 客户端源码是 TS/TSX，classic JSX，样式只写 `src/client/styles.css`；改源码后运行 `npm run build:client`，esbuild 0.28.2 隔离在 `tools/build/`，运行时不打包。
-- 后端 `npm run typecheck` 与客户端 `npm run typecheck:client` 分开；客户端 strict/allowJs:false，现有后端 JS 未全量语义检查。详见[TypeScript 工具链](<../TYPESCRIPT.md>)。
+- 后端 `npm run typecheck` 与客户端 `npm run typecheck:client` 分开；客户端 strict/allowJs:false，现有后端 JS 未全量语义检查。详见[TypeScript 工具链](<../governance/TYPESCRIPT.md>)。
 - 根目录 `node_modules/@deepseek-ai` 是开发期宿主 junction，不在根目录运行 `npm install`。
 
 - 不引入第三方运行时依赖（除 `@deepseek-ai/dsh-tools` / `dsh-home-paths` 等宿主已有包）。
@@ -86,6 +86,6 @@ node scripts/repair-log.mjs --root <absolute root> --project <id> --truncate-to-
 node scripts/migrate-gate-v3.mjs --store <absolute-store-dir> [--apply] [--backup <outside-source-dir>]
 ```
 
-默认 dry-run 零写；apply 先备份，再追加 `project/updated` schemaVersion3、全量 `task/updated` 与受影响草稿的既有 `plan/updated`，不新增事件、不重写历史；meta/snapshot 升至3。回滚只恢复迁移前备份+旧构建，流程见[迁移](<../MIGRATION.md>)。
+默认 dry-run 零写；apply 先备份，再追加 `project/updated` schemaVersion3、全量 `task/updated` 与受影响草稿的既有 `plan/updated`，不新增事件、不重写历史；meta/snapshot 升至3。回滚只恢复迁移前备份+旧构建，流程见[迁移](<MIGRATION.md>)。
 
 局部真实磁盘故障测试通过 `storeFactory: (dir, meta) => new JsonlStore(dir, meta, { fs: adapter })` 注入每 store 写适配器，覆盖 append/sync、snapshot、blob 和 relocate meta；默认原生 fs，锁和读保持真实，不修改全局 fs。`test/storage/store-faults.test.mjs` 用最小环境白名单启动合成 fixture worker，纳入默认与 CI 测试。

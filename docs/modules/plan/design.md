@@ -30,7 +30,7 @@
 
 head 是管理面；plans 的 id@version 键是历史内容面。
 currentPlans/currentVersion 用于找到当前版本，不是复制一份可写 steps。
-[PLAN-V2](<../../PLAN-V2.md>)提供背景；现行参数与语义不从背景旧表推导。
+[PLAN-V2](<contract.md>)提供背景；现行参数与语义不从背景旧表推导。
 
 ## 3. 草稿与发布数据流
 

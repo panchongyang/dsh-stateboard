@@ -1,6 +1,6 @@
 # ProjectBoard 恢复与继续交付 Runbook
 
-安装入口见 [INSTALL](<INSTALL.md>)，升级/换机见 [MIGRATION](<MIGRATION.md>)，发布与部署边界见 [RELEASE](<RELEASE.md>)。npm 包内的完整用户步骤见 [README](<../README.md#备份回退与迁移>)。
+安装入口见 [INSTALL](<INSTALL.md>)，升级/换机见 [MIGRATION](<MIGRATION.md>)，发布与部署边界见 [RELEASE](<RELEASE.md>)。npm 包内的完整用户步骤见 [README](<../../README.md#备份回退与迁移>)。
 
 ## 一致备份与版本回退
 
@@ -40,13 +40,13 @@ node scripts/recovery-drill.mjs
 node --test test/ops/recovery-drill.test.mjs test/ops/test-discovery.test.mjs
 ```
 
-[入口](<../scripts/recovery-drill.mjs>)不接受任何参数，包括真实 root、输出路径或真实数据 opt-in。每次创建新的 `pb-recovery-*` 临时根，使用 Windows native canonical 路径、随机标记和严格 containment/link 校验。内部 worker 只接受本次 fixture 的名字和动作；不提供恢复任意目录的公共入口。
+[入口](<../../scripts/recovery-drill.mjs>)不接受任何参数，包括真实 root、输出路径或真实数据 opt-in。每次创建新的 `pb-recovery-*` 临时根，使用 Windows native canonical 路径、随机标记和严格 containment/link 校验。内部 worker 只接受本次 fixture 的名字和动作；不提供恢复任意目录的公共入口。
 
 子进程只保留最小系统变量白名单；HOME、USERPROFILE、DSH_HOME、DSH_AGENTS_HOME、APPDATA、LOCALAPPDATA、TEMP/TMP/TMPDIR、XDG、npm 配置和 cache 全部进入 fixture，不继承密钥、Node 注入或真实配置。命令证据执行关闭；主业务链使用真实合成 file 证据。
 
 每 case 都在新进程创建项目并保存 pristine，注入故障后保存 damaged，再冷进程恢复。恢复后提交真实业务命令，另一个新进程再次打开，核对数据、提交保留和 health。主链另覆盖 plan → claim/begin → 冷重启恢复 → reconcile/resume → 写 artifact → submit → 合成 human actor verify → 再冷开；它不是对真实任务的人审或自验收。
 
-[恢复 wrapper](<../test/ops/recovery-drill.test.mjs>)由独立 `test:recovery` 执行，`check:strict` 在 perf 后串行调用，CI 另有独立步骤；不进入默认 core/fast。Suite wall-clock 上限为 300 秒。普通子进程上限 15 秒，runner 上限 120 秒，wrapper 子进程上限 150 秒；锁持有者是本 runner 创建的可追踪 fixture 子进程，正常演练通过 stdin 自然退出，不 close 以留下自身锁。超时边界只约束本次创建的子进程，不读取磁盘旧 PID 来终止进程。
+[恢复 wrapper](<../../test/ops/recovery-drill.test.mjs>)由独立 `test:recovery` 执行，`check:strict` 在 perf 后串行调用，CI 另有独立步骤；不进入默认 core/fast。Suite wall-clock 上限为 300 秒。普通子进程上限 15 秒，runner 上限 120 秒，wrapper 子进程上限 150 秒；锁持有者是本 runner 创建的可追踪 fixture 子进程，正常演练通过 stdin 自然退出，不 close 以留下自身锁。超时边界只约束本次创建的子进程，不读取磁盘旧 PID 来终止进程。
 
 报告保留在终端打印的新临时根：
 

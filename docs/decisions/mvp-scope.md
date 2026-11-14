@@ -1,5 +1,7 @@
 # MVP 范围与验收档案
 
+> 状态：已替代（现行语义见[实现契约](<../CONTRACT.md>)；正文保留方案或决策时的语境）。
+
 > 状态：已归档，仅作历史背景。
 
 保留重排前的范围与验收语义，不作为当前能力声明；现行行为见[实现契约](<../CONTRACT.md>)。章节号属于归档原文。
@@ -9,7 +11,7 @@
 必须可用：
 
 - 项目：按 workspace 路径识别；创建/列出；active/paused/archived。
-- 计划：一个项目可有多个计划（planHeads + 不可变版本表，命令/读模型见 §2.4.1、§2.5 与 [PLAN-V2.md](<../PLAN-V2.md>)）；`plan.publish` 原子创建 tasks；`plan.revise` 支持加/改/移除（移除标 orphaned）；draft/active/archived 生命周期、adopt/release 与 focus（human-only）。
+- 计划：一个项目可有多个计划（planHeads + 不可变版本表，命令/读模型见 §2.4.1、§2.5 与 [计划模块](<../modules/plan/contract.md>)）；`plan.publish` 原子创建 tasks；`plan.revise` 支持加/改/移除（移除标 orphaned）；draft/active/archived 生命周期、adopt/release 与 focus（human-only）。
 - 任务：create/update/ready/claim/begin/submit/verify/reject/block/interrupt/unblock/release/reconcile/cancel/reopen。
 - 文档：put/get/list/link；内容寻址 blob；`baseRev` 冲突。
 - 进度：只从任务状态推导；不存百分比。
@@ -24,7 +26,7 @@
 
 - 拖拽（用按钮/菜单）。
 - SSE（2s 轮询）。
-- 计划的拖拽排序 / 甘特图 / 模板（计划编辑用表单，非目标见 [PLAN-V2.md](<../PLAN-V2.md>) §13）。
+- 计划的拖拽排序 / 甘特图 / 模板（计划编辑用表单，非目标见 [计划模块](<../modules/plan/design.md>)）。
 - 血统级审计身份、autopilot、LAN/多用户、doc export、甘特图、工时。
 - 跨进程实时同步（只有 lock 只读降级）。
 

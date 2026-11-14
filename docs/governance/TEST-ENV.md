@@ -69,15 +69,17 @@ reset 只在确认停止且持有独占生命周期锁时，把 board/workspace 
 - 可以用仅存在于临时 profile 的观察插件读取真实 tools registry、以合成 agent execution context 调用已注册 handler；必须明确这不是 LLM 推理或完整 agent executor 测试。HTTP/client presence 不等于浏览器交互/渲染验收，不添加 headless UI 探针。
 - 卸载用 `dsh plugin --profile PROFILE remove dsh-stateboard`，核对只移除该依赖与 bundle 选择，保留项目数据和其他配置；停止所有自己启动的临时进程。
 
-源码维护脚本的 dry-run、备份、幂等、失败回退、仅撤自身链接由 `test:core` 的 scripts 测试覆盖；宿主 helper、bundle/D6 metadata 和隔离 HOME 下的脚本 CLI 由 `test:host` 覆盖。脚本不打入 npm 包、不修改源码 runtime junction，也不自动重启。面向用户的安装、手动重启/刷新、卸载与配置回退步骤见 [README 安装节](<../README.md#安装与首次运行>)；真实宿主证据需逐候选另留，不以离线 CI 替代。
+源码维护脚本的 dry-run、备份、幂等、失败回退、仅撤自身链接由 `test:core` 的 scripts 测试覆盖；宿主 helper、bundle/D6 metadata 和隔离 HOME 下的脚本 CLI 由 `test:host` 覆盖。脚本不打入 npm 包、不修改源码 runtime junction，也不自动重启。面向用户的安装、手动重启/刷新、卸载与配置回退步骤见 [README 安装节](<../../README.md#安装与首次运行>)；真实宿主证据需逐候选另留，不以离线 CI 替代。
 
 ## 6. 离线门禁与入口
 
-`check:strict` 串行执行 `audit:check` → `npm test`（规模门禁及离线四层 + host）→ `test:perf` → `test:recovery` → `test:stores -- --gate` → `check:release`；失败即停。perf/recovery 不在默认 core。各层预算、coverage 阈值和 SKIP 口径见[测试索引](<../test/README.md>)。stores gate 默认根来自 `os.homedir()/.dsh/project-board/projects`，不读取 DSH_HOME：运行 strict 前必须用白名单临时 HOME/USERPROFILE 并断言默认根在合成 fixture 内。显式 stores gate 使用 `--root <synthetic-projects>`，无需基准。源码不附带真实 store 基准。需要比对时用 `--baseline <fixture-baseline>` 指定与隔离数据配对的基准文件。生成合成基准时仅在隔离根使用 `--update`。不得对真实默认根运行、设置真实迁移 opt-in、改生产基准或为通过执行真实 `--update`。
+验证矩阵按[套件配置](<../../test/suite-manifest.mjs>)与[测试索引](<../../test/README.md>)路由，不用历史文件数代替覆盖：core/storage/docs/contract 覆盖状态与回放，git 组覆盖恶意程序/配置/路径反例，client 组覆盖纯逻辑与竞态，host 组需要显式装配兼容 peer。临时 Git 仓库仍可能继承 HOME/system/global 配置；跨进程矩阵、fault launcher 与 worker 必须成组运行，全局 fs/spawn/Worker/环境替换须串行并在 finally 恢复，平台能力 skip 单独报告。R3 只在合成隔离环境执行，不因 fixture 位于临时目录就宣称 OS 隔离，也不把未提交工作树的 HEAD 导出测试视为候选已测。
 
-store 门禁在临时副本上复用普通日志打开的事件分类与诊断（[实现契约 §2.9.1](<CONTRACT.md#29-存储>)），包括快照覆盖的提交。未知或需迁移的事件输出项目 ID、事件类型、seq 和处理提示，与只读前缀诊断共用拒绝文案，门禁非零退出。成功行列出源日志的 applied/additive 事件计数，以及副本恢复后的 health 告警数。显式根不存在、无项目、缺少日志提交或项目无法正常打开均失败；只有默认 gate 缺样本时报告 SKIP。副本跳过源锁及其临时认领记录，拒绝符号链接或 junction。普通比对不写基准；显式 `--update` 只在副本回放、数据不变量和源哈希检查全通过后更新源根之外的基准。
+`check:strict` 串行执行 `audit:check` → `npm test`（规模门禁及离线四层 + host）→ `test:perf` → `test:recovery` → `test:stores -- --gate` → `check:release`；失败即停。perf/recovery 不在默认 core。各层预算、coverage 阈值和 SKIP 口径见[测试索引](<../../test/README.md>)。stores gate 默认根来自 `os.homedir()/.dsh/project-board/projects`，不读取 DSH_HOME：运行 strict 前必须用白名单临时 HOME/USERPROFILE 并断言默认根在合成 fixture 内。显式 stores gate 使用 `--root <synthetic-projects>`，无需基准。源码不附带真实 store 基准。需要比对时用 `--baseline <fixture-baseline>` 指定与隔离数据配对的基准文件。生成合成基准时仅在隔离根使用 `--update`。不得对真实默认根运行、设置真实迁移 opt-in、改生产基准或为通过执行真实 `--update`。
 
-- [生命周期命令](<../scripts/test-env.mjs>)
-- [目录/配置/凭据隔离与 reset](<../scripts/test-env/environment.mjs>)
-- [进程托管与认证控制端点](<../scripts/test-env/lifecycle.mjs>)
-- [合成数据](<../scripts/test-env-seed.mjs>)、[HTTP 验证](<../scripts/test-env-verify.mjs>)、[浏览器入口](<../scripts/test-env-open.mjs>)
+store 门禁在临时副本上复用普通日志打开的事件分类与诊断（[实现契约 §2.9.1](<../CONTRACT.md#29-存储>)），包括快照覆盖的提交。未知或需迁移的事件输出项目 ID、事件类型、seq 和处理提示，与只读前缀诊断共用拒绝文案，门禁非零退出。成功行列出源日志的 applied/additive 事件计数，以及副本恢复后的 health 告警数。显式根不存在、无项目、缺少日志提交或项目无法正常打开均失败；只有默认 gate 缺样本时报告 SKIP。副本跳过源锁及其临时认领记录，拒绝符号链接或 junction。普通比对不写基准；显式 `--update` 只在副本回放、数据不变量和源哈希检查全通过后更新源根之外的基准。
+
+- [生命周期命令](<../../scripts/test-env.mjs>)
+- [目录/配置/凭据隔离与 reset](<../../scripts/test-env/environment.mjs>)
+- [进程托管与认证控制端点](<../../scripts/test-env/lifecycle.mjs>)
+- [合成数据](<../../scripts/test-env-seed.mjs>)、[HTTP 验证](<../../scripts/test-env-verify.mjs>)、[浏览器入口](<../../scripts/test-env-open.mjs>)

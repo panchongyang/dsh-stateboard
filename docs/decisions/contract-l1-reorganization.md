@@ -1,5 +1,7 @@
 # L1 契约重排核对记录
 
+> 状态：已替代（现行语义见[实现契约](<../CONTRACT.md>)；正文保留方案或决策时的语境）。
+
 > 状态：交付核对档案；不替代现行契约，不授予提交、发布或部署权限。
 
 范围：只改文档，保持 [CONTRACT](<../CONTRACT.md>) 随包路径；未改业务代码，未 commit/push。D1 冻结原文保持不变。
@@ -25,7 +27,7 @@ delegation: no — 单人有界重排；不追加下级委派。
 | §3 Host 全节 | [CONTRACT §2.6](<../CONTRACT.md#26-host-表面>) | 保留7工具、全部 HTTP 路由、MCP、身份与 prompt/去重规则 |
 | §4 Client | [CONTRACT §2.6](<../CONTRACT.md#26-host-表面>)、[CLI §2–§3](<../operations/CLI.md>)、[旧口径档案](<contract-legacy-surfaces.md>) | 可观察 slot/鉴权/渲染/冲突语义保留；测试机制进 CLI；旧模块路径/测试键数/样式沿革进档案 |
 | §5 CLI/测试/编码约束 | [CLI](<../operations/CLI.md>)、[旧口径档案](<contract-legacy-surfaces.md>) | 15条最低测试语义全部保留；现行脚本组合/TS范围核对实现；已不存在的 wt 工具及过时数量原文归档 |
-| §7 子代理边界 | [AUTONOMOUS-DELIVERY §9](<../AUTONOMOUS-DELIVERY.md#9-子代理交付边界>) | 原有各代理写入范围、构建产物限制和契约先行语义保留 |
+| §7 子代理边界 | [AUTONOMOUS-DELIVERY §9](<../governance/AUTONOMOUS-DELIVERY.md#9-子代理交付边界>) | 原有各代理写入范围、构建产物限制和契约先行语义保留 |
 | §8 历史读模型 | [CONTRACT §2.7](<../CONTRACT.md#27-历史知识送达与摘要规则>)、[旧口径档案](<contract-legacy-surfaces.md>) | 现行知识参数/预算/覆盖/摘要保留；未交付 asOf/fromSeq 提案及 asof-out-of-range/bad-seq 原文归档 |
 | DESIGN §3.4 不变量 | [CONTRACT §1.4](<../CONTRACT.md#14-不变量>) | 把设计约束转为现行口径；不引入依赖 waiver、全量计划禁写或虚构原子文件快照 |
 | 冻结原文与 schema | [CONTRACT §3](<../CONTRACT.md#3-冻结子契约索引1c>) | 只索引 D1、fixed schema、EVENT_REGISTRY，不改写冻结原文 |

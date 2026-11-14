@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Local identity operations for ProjectBoard (docs/IDENTITY.md).
+ * Local identity operations for ProjectBoard (docs/modules/project/contract.md).
  *
  *   node scripts/identity.mjs resolve  --cwd <dir>
  *   node scripts/identity.mjs plan                                   (dry-run, writes nothing)

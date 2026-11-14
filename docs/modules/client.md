@@ -36,5 +36,5 @@ pages → components/hooks/model/utils/api；hooks → api/model/utils；compone
 ## 关键不变量与读图指针
 
 - transport 不读取页面导航状态；页面确认的选择版本决定能否发写请求，迟到响应不能覆盖新选择；正文不进入 innerHTML。
-- [读图](<../diagrams/layers.svg>)：分层图的 client→host 是 HTTP，不是 import；六层细节见[前端分层基线](<../design/frontend-layering.md>)，构建见[架构产物](<../ARCHITECTURE.md#5-构建与产物>)。
+- [读图](<../diagrams/layers.svg>)：分层图的 client→host 是 HTTP，不是 import；六层细节见[前端分层基线](<client/design.md>)，构建见[架构产物](<../ARCHITECTURE.md#5-构建与产物>)。
 - 全局文件清单与依赖规则见[架构地图](<../ARCHITECTURE.md#21-机器可校验的清单arch-map>)；领域不变量见[CONTRACT §1.4](<../CONTRACT.md#14-不变量>)。

@@ -1,6 +1,6 @@
 # 兼容与降级
 
-本文是跨模块兼容入口；权威条款为 [CONTRACT §2.5](<CONTRACT.md#25-存储格式与事件兼容>)、[§2.4](<CONTRACT.md#24-文档>)与[§4](<CONTRACT.md#4-兼容与降级>)，运维操作另见[迁移](<MIGRATION.md>)和[恢复](<RECOVERY.md>)。
+本文是跨模块兼容入口；权威条款为 [CONTRACT §2.5](<CONTRACT.md#25-存储格式与事件兼容>)、[§2.4](<CONTRACT.md#24-文档>)与[§4](<CONTRACT.md#4-兼容与降级>)，运维操作另见[迁移](<operations/MIGRATION.md>)和[恢复](<operations/RECOVERY.md>)。
 
 ## 1. 版本域分开校验
 
@@ -30,7 +30,7 @@ schema、事件分类、字段语义与传输版本是不同校验域；同为 v
 
 冷开检查完整日志的版本、序号、哈希和事件，包括快照覆盖的部分；随后校验快照水位及文档/固定内容身份，再回放、检查 schema，最后只有 writer 可以规范化尾部。坏链、未知事件或不支持版本不能靠快照跳过，锁外读取也不修尾，见 [CONTRACT §2.5](<CONTRACT.md#25-存储格式与事件兼容>) 与 [store 模块](<modules/store.md>)。
 
-出现 refuse/migration 事件时，较低能力构建只能回到切换前快照对应的一致性备份，不能只换代码目录；这里的回退不是把单个 snapshot 文件盖在新日志上，而是匹配构建和完整数据备份。即使事件全可读，审计门/I23 等字段语义仍可能不兼容，必须按同样的数据回退边界处理，见[事件兼容契约](<CONTRACT.md#事件兼容契约fail-closed>)、[发布](<RELEASE.md>)与[恢复](<RECOVERY.md>)。
+出现 refuse/migration 事件时，较低能力构建只能回到切换前快照对应的一致性备份，不能只换代码目录；这里的回退不是把单个 snapshot 文件盖在新日志上，而是匹配构建和完整数据备份。即使事件全可读，审计门/I23 等字段语义仍可能不兼容，必须按同样的数据回退边界处理，见[事件兼容契约](<CONTRACT.md#事件兼容契约fail-closed>)、[发布](<operations/RELEASE.md>)与[恢复](<operations/RECOVERY.md>)。
 
 salvage/fsck 是诊断或前缀观测，显式 repair 不是自动迁移；维护授权、停写、备份和数据损失确认见[运维 CLI](<operations/CLI.md#1-开发-cli>)。代码回退不回滚外部副作用。
 

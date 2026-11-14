@@ -4,11 +4,11 @@
 
 ## 1. 本地候选准备
 
-产品 `dsh-stateboard@0.3.1` 使用 BSD-3-Clause 许可证。源码在 [GitHub 仓库](https://github.com/panchongyang/dsh-stateboard) 公开，包的可用版本以 npm registry 为准。[支持矩阵](<../README.md#支持环境>)覆盖 Windows 11 x64 和 DSH `0.2.1-rc.2` 至 `0.2.2-rc.1`。DSH `0.2.2-rc.1` 要求 Node >=24.9，Node 22 是 core/client 基线，macOS 和 Linux 尚未测试。
+产品 `dsh-stateboard@0.3.1` 使用 BSD-3-Clause 许可证。源码在 [GitHub 仓库](https://github.com/panchongyang/dsh-stateboard) 公开，包的可用版本以 npm registry 为准。[支持矩阵](<../../README.md#支持环境>)覆盖 Windows 11 x64 和 DSH `0.2.1-rc.2` 至 `0.2.2-rc.1`。DSH `0.2.2-rc.1` 要求 Node >=24.9，Node 22 是 core/client 基线，macOS 和 Linux 尚未测试。
 
 候选说明应列：基线与冻结提交、变更面、行为是否变化、兼容类别、定向/全量结果与 SKIP、安装来源、备份和匹配旧包、RPO、已知限制。事件/存储变更必须解释 additive/refuse/migration；schema v3 即使事件类型兼容，旧构建也可能静默丢失审计门，不能只看“能打开”。
 
-按[贡献指南](<CONTRIBUTING.md>)运行定向测试；维护者在[隔离环境](<TEST-ENV.md>)统一跑冻结候选完整门禁。不访问真实默认 store。缺宿主依赖/未测组合/无数据时的跳过明确单列。
+按[贡献指南](<../governance/CONTRIBUTING.md>)运行定向测试；维护者在[隔离环境](<../governance/TEST-ENV.md>)统一跑冻结候选完整门禁。不访问真实默认 store。缺宿主依赖/未测组合/无数据时的跳过明确单列。
 
 ```text
 npm run check:strict
@@ -17,7 +17,7 @@ npm run check:release
 npm run check:release:readiness
 ```
 
-`check:strict` 包含 audit、core/client/host、stores gate 和 release purity；stores gate 无数据时报告 SKIP，真实数据回放须另有证据。公开源码的 stores gate 无需随包基准，比对命令和隔离要求见[独立测试环境](<TEST-ENV.md#6-离线门禁与入口>)。改客户端先重建产物并核对与冻结源码一致。独立审计与人工 UI 验收另行安排。
+`check:strict` 包含 audit、core/client/host、stores gate 和 release purity；stores gate 无数据时报告 SKIP，真实数据回放须另有证据。公开源码的 stores gate 无需随包基准，比对命令和隔离要求见[独立测试环境](<../governance/TEST-ENV.md#6-离线门禁与入口>)。改客户端先重建产物并核对与冻结源码一致。独立审计与人工 UI 验收另行安排。
 
 ## 2. 唯一包检查入口
 
@@ -28,7 +28,7 @@ npm run check:release:readiness
 - 两种模式均可用 `-- --tarball <tgz>` 检查冻结包。纯度检查验证元数据和分发内容。readiness 另将 `private:true` 列为人工闸，发布授权仍按下文单独记录。
 - 链接解析复用声明的 Markdown 子集；未支持语法阻断，不校验 fragment 是否存在或外链可达性。不检查 Git 全历史、registry 线上可用性、法律合规或任意宿主版本兼容。
 
-README 的必要安装/演示/恢复说明自包含，不用未公开 GitHub 链接伪装修复 npm 断链。源码文档入口：[文档地图](<INDEX.md>) · [安装](<INSTALL.md>) · [演示](<DEMO.md>) · [备份/恢复](<RECOVERY.md>) · [迁移](<MIGRATION.md>) · [架构](<ARCHITECTURE.md>)。
+README 的必要安装/演示/恢复说明自包含，不用未公开 GitHub 链接伪装修复 npm 断链。源码文档入口：[文档地图](<../INDEX.md>) · [安装](<INSTALL.md>) · [演示](<DEMO.md>) · [备份/恢复](<RECOVERY.md>) · [迁移](<MIGRATION.md>) · [架构](<../ARCHITECTURE.md>)。
 
 ## 3. 人工授权公开发布
 

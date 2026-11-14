@@ -34,5 +34,5 @@
 ## 关键不变量与读图指针
 
 - 日志验证覆盖快照之前的记录；快照不是兼容性豁免，诊断不修复，锁外回放不修尾或恢复任务。
-- [读图](<../diagrams/store-recovery.svg>)：图按冷开验证顺序阅读；恢复与修复的维护授权见[恢复 Runbook](<../RECOVERY.md>)。
+- [读图](<../diagrams/store-recovery.svg>)：图按冷开验证顺序阅读；恢复与修复的维护授权见[恢复 Runbook](<../operations/RECOVERY.md>)。
 - 全局文件清单与依赖规则见[架构地图](<../ARCHITECTURE.md#21-机器可校验的清单arch-map>)；领域不变量见[CONTRACT §1.4](<../CONTRACT.md#14-不变量>)。

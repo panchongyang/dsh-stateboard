@@ -93,10 +93,10 @@
 
 ## 5. 可执行测试分层、规模与覆盖率
 
-- [Suite manifest](<../test/suite-manifest.mjs>)是 runner、discovery、coverage 的单一接线来源；每个 tracked `.test.mjs` 恰属一个叶 suite，显式路径排除未跟踪测试。详见[测试索引](<../test/README.md>)。
+- [Suite manifest](<../../test/suite-manifest.mjs>)是 runner、discovery、coverage 的单一接线来源；每个 tracked `.test.mjs` 恰属一个叶 suite，显式路径排除未跟踪测试。详见[测试索引](<../../test/README.md>)。
 - `test:core` 为规模门禁 + unit/integration/cli/ops；层间串行、层内文件并发上限 4，wall-clock 预算分别 480/480/300/300 秒。host 独立（300 秒，不进入离线 CI）；perf/recovery 分别 300 秒且不在 core/fast。runner 输出实际耗时和预算，超时回收本次子进程树、非零退出。
 - `check:strict` 依次执行 audit:check、npm test（core + host）、perf、recovery、stores gate、release；失败即停。CI 执行离线 core（含全部 client 且不重复）与独立 perf/recovery，不以缺 peer 的离线结果代替完整宿主验证。
-- [规模门禁](<../scripts/check-test-size.mjs>)对 tracked `test/**/*.test.mjs` 采用物理行计数（含注释/空行）：新文件 ≤600，函数 AST 行 ≤150（包括匿名回调，无函数例外）。四个精确既有 ceiling 是 [bundle-logic](<../test/client/unit/bundle-logic.test.mjs>) 781、[external-docs](<../test/client/unit/external-docs.test.mjs>) 607、[logic](<../test/client/unit/logic.test.mjs>) 883、[evidence-audit](<../test/docs/evidence-audit.test.mjs>) 860；任何增长即失败，不自动更新，≤600 后必须移除 stale exception。既有超限须按职责另行拆分，不借例外新增大文件。
+- [规模门禁](<../../scripts/check-test-size.mjs>)对 tracked `test/**/*.test.mjs` 采用物理行计数（含注释/空行）：新文件 ≤600，函数 AST 行 ≤150（包括匿名回调，无函数例外）。四个精确既有 ceiling 是 [bundle-logic](<../../test/client/unit/bundle-logic.test.mjs>) 781、[external-docs](<../../test/client/unit/external-docs.test.mjs>) 607、[logic](<../../test/client/unit/logic.test.mjs>) 883、[evidence-audit](<../../test/docs/evidence-audit.test.mjs>) 860；任何增长即失败，不自动更新，≤600 后必须移除 stale exception。既有超限须按职责另行拆分，不借例外新增大文件。
 - `test:coverage` 覆盖 manifest 全部 wired tracked 入口（含 client/unit、host preflight、perf/recovery），预算 1800 秒；Node V8 line/branch/functions 阈值分别 90/80/90%，任何不足非零退出。分母保留 Node 默认 loaded-project JS（产品与维护脚本，默认排除测试文件和 node_modules，路径以报告为准），不是产品源码独立覆盖率。报告逐文件数据，手工 worker 与动态 bundle 的采集边界单列，不能用高总百分比遮蔽未执行能力。
 - TAP 输出 skipped 数与用例名。SKIP 回调未执行、不贡献覆盖；缺 peer、平台能力或真实 store 未授权须单独列明。real-store opt-in 跳过保留，SKIP 不能算真实数据覆盖，coverage 也不授予真实数据访问权。
 

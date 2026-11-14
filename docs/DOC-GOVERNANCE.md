@@ -1,6 +1,6 @@
 # 文档治理：分层、归属与维护规则
 
-> 状态：现行。本文规定文档怎么分层、每层写什么、旧文档怎么处置；产品行为以 [实现契约](CONTRACT.md) 为准，方案取舍以各模块文档与 `decisions/` 为准。
+> 状态：现行。本文规定文档怎么分层、每层写什么、旧文档怎么处置；产品行为以 [实现契约](<CONTRACT.md>) 为准，方案取舍以各模块文档与 `decisions/` 为准。
 
 ## 1. 要解决的问题
 
@@ -14,12 +14,12 @@
 
 | 层 | 目录 / 文件 | 读者 | 写什么 | 不写什么 |
 |---|---|---|---|---|
-| L0 治理 | `governance/`、本文件、[项目框架约束](CONSTRAINTS.md) | 先定边界的人 | 方针、约束、交付流程、测试分级、工具链、自治边界 | 产品行为、模块实现 |
-| L0 设计背景 | [DESIGN.md](DESIGN.md) | 想理解取舍的人 | 问题定义、设计立场、总体取舍、历史路线入口 | 逐条行为承诺、当前参数表 |
+| L0 治理 | `governance/`、本文件、[项目框架约束](<governance/CONSTRAINTS.md>) | 先定边界的人 | 方针、约束、交付流程、测试分级、工具链、自治边界 | 产品行为、模块实现 |
+| L0 设计背景 | [DESIGN.md](<DESIGN.md>) | 想理解取舍的人 | 问题定义、设计立场、总体取舍、历史路线入口 | 逐条行为承诺、当前参数表 |
 | L1a 领域模型 | `CONTRACT.md` 前半 | 外部集成者、Agent | 词汇表、任务/计划状态机、不变量、可信度口径 | 函数级实现细节 |
 | L1b 对外契约 | `CONTRACT.md` 主体 | 外部集成者、Agent | 命令、事件、错误、查询、HTTP、工具、MCP、存储格式、兼容与降级 | 内部函数、设计论证 |
-| L1c 冻结子契约 | [D1 冻结契约](WORKSPACE-DOCUMENTS-CONTRACT.md) | 改文档能力的人 | 身份、四维状态、读取边界、固定证据（只登记不改写） | 实现细节 |
-| L2a 架构地图 | [ARCHITECTURE.md](ARCHITECTURE.md) | 新会话、改架构的人 | 分层、arch-map、入口、不变量、构建产物 | 模块内部设计 |
+| L1c 冻结子契约 | [D1 冻结契约](<WORKSPACE-DOCUMENTS-CONTRACT.md>) | 改文档能力的人 | 身份、四维状态、读取边界、固定证据（只登记不改写） | 实现细节 |
+| L2a 架构地图 | [ARCHITECTURE.md](<ARCHITECTURE.md>) | 新会话、改架构的人 | 分层、arch-map、入口、不变量、构建产物 | 模块内部设计 |
 | L2b 运行时路径 | `ARCHITECTURE.md` 运行时小节 + 模块文档时序说明 | 排障、改链路的人 | 写入时序、读取与隔离、恢复路径 | 逐函数说明 |
 | L3 模块设计 | `modules/<slug>/design.md` | 改这个模块的人 | 职责与非职责、内部结构、数据流、取舍、失败与降级、I/O 成本、阅读顺序 | 逐条对外承诺 |
 | L4 模块内部契约 | `modules/<slug>/contract.md` | 调用这个模块的人 | 导出 API 与语义、输入校验域、不变量、副作用与提交边界、并发/幂等、错误分类、隐含契约、兼容类别 | 产品级承诺、设计论证 |
@@ -31,7 +31,7 @@
 - `GLOSSARY.md`（一期建立）：全仓唯一词汇表，替代 `DESIGN.md` §3.1 的分散定义。
 - `TRUST-BOUNDARIES.md`（一期建立）：鉴权、只读 Git、证据只记录不执行、human-only 操作。
 - `COMPATIBILITY.md`（一期建立）：schema、事件兼容类别、迁移与回退口径。
-- 测试与验证矩阵：放在 `operations/TEST-ENV.md` 与各模块 `contract.md` 的验证小节，不另立总表。
+- 测试与验证矩阵：放在 `governance/TEST-ENV.md` 与各模块 `contract.md` 的验证小节，不另立总表。
 - 容量与性能：`decisions/capacity-100k-boundary.md` 是决策背景，现行口径写在 L1 与模块文档。
 
 ## 3. 目录布局
@@ -66,7 +66,7 @@ docs/
 
 - 定义处：1 个；引用处：若干，只写路径与一句话用途，不复制表格、字段清单或错误码全集。
 - 同一事实出现两处完整描述，即视为缺陷；即使两处当前一致，也按缺陷登记。
-- 契约先改 [实现契约](CONTRACT.md)，再改模块 `contract.md`，最后改实现；设计文档只解释为什么。
+- 契约先改 [实现契约](<CONTRACT.md>)，再改模块 `contract.md`，最后改实现；设计文档只解释为什么。
 
 允许的重复只有三种：背景一句话、指向定义的链接、示例中必要的片段（须标注来源）。
 
@@ -75,17 +75,17 @@ docs/
 | 模块 | 代码范围 | 现有素材（迁移来源） |
 |---|---|---|
 | `shared` | `lib/shared/` | 契约枚举、事件分类 |
-| `project` | `service.js`、`identity/`、`project-list-*`、`project-reader*` | [项目身份](IDENTITY.md)、契约 §2.1 |
-| `command` | `handle.js`、`contracts.js`、`normalize.js`、`schema.js`、`command-shape.js` | 契约 §2.2、[设计背景](DESIGN.md) §4 |
+| `project` | `service.js`、`identity/`、`project-list-*`、`project-reader*` | [项目身份](<modules/project/contract.md>)、契约 §2.1 |
+| `command` | `handle.js`、`contracts.js`、`normalize.js`、`schema.js`、`command-shape.js` | 契约 §2.2、[设计背景](<DESIGN.md>) §4 |
 | `task` | `commands/task*`、`lease.js`、`intent.js`、`audit.js` | 契约 §2.4、§2.6 |
-| `plan` | `commands/plan*`、`plan-stages.js` | [计划 v2](PLAN-V2.md) |
-| `documents` | `commands/doc*`、`documents/external*`、`inline-doc-access.js`、`documents/migration*` | [外置文档](EXTERNAL-DOCS.md)、[内嵌迁移](DOC-MIGRATION.md)、[D1 契约](WORKSPACE-DOCUMENTS-CONTRACT.md) |
-| `evidence` | `evidence.js`、`documents/fixed*`、`git-exec.js` | [固定内容证据](DOC-EXTERNAL-EVIDENCE.md)、[Git 执行边界](GIT-EXECUTION.md) |
-| `store` | `store/`、`fsck.js`、`repair.js` | 契约 §2.9、[恢复](RECOVERY.md) |
+| `plan` | `commands/plan*`、`plan-stages.js` | [计划 v2](<modules/plan/contract.md>) |
+| `documents` | `commands/doc*`、`documents/external*`、`inline-doc-access.js`、`documents/migration*` | [外置文档](<modules/documents/contract.md>)、[内嵌迁移](<operations/DOC-MIGRATION.md>)、[D1 契约](<WORKSPACE-DOCUMENTS-CONTRACT.md>) |
+| `evidence` | `evidence.js`、`documents/fixed*`、`git-exec.js` | [固定内容证据](<modules/evidence/contract.md>)、[Git 执行边界](<modules/evidence/contract.md>) |
+| `store` | `store/`、`fsck.js`、`repair.js` | 契约 §2.9、[恢复](<operations/RECOVERY.md>) |
 | `read` | `views.js`、`digest.js`、`health*.js`、`model.js` | 契约 §2.5、§2.10 |
-| `knowledge` | `knowledge/` | [历史知识读取](design/history-knowledge-read-model.md) |
+| `knowledge` | `knowledge/` | [历史知识读取](<modules/knowledge/design.md>) |
 | `host` | `lib/index.js`、`host/*` | 契约 §3 |
-| `client` | `src/client/` | [UI 重做](UI-REDESIGN.md)、[前端分层](design/frontend-layering.md) |
+| `client` | `src/client/` | [UI 重做](<modules/client/design.md>)、[前端分层](<modules/client/design.md>) |
 
 模块文档的 design 与 contract 各写一份；`shared` 只有 `contract.md`（它没有独立运行逻辑，设计见 L1a）。
 
@@ -105,7 +105,7 @@ docs/
 - **位置与格式**：`docs/diagrams/<主题>.svg`，矢量、纯文本可 diff；不引入外部图床、位图截图或构建期图片处理。需要位图预览时在本机临时生成，不提交。
 - **内容**：分层与依赖、模块数据流、写入时序、读取与审计隔离、存储与恢复、文档与证据状态、任务/计划状态机、客户端分层、宿主装配。每张图只回答一个问题，标题写在图内。
 - **视觉**：统一画布与配色（层级色块、正交连线、2px 描边），最小字号 13px，宽度不超过 1200；白底深字，保证亮暗主题下都能读；不依赖外部字体。
-- **嵌入**：文档中用 `![完整句子描述](../diagrams/xxx.svg)` 引用，图片必须可被文档页渲染；图后紧跟 3–6 行“读图要点”，再给结构表。
+- **嵌入**：文档中用 `![完整句子描述](<../diagrams/xxx.svg>)` 引用，图片必须可被文档页渲染；图后紧跟 3–6 行“读图要点”，再给结构表。
 - **文本可读性**：删掉图，正文仍能完整表达；图不替代契约条款、错误码或不变量表。
 - **准确性**：图必须与基线代码和契约核对；图与文字冲突时以契约和实现为准，并修图。
 
@@ -141,7 +141,7 @@ docs/
 5. 图能在文档页显示，每张图有 alt、读图要点与结构表。
 6. 归档文档不在入库树，决策记录列出旧路径与去向。
 
-后续机器检查（不属于一期）：链接存在、INDEX 覆盖、状态行、公共文档不含真实 id 与绝对路径；检查脚本不得以注释或字数比例作为质量指标。
+只读机器门禁为 `npm run check:docs`：检查入库 Markdown 相对链接与标题锚点、INDEX 图可达性、公共文档隐私及归档引用；CI 在测试与可维护性审计后执行。状态行由文档评审核对；检查脚本不得以注释或字数比例作为质量指标。
 
 ## 11. 归属判定示例
 
@@ -153,33 +153,14 @@ docs/
 
 ## 12. 图与文档的关系
 
-图是 L2/L3 的辅助阅读材料：L2 放全局分层、时序与数据流；L3 放模块内部结构与状态机；L1 不依赖图（随 npm 包发布，保持纯文本）。文档页图片渲染是产品能力，见 [实现契约](CONTRACT.md) 的文档读取小节（渲染落地后在此补链接）。
+图是 L2/L3 的辅助阅读材料：L2 放全局分层、时序与数据流；L3 放模块内部结构与状态机；L1 不依赖图（随 npm 包发布，保持纯文本）。文档页图片渲染是产品能力，见[文档只读图片资源](<CONTRACT.md#内嵌外置与图片只读资源>)。
 
-## 13. 现有文档去向（一期）
+## 13. 文档归位与处置记录
 
-下表是一期的处置方向，正式逐篇结论与路径映射在收口任务里登记；`已实施` 以任务与验证记录为准，不按文档标题推断。
+- L0 方针、框架约束、交付流程、测试分级与工具链位于 `governance/`，见[方针](<governance/PRODUCT-PRINCIPLES.md>)和[框架约束](<governance/CONSTRAINTS.md>)。
+- L3/L4 实现细则进入 `modules/<slug>/design.md` / `contract.md`；`modules/<slug>.md` 是 L2 路由入口，shared 仅有 contract。
+- 发布、恢复、安装、迁移与操作清单位于 `operations/`，子 runbook 位于 `operations/runbooks/`；测试验证矩阵随[测试环境](<governance/TEST-ENV.md>)维护。
+- 尚未实施的方案/规格与决策背景保留在 `design/`、`specs/`、`decisions/`，文首状态决定读法，不由目录推断实施或授权。
+- 每篇基线文档的结论、归档原因、模块吸收位置与新增清单见[逐篇处置记录](<decisions/doc-disposition-2026-11-14.md>)。归档原件本机保留、不入库、不路由；不保留旧路径跳转文件。
 
-| 现有文档 | 去向 | 处理 |
-|---|---|---|
-| `CONTRACT.md` | L1（路径不变） | 重排为 1a 领域模型 / 1b 对外契约 / 1c 冻结索引 |
-| `ARCHITECTURE.md` | L2 | 瘦身，模块叙述下沉 |
-| `DESIGN.md` | L0 设计背景 | 压缩为问题定义与取舍；§3 进 L1a，§4 进 L2/L3 |
-| `PRODUCT-PRINCIPLES.md`、`CONSTRAINTS.md`、`AUTONOMOUS-DELIVERY.md`、`CONTRIBUTING.md`、`TESTING-POLICY.md`、`TEST-ENV.md`、`TYPESCRIPT.md`、`BACKEND-READABILITY.md` | `governance/` | 移动，内容就地维护 |
-| `RELEASE.md`、`RECOVERY.md`、`MIGRATION.md`、`MIGRATION-ENTRY.md`、`INSTALL.md`、`DEMO.md`、`DOC-MIGRATION.md`、`DOCS-UI-CHECKLIST.md`、`CHANGELOG.md`、`runbooks/*` | `operations/` | 移动，内容就地维护 |
-| `IDENTITY.md` | `modules/project/` | 拆为 design 与 contract 后归档原文 |
-| `PLAN-V2.md` | `modules/plan/` | 拆为 design 与 contract 后归档原文 |
-| `EXTERNAL-DOCS.md` | `modules/documents/contract.md` | 迁入后归档原文 |
-| `DOC-EXTERNAL-EVIDENCE.md` | `modules/evidence/contract.md` | 迁入后归档原文 |
-| `GIT-EXECUTION.md` | `modules/evidence/`（Git 边界） | 迁入后归档原文 |
-| `WORKSPACE-DOCUMENTS-CONTRACT.md` | L1c（原位保留） | 冻结，只登记不改写 |
-| `UI-REDESIGN.md` | `modules/client/design.md` | 迁入设计系统与组件规范后归档原文 |
-| `design/task-delivery-workflow.md` | `governance/` | 提升为现行流程 |
-| `design/test-implicit-contracts.md` | `operations/TEST-ENV.md` 验证矩阵 | 提升后归档原文 |
-| `design/frontend-layering.md` | `modules/client/design.md` | 迁移完成、架构基线并入后归档 |
-| `design/history-knowledge-read-model.md` | `modules/knowledge/design.md` | 已实现，迁入后归档 |
-| `specs/ui-2-spec.md` | `modules/client/design.md` | 已交付，迁入后归档 |
-| `specs/d5-autoshell-spec.md` | `modules/evidence/` | 先核对实现状态，再迁入或保留 |
-| `design/` 其余未实施方案、`specs/` 未实施规格、`decisions/*` | 原位保留 | 只补状态行与链接，不改内容 |
-| `research/*`、`CAPACITY.md`、`MAINTAINABILITY.md`、`UI-AUDIT.md`、`ROBUSTNESS-2026-10-22.md`、`RELIABILITY-REVIEW-2026-10-29.md`、`RESEARCH-dsh-tasks-manager.md`、`WORKSPACE-DOCUMENTS-PLAN.md` | `docs/archive/`（本机） | 归档；已交付或带日期的评估/调研 |
-
-移动或归档时，同一提交内更新 `INDEX.md`、`AGENTS.md`、`README.md` 与全库引用；不保留跳转占位文件。
+移动或归档必须在同一变更内同步 INDEX、AGENTS、README、框架约束和全库引用，并跑只读门禁；冻结 D1 不改写。

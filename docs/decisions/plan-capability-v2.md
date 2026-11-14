@@ -1,5 +1,7 @@
 # 决策：计划能力 v2 —— 不嵌套任务，把计划升格为可管理的多实例
 
+> 状态：已替代（现行语义见[实现契约](<../CONTRACT.md>)；正文保留方案或决策时的语境）。
+
 - 日期：2026-10-22
 - 状态：待人类确认（见任务 D1）
 - 影响面：lib/core、lib/host、lib/client.js、CONTRACT.md、DESIGN.md、README.md、测试
@@ -211,7 +213,7 @@
 - 计划详情：现有步骤时间线 + 编辑模式（加/改/删 step 与 task、验收、依赖、优先级、人审）；baseVersion 冲突提示；删除任务显示 orphan 警告。
 - 看板/列表：按计划过滤（全部 / 各 active / 计划外）；卡片与列表行显示计划名 + 步骤名（R2）；抽屉的计划区可跳转。
 - 只走 commands，不新增 HTTP 写端点；不引入组件库；不手工编辑 46KB CSS 单行。
-- UI 验收：纯逻辑在 node 测，交互由人类按 docs/UI-REDESIGN.md 清单验收。
+- UI 验收：纯逻辑在 node 测，交互由人类按 docs/modules/client/design.md 清单验收。
 
 ### 7.6 迁移与兼容
 
@@ -235,7 +237,7 @@
 
 | 键 | 标题 | 依赖 | 优先级 | 产出 |
 |---|---|---|---|---|
-| D1 | 决策与契约同步 | — | 120 | 本决策落进 DESIGN/CONTRACT/README + docs/PLAN-V2.md |
+| D1 | 决策与契约同步 | — | 120 | 本决策落进 DESIGN/CONTRACT/README + docs/modules/plan/contract.md |
 | C1 | 核心：Plan 聚合与生命周期 | D1 | 122 | planHeads、多实例、focus、archive、迁移、单测 |
 | C2 | 核心：任务与计划绑定 | C1 | 124 | plan.adopt/release、版本化成员、orphan、单测 |
 | H1 | 宿主：工具/读模型/HTTP | C1,C2 | 126 | project_plan op、view=plans、/plans 路由、测试 |

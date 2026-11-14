@@ -115,6 +115,6 @@ focus 只授 human；普通 agent 不能把管理偏好写成执行顺序强约�
 运行时 schema 准入见[L1 兼容域](<../../CONTRACT.md#4-兼容与降级>)；不在运行时自动迁移旧门。
 normalizePlanHeads 只派生缺失管理面，不自动归位计划外/孤儿任务。
 事件类别来自[EVENT_REGISTRY](<../../../lib/shared/events.js>)；applied/additive/migration/refuse 不能由 handler 私自解释。
-[PLAN-V2](<../../PLAN-V2.md>)是背景，旧的 focus 强制项目 CAS、未知查询报错等措辞不能覆盖 L1。
+[PLAN-V2](<contract.md>)是背景，旧的 focus 强制项目 CAS、未知查询报错等措辞不能覆盖 L1。
 
 边界回归见[计划生命周期](<../../../test/core/plan-lifecycle.test.mjs>)、[并发](<../../../test/core/plan-concurrency.test.mjs>)、[阶段依赖](<../../../test/core/plan-stages.test.mjs>)与[验收项](<../../../test/core/plan-acceptance.test.mjs>)。

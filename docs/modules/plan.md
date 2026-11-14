@@ -31,5 +31,5 @@
 ## 关键不变量与读图指针
 
 - head 管理面不直接改写版本快照；阶段提示不授予租约，成员移出计划不删除任务。
-- [读图](<../diagrams/task-plan-state.svg>)：图中阶段是任务分组和推进提示，不是第二套任务状态机；设计素材见[计划 v2](<../PLAN-V2.md>)。
+- [读图](<../diagrams/task-plan-state.svg>)：图中阶段是任务分组和推进提示，不是第二套任务状态机；设计素材见[计划 v2](<plan/contract.md>)。
 - 全局文件清单与依赖规则见[架构地图](<../ARCHITECTURE.md#21-机器可校验的清单arch-map>)；领域不变量见[CONTRACT §1.4](<../CONTRACT.md#14-不变量>)。

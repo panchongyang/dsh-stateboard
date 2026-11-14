@@ -37,7 +37,7 @@ file 证据独立按工作区真实路径做包含检查；不能把外置 locat
 
 Git 可选；解析器只接受真实路径位于所有待读工作区和实现 checkout 之外的普通可执行文件，无安全候选则不可用，不回退裸命令名。调用白名单只允许观测；固定读取限制环境、时限和输出，禁用交互、lazy fetch、replace objects、hooks 和 fsmonitor，见 [git-exec.js](<../lib/core/git-exec.js>) 与 [fixed-git.js](<../lib/core/documents/fixed-git.js>)。
 
-正文还原不运行 filter、textconv、hook 或远端 LFS；不支持的内容转换降级，不写仓库配置、不 add/commit/stash，不管理分支/worktree，见 [fixed-worktree.js](<../lib/core/documents/fixed-worktree.js>)、[Git 执行边界](<GIT-EXECUTION.md>) 和 [CONTRACT §4](<CONTRACT.md#4-兼容与降级>)。固定字节属于 Git 对象读取，不拷入看板 blob。
+正文还原不运行 filter、textconv、hook 或远端 LFS；不支持的内容转换降级，不写仓库配置、不 add/commit/stash，不管理分支/worktree，见 [fixed-worktree.js](<../lib/core/documents/fixed-worktree.js>)、[Git 执行边界](<modules/evidence/contract.md>) 和 [CONTRACT §4](<CONTRACT.md#4-兼容与降级>)。固定字节属于 Git 对象读取，不拷入看板 blob。
 
 ## 5. 数据不是指令，材料不是执行结果
 

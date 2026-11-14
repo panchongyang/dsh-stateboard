@@ -4,7 +4,7 @@
 
 ## 0. 系统上下文
 
-![图 1：系统上下文与信任边界](diagrams/context.svg)
+![图 1：系统上下文与信任边界](<diagrams/context.svg>)
 
 - UI、DSH 工具与本机 MCP 汇入同一 core；宿主身份与领域状态分开。
 - 工作区和 Git 是读取来源，不是命令执行入口。
@@ -12,7 +12,7 @@
 
 ## 1. 分层与依赖方向
 
-![图 2：分层依赖与三个入口](diagrams/layers.svg)
+![图 2：分层依赖与三个入口](<diagrams/layers.svg>)
 
 - 实线指向被依赖层；shared 是依赖终点，core 不认识 DSH 或浏览器。
 - client 与 host 通过 HTTP 通信，不存在 client import host。
@@ -29,7 +29,7 @@
 
 ## 2. 模块清单
 
-![图 3：十二模块职责与主要数据流](diagrams/module-map.svg)
+![图 3：十二模块职责与主要数据流](<diagrams/module-map.svg>)
 
 - 十二模块是职责分组，不等同于十二个物理目录。
 - 写入主链为 host → service → handle → commands → store；查询从已发布状态投影。
@@ -155,7 +155,7 @@ src/client/api/read-lifecycle.ts
 | 完整 health worker | [read](<modules/read.md>) | 重文件/Git 审计独立于 prompt 热路径 |
 | 知识 worker | [knowledge](<modules/knowledge.md>) | 与普通视图 worker 分离，持有可重建缓存，不参加命令事务 |
 
-![图 4：写命令时序与失败边界](diagrams/command-write.svg)
+![图 4：写命令时序与失败边界](<diagrams/command-write.svg>)
 
 - 入口先建立身份，service 选取项目句柄，handle 串行调度领域处理器。
 - 事件批次只在 store 追加成功后发布；handle 显式采用返回 state。
@@ -163,7 +163,7 @@ src/client/api/read-lifecycle.ts
 
 ### 3.1 读路径与审计隔离
 
-![图 5：内存读模型、隔离审计与锁外冷读](diagrams/read-isolation.svg)
+![图 5：内存读模型、隔离审计与锁外冷读](<diagrams/read-isolation.svg>)
 
 - brief 取内存健康摘要，显式完整 health 才调度内容审计。
 - 项目读取器使用同进程已发布状态或 worker 的验证前缀，运行时 lease 与日志状态分开。
@@ -171,11 +171,11 @@ src/client/api/read-lifecycle.ts
 
 ### 3.2 存储与恢复边界
 
-![图 6：存储文件、验证顺序与显式修复](diagrams/store-recovery.svg)
+![图 6：存储文件、验证顺序与显式修复](<diagrams/store-recovery.svg>)
 
 - 日志是事实源；快照与 blob 各有独立身份校验，缓存不是权威状态。
 - writer 冷开持锁验证完整日志与快照，再回放、检查 schema，最后规范化尾部。
-- 锁外读取不修尾，诊断与修复分开；实现入口见 [store](<modules/store.md>)，维护操作见[恢复 Runbook](<RECOVERY.md>)。
+- 锁外读取不修尾，诊断与修复分开；实现入口见 [store](<modules/store.md>)，维护操作见[恢复 Runbook](<operations/RECOVERY.md>)。
 
 ## 4. 关键不变量
 
@@ -197,7 +197,7 @@ src/client/api/read-lifecycle.ts
 | [客户端入口](<../src/client/index.ts>)、[构建脚本](<../scripts/build-client.mjs>) | [lib/client.js](<../lib/client.js>) + [map](<../lib/client.js.map>) | 开发期 esbuild，浏览器 CJS 外壳由 ModuleLoader 加载，React external，CSS 内联 |
 | [tools/build/package.json](<../tools/build/package.json>) | 隔离构建工具链 | 运行/安装不现场构建；产物以 tmp + rename 写入 |
 | [后端入口](<../lib/index.js>)、core/host/shared | Node ESM 直接加载 | Node ≥22；类型检查 noEmit，不增加运行时编译链 |
-| [tools/typescript/package.json](<../tools/typescript/package.json>) | 开发期类型检查 | 检查范围和配置见 [TypeScript 工具链](<TYPESCRIPT.md>) |
+| [tools/typescript/package.json](<../tools/typescript/package.json>) | 开发期类型检查 | 检查范围和配置见 [TypeScript 工具链](<governance/TYPESCRIPT.md>) |
 | [package.json](<../package.json>) 的 files/exports | npm 交付面 | scripts/test 是仓库维护面，不作为用户 CLI 发布 |
 
-源码与产物的归属见 [client](<modules/client.md>)、[host](<modules/host.md>)；开发操作见[贡献指南](<CONTRIBUTING.md>)，构建检查不构成[发布授权](<RELEASE.md>)。
+源码与产物的归属见 [client](<modules/client.md>)、[host](<modules/host.md>)；开发操作见[贡献指南](<governance/CONTRIBUTING.md>)，构建检查不构成[发布授权](<operations/RELEASE.md>)。

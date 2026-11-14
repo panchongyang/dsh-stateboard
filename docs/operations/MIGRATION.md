@@ -1,10 +1,10 @@
 # 工作区搬迁、换机与 schema v3 升级
 
-入口互链：[安装](<INSTALL.md>) · [备份/故障恢复](<RECOVERY.md>) · [发布与部署边界](<RELEASE.md>) · [npm 包内自包含步骤](<../README.md#备份回退与迁移>)。
+入口互链：[安装](<INSTALL.md>) · [备份/故障恢复](<RECOVERY.md>) · [发布与部署边界](<RELEASE.md>) · [npm 包内自包含步骤](<../../README.md#备份回退与迁移>)。
 
 ## 工作区与机器迁移
 
-先停写并备份整个 board 根、工作区文件、必要 Git 对象、profile 配置和匹配包；只 clone 代码或复制 marker 不包含看板状态。新环境遵守 [支持矩阵](<../README.md#支持环境>)，不要与旧环境并发写同一 store。旧 key/profile 仅是私密历史材料，不作为新安装前置；当前版本不生成历史执行 key，也不执行或验签旧证明。
+先停写并备份整个 board 根、工作区文件、必要 Git 对象、profile 配置和匹配包；只 clone 代码或复制 marker 不包含看板状态。新环境遵守 [支持矩阵](<../../README.md#支持环境>)，不要与旧环境并发写同一 store。旧 key/profile 仅是私密历史材料，不作为新安装前置；当前版本不生成历史执行 key，也不执行或验签旧证明。
 
 在匹配源码根目录，针对已核对的副本使用显式绝对 board 根和项目ID：
 
@@ -63,4 +63,4 @@ node scripts/migrate-gate-v3.mjs --store <absolute-store-dir> --apply --backup <
 
 ## 5. 候选与授权
 
-完整门禁针对冻结候选，由维护者统一执行。测试按 [TEST-ENV](<TEST-ENV.md>) 隔离 HOME/USERPROFILE/DSH/XDG/npm/TEMP，使用 Git 树外的合成临时目录；日志留在候选 `.evidence`。人工 UI 验收、真实迁移、合入、公开发布、部署与重启均是各自独立的授权。内嵌文档外置另见 [DOC-MIGRATION](<DOC-MIGRATION.md>)，不得把普通登记当作保持历史身份的迁移。
+完整门禁针对冻结候选，由维护者统一执行。测试按 [TEST-ENV](<../governance/TEST-ENV.md>) 隔离 HOME/USERPROFILE/DSH/XDG/npm/TEMP，使用 Git 树外的合成临时目录；日志留在候选 `.evidence`。人工 UI 验收、真实迁移、合入、公开发布、部署与重启均是各自独立的授权。内嵌文档外置另见 [DOC-MIGRATION](<DOC-MIGRATION.md>)，不得把普通登记当作保持历史身份的迁移。

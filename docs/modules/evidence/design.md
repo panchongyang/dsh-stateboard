@@ -3,7 +3,7 @@
 > 文档定位：L3 模块设计；L1 权威：[验收项与证据](<../../CONTRACT.md#验收项与证据>)、[兼容与降级](<../../CONTRACT.md#4-兼容与降级>)；[D1 冻结 v1](<../../WORKSPACE-DOCUMENTS-CONTRACT.md>)。
 
 本文解释证据归一化、内容观测和固定 Git 取舍；调用约定见[内部契约](<contract.md>)，模块定位见[L2 入口](<../evidence.md>)。
-D1 与自动跟随的既有复议关系只引用[现行补充 §2](<../../DOC-EXTERNAL-EVIDENCE.md#2-自动记录项目内容来源>)，不在此改写冻结语义。
+D1 与自动跟随的既有复议关系只引用[现行补充 §2](<contract.md>)，不在此改写冻结语义。
 
 ## 1. 职责与非职责
 
@@ -68,7 +68,7 @@ pinCurrent 只选项目主绑定，确定仓库与文档的仓库相对路径。
 ### 当前文件路径
 
 固定前提不足时保留新鲜工作区原始字节 hash，生成 current-only 与 fixedReason。
-不会伪造 fixed、写来源事件或写内容屏障；降级原因闭集只在[补充 §3.2](<../../DOC-EXTERNAL-EVIDENCE.md#32-自动提交标准路径>)定义。
+不会伪造 fixed、写来源事件或写内容屏障；降级原因闭集只在[补充 §3.2](<contract.md>)定义。
 非法 UTF-8 但完整字节 hash 可得时也能降级；没有可靠字节则不能凭空生成证据。
 current-only 后续审计跟随 locator 的当前字节，变化报 drift，不把“当前”冒充不可变快照。
 
@@ -84,7 +84,7 @@ current-only 后续审计跟随 locator 的当前字节，变化报 drift，不�
 
 ## 5. Git 只读与明确读取
 
-[Git 执行边界](<../../GIT-EXECUTION.md>)区分“选择哪个程序”和“程序能执行哪些参数”。
+[Git 执行边界](<contract.md>)区分“选择哪个程序”和“程序能执行哪些参数”。
 解析器只从禁止根之外的 PATH 取得绝对程序路径，cwd 只表达仓库语义。
 调用点再用只读白名单、超时和输出上限限制 Git；不能把可信程序等同于可信仓库配置。
 固定 Git 层清理继承 GIT_*，禁 replace、fsmonitor、hook、交互、lazy fetch 和 transport。
@@ -116,7 +116,7 @@ verify 不重新 pin；需要新材料时返工重提，旧行保留历史。
 Git 对象恢复依赖持久 ref 与完整对象备份，固定索引本身不是 GC 保留根。
 系统不自动 fetch、创建 ref 或修复仓库；精确恢复后重新审计。
 新事件不被旧构建理解时需匹配 store 快照回退，Git 文件与外部副作用不会随看板回滚。
-保留/恢复步骤只在[补充 §6](<../../DOC-EXTERNAL-EVIDENCE.md#6-保留备份与回退>)维护。
+操作者在授权维护窗口为来源锚点及被引用提交建立持久 ref、备份完整可达 commit/tree/blob，并验证离线可恢复；只备份 store、当前文件或浅 clone 不够。恢复先匹配 store/构建，再恢复精确 Git 对象和本机绑定；对象不可用时不得以当前正文补历史，操作边界见[恢复指南](<../../operations/RECOVERY.md>)。
 
 ## 7. I/O 成本与性能边界
 

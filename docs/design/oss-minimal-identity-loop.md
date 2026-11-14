@@ -1,10 +1,12 @@
 # 最小身份闭环与兼容验收方案
 
+> 状态：已替代（现行语义见[实现契约](<../CONTRACT.md>)；正文保留方案或决策时的语境）。
+
 ## 状态与边界
 
 这是待实现的方案约束与验收输入，不宣称当前已支持。v0.1的项目文档正文由工作区/Git持有；看板任务、计划、租约、事件、执行密钥、文档登记/人工状态和本机绑定继续用户级集中存储。完整项目内状态存储、远端同步及多人协作独立规划。本方案不授权真实数据搬迁或历史日志改写。
 
-身份任务等待首发决策与文档外置契约，再为文档登记提供稳定身份与本机绑定。文档外置实施另见[工作区方案](<../../docs/WORKSPACE-DOCUMENTS-PLAN.md>)，不重复建设身份发现。
+身份任务等待首发决策与文档外置契约，再为文档登记提供稳定身份与本机绑定。文档外置实施另见[工作区方案](<../modules/documents/design.md>)，不重复建设身份发现。
 
 ## 核心模型
 
@@ -52,6 +54,6 @@
 
 按R3：专用分支/worktree、独立home/workspace/board/认证，先风险/回退再合成测试；冻结候选后完整门禁、独立审查与受影响UI人验。身份发现至少覆盖会话attach、工具resolveHandle和项目创建/打开，不能只修单入口。
 
-参考：[服务与路径索引](<../../lib/core/service.js>)、[身份路径工具](<../../lib/core/util.js>)、[会话关联](<../../lib/host/lifecycle.js>)、[工具项目解析](<../../lib/host/tools/shared.js>)、[搬迁脚本](<../../scripts/relocate-project.mjs>)、[文件证据边界](<../../lib/core/evidence.js>)、[测试规范](<../../docs/TESTING-POLICY.md>)。
+参考：[服务与路径索引](<../../lib/core/service.js>)、[身份路径工具](<../../lib/core/util.js>)、[会话关联](<../../lib/host/lifecycle.js>)、[工具项目解析](<../../lib/host/tools/shared.js>)、[搬迁脚本](<../../scripts/relocate-project.mjs>)、[文件证据边界](<../../lib/core/evidence.js>)、[测试规范](<../governance/TESTING-POLICY.md>)。
 
 delegation: no — 本轮仅设计/依赖对齐；实现与独立审查在开工时另行安排。

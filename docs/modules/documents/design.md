@@ -35,7 +35,7 @@
 
 元数据通过 command 总线与 store 提交。
 文件读取只取得本项目 locator 指定的活动绑定，不借会话 cwd 猜根。
-迁移子域保留原 inline 历史映射，操作步骤见[迁移 runbook](<../../DOC-MIGRATION.md>)。
+迁移子域保留原 inline 历史映射，操作步骤见[迁移 runbook](<../../operations/DOC-MIGRATION.md>)。
 
 ## 3. 四维状态为何分开
 

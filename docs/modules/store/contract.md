@@ -105,7 +105,7 @@ applied 才投影，additive 可 no-op，migration/refuse 拒读；细则见[L1 
 commit.v/snapshot.v 与运行时 schemaVersion 是不同版本域；fixed.v 也独立。
 运行时 schema 准入不是“版本号大于等于3就保证所有字段安全”。
 additive 事件不代表旧构建理解审计门或验收范围；回退须匹配完整数据与代码。
-维护步骤见[迁移说明](<../../MIGRATION.md>)，阅读本文不授予真实 store 修复权限。
+维护步骤见[迁移说明](<../../operations/MIGRATION.md>)，阅读本文不授予真实 store 修复权限。
 
 ## 9. 验证入口
 

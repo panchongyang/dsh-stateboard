@@ -47,13 +47,13 @@ Git OID 与 blobContentHash 的域不同；hash 必须等于 fixed.blobContentHa
 get_fixed 的 fixed 与 commitOid/pathAtCommit 两种输入互斥，docId 不带 @rev。
 不接受 HEAD、分支名或缩写；bindingId 仅是本机活动绑定的读取提示，不进入固定身份。
 无来源时允许纯读对象验证；已有来源时遵守锚点/格式及必要的既有对象同源证明。
-对象、预览与文本限额见[补充 §3.1](<../../DOC-EXTERNAL-EVIDENCE.md#31-读取不生成证据>)，不是任意二进制/远端资源读取接口。
+对象、预览与文本限额见[补充 §3.1](<contract.md>)，不是任意二进制/远端资源读取接口。
 
 ## 3. 不变量与降级
 
 pinned 只能由可证明的干净已提交路径生成，必带合法 fixed，不带 fixedReason。
 current-only 不带 fixed，必带闭集 fixedReason，记录本次完整工作区原始字节 hash。
-原因闭集和优先命中规则只在[补充 §3.2](<../../DOC-EXTERNAL-EVIDENCE.md#32-自动提交标准路径>)与[pinReason](<../../../lib/core/documents/fixed-auto.js>)维护，不在模块文档复制矩阵。
+自动固定（D5 自动壳）已实施：主绑定首次 pin 与来源记录、`doc/content-fixed` 屏障同 commit；同源新主绑定须核验锚点和全部既有 fixed 对象后才能追加 bindingIds，`get_fixed` 仅只读放行、不写来源。降级原因闭集及优先命中以 [pinReason](<../../../lib/core/documents/fixed-auto.js>) 为唯一实现定义，覆盖见[自动壳矩阵](<../../../test/docs/doc-fixed-auto.test.mjs>)；没有可靠工作区 hash 的失败不在降级承诺内。
 
 - Git 缺失/路径脏/HEAD 变化/转换不支持只降低固定能力，不伪造 pinned。
 - 没有可靠工作区字节 hash 的读取失败仍可拒绝，自动降级不等于空内容也能提交。
@@ -84,7 +84,7 @@ get_fixed 读取不生成证据、来源或屏障，也不更新文档或正文 
 
 ## 5. Git 只读、并发与采样边界
 
-[Git 执行边界](<../../GIT-EXECUTION.md>)约束绝对程序解析；[参数守卫](<../../../lib/core/git-exec.js>)只放行现有有界读取形状。
+[Git 解析与参数守卫](<../../../lib/core/git-exec.js>)只接受当前读取根与运行代码 checkout 的 realpath 子树之外的普通可执行文件；缓存每次复核禁止根，禁止裸程序名回退。separate-git-dir/linked worktree 须枚举 checkout、gitfile、common-dir 与公共目录 owner，无法解析根/owner 时显式不可观测；[根边界测试](<../../../test/git/git-exec-repo-root.test.mjs>)保留 junction/8.3 与恶意程序反例。
 固定读取不经 shell，不执行 filter/clean/smudge/process、textconv、hook 或远程 LFS。
 禁止 add/commit/stash、配置写入、ref 写入、分支/worktree 管理及自动 fetch。
 Git 调用清理 GIT_*，禁 replace、fsmonitor、交互、lazy fetch 与 transport；不能只靠 OPTIONAL_LOCKS 声称安全。
@@ -97,7 +97,7 @@ HEAD 在全部干净性/模式检查结束后复核；变化降 head-changed，�
 
 ## 6. 错误分类
 
-code/status 权威见[L1 错误码](<../../CONTRACT.md#错误码>)、[D1 §6.2](<../../WORKSPACE-DOCUMENTS-CONTRACT.md#62-错误码>)及[L1 指定补充](<../../DOC-EXTERNAL-EVIDENCE.md#5-失败码与场景>)。
+code/status 权威见[L1 错误码](<../../CONTRACT.md#错误码>)、[D1 §6.2](<../../WORKSPACE-DOCUMENTS-CONTRACT.md#62-错误码>)及[L1 指定补充](<contract.md>)。
 自动生成折叠固定失败为 fixedReason；明确读取与历史审计保留具体 code，不复用生成降级掩盖损坏。
 
 - 参数/结构/来源身份或对象不符：拒绝或硬审计错误，不回退弱解析。
@@ -119,7 +119,7 @@ code/status 权威见[L1 错误码](<../../CONTRACT.md#错误码>)、[D1 §6.2](
 
 ## 8. 兼容类别
 
-D1 v1 与固定 schema v1 是冻结域；自动跟随/降级只按[已登记复议口径](<../../DOC-EXTERNAL-EVIDENCE.md#2-自动记录项目内容来源>)，本文不裁定新偏离。
+D1 v1 与固定 schema v1 是冻结域；自动跟随/降级只按[已登记复议口径](<contract.md>)，本文不裁定新偏离。
 fixed.v、external schemaVersion=1 与[运行时 schema](<../../../lib/core/schema.js>)不同；字段版本不替代事件兼容。
 doc/content-fixed 为 applied，唯一分类取[EVENT_REGISTRY](<../../../lib/shared/events.js>)；旧读方不识别必须拒读，快照覆盖段不能绕过。
 历史 fixed/来源/inline @rev/execution 保持原数据解析，不恢复已移除的显式写入口或 runner。

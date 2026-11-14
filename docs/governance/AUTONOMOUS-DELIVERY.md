@@ -264,6 +264,6 @@ AI 容易沿着「发现缺陷 → 修复缺陷 → 增加机制」的路径持�
   **不手改 `lib/client.js`**（构建产物，由 `npm run build:client` 生成）。不改 host/core。
 - **Host 代理**：只写 `lib/host/**`、`test/host/host-tools.test.mjs`、`test/host/routes.test.mjs`、
   `test/host/host-preflight.mjs`。不改 core/client。
-- **文档/契约**：`docs/CONTRACT.md`、`docs/ARCHITECTURE.md`、`README.md`/`docs/CONTRIBUTING.md` 由文档维护者改；
-  跨面接口变更先改[实现契约](<CONTRACT.md>)与 `lib/shared/contract.js`，再改代码与快照测试。
-- 任何跨面接口变更先改[实现契约](<CONTRACT.md>)，再改代码。
+- **文档/契约**：`docs/CONTRACT.md`、`docs/ARCHITECTURE.md`、`README.md`/`docs/governance/CONTRIBUTING.md` 由文档维护者改；
+  跨面接口变更先改[实现契约](<../CONTRACT.md>)与 `lib/shared/contract.js`，再改代码与快照测试。
+- 任何跨面接口变更先改[实现契约](<../CONTRACT.md>)，再改代码。

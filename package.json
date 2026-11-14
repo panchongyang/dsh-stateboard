@@ -32,6 +32,7 @@
     "audit": "node scripts/maintainability-audit.mjs",
     "audit:check": "node scripts/check-client-layers.mjs && node scripts/maintainability-audit.mjs --check",
     "audit:context": "node scripts/measure-context-cost.mjs",
+    "check:docs": "node scripts/check-docs.mjs",
     "check:architecture": "node scripts/check-architecture.mjs",
     "check:client-layers": "node scripts/check-client-layers.mjs",
     "check": "npm run audit && npm test",

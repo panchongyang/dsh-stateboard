@@ -33,5 +33,5 @@
 ## 关键不变量与读图指针
 
 - command/test 证据不执行；固定身份不追当前分支或 metaRev，无法观测和身份/hash 不符不是同一结果。
-- [读图](<../diagrams/doc-evidence.svg>)：图中 pinned 与 current-only 代表不同观测能力，不代表交付正确性；Git 细节见[执行边界](<../GIT-EXECUTION.md>)。
+- [读图](<../diagrams/doc-evidence.svg>)：图中 pinned 与 current-only 代表不同观测能力，不代表交付正确性；Git 细节见[执行边界](<evidence/contract.md>)。
 - 全局文件清单与依赖规则见[架构地图](<../ARCHITECTURE.md#21-机器可校验的清单arch-map>)；领域不变量见[CONTRACT §1.4](<../CONTRACT.md#14-不变量>)。

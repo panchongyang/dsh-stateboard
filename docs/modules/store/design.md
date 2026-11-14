@@ -115,7 +115,7 @@ blob 读失败返回 null，完整性诊断和文档读取方负责解释缺失/
 
 任务重启恢复在 service 创建 handle 后执行，不在 store.open 内。
 锁外 readStateWithoutLock 只重放持久状态，不 recover、不修尾。
-真实恢复步骤见[恢复 Runbook](<../../RECOVERY.md>)；schema 升级见[迁移说明](<../../MIGRATION.md>)。
+真实恢复步骤见[恢复 Runbook](<../../operations/RECOVERY.md>)；schema 升级见[迁移说明](<../../operations/MIGRATION.md>)。
 
 ## 7. I/O 成本与热路径
 

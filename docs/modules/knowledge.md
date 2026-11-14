@@ -35,5 +35,5 @@ DSH 与 MCP 的 [host](<host.md>) 适配器共享该读取器和 [shared](<share
 ## 关键不变量与读图指针
 
 - 索引和 coverage 不参与任务事务或验收；零命中不证明没有约束，已有关系和调用者线索分别标识。
-- [读图](<../diagrams/read-isolation.svg>)：图中知识读取拥有独立 worker 和缓存，不能用检索结果覆盖权威状态；实现素材见[知识读模型](<../design/history-knowledge-read-model.md>)。
+- [读图](<../diagrams/read-isolation.svg>)：图中知识读取拥有独立 worker 和缓存，不能用检索结果覆盖权威状态；实现素材见[知识读模型](<knowledge/design.md>)。
 - 全局文件清单与依赖规则见[架构地图](<../ARCHITECTURE.md#21-机器可校验的清单arch-map>)；领域不变量见[CONTRACT §1.4](<../CONTRACT.md#14-不变量>)。
