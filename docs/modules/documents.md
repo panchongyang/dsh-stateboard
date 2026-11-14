@@ -2,6 +2,8 @@
 
 文档定位：L2 模块入口；L1 行为权威为下列契约链接。代码层级：core：文档领域与文件读取层。
 
+内部细节：[模块设计](<documents/design.md>) · [内部契约](<documents/contract.md>)。
+
 ## 职责
 
 维护 inline 档案和 external 登记元数据，并在绑定根内读取正文及文档引用图片。
