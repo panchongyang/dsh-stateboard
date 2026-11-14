@@ -225,6 +225,16 @@ export function copyToClipboard(text: string) {
   }
 }
 
+function DocImage(props: { url: string; alt: string; raw: string }) {
+  const [failed, setFailed] = React.useState(false);
+  // 解码失败、CSP 拒绝或响应损坏时退回原始 Markdown，避免留下破图。
+  if (failed) return <p className="pb-md__p">{props.raw}</p>;
+  return <figure className="pb-md__figure">
+    <img className="pb-md__img" src={props.url} alt={props.alt} loading="lazy" onError={function() { setFailed(true); }} />
+    <figcaption>{props.alt}</figcaption>
+  </figure>;
+}
+
 export function Markdown(props: MarkdownProps) {
   const blocks = markdownBlocks(props.body);
   const scope = props.scope || 'md';
@@ -247,10 +257,8 @@ export function Markdown(props: MarkdownProps) {
       // markdownBlocks supplies each kind's fields; the type guards retain that parser contract.
       if (block.type === 'image') {
         const url = props.imageUrl?.(block.src);
-        return url ? <figure key={key} className="pb-md__figure">
-          <img className="pb-md__img" src={url} alt={block.alt} loading="lazy" />
-          <figcaption>{block.alt}</figcaption>
-        </figure> : <p key={key} className="pb-md__p">{'![' + block.alt + '](' + block.src + ')'}</p>;
+        const raw = '![' + block.alt + '](' + block.src + ')';
+        return url ? <DocImage key={key} url={url} alt={block.alt} raw={raw} /> : <p key={key} className="pb-md__p">{raw}</p>;
       }
       if (block.type === 'heading') {
         const tag = 'h' + Math.min(4, block.level! + 1);
