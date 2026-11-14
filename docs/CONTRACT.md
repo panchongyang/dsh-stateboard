@@ -610,6 +610,7 @@ export class BoardError extends Error {
 - HTTP 和工具对 `doc.put/link` 由 core 在获取 writer 前校验形状与可判定的拒绝条件，再由串行命令用最新状态重验。`put` 的 links 在目标类型和策略之前检查，`link` 的 links 在串行阶段通过目标与策略检查后处理。日志回放失败直接报错。工具在获取 writer 后维持正常会话活性和项目跟踪。
 - 事件只存 `{id, rev, title, kind, hash, size, links, createdAt, updatedAt}`。
 - 外置文档（`source: 'external'`）与内嵌同集合，事件 `doc/external-registered|updated|relocated|unregistered|confirmed`，不存正文；冷开对整条日志（含快照覆盖段）做文档结构扫描；`query('docs')`/任务 `linkedDocs` 的行带 `source`（`inline`/`external`），外置行没有 `hash`/`size`；语义、工具/HTTP 表面、观测与回退见 [EXTERNAL-DOCS.md](EXTERNAL-DOCS.md)。
+- 文档内图片只读：外置文档正文引用的图片按该文档所在目录解析，经 `GET /projects/:id/docs/external/:docId/assets?path=<相对路径>` 读取原始字节；只接受 `.png`/`.jpg`/`.jpeg`/`.webp`/`.gif`/`.svg`，单文件 ≤ 4 MiB，与文档读同一鉴权，不获取 writer、不写事件、不写观测缓存，响应 `Cache-Control: no-store`。`path` 必须是相对路径：拒绝反斜杠、盘符、控制字符、空段与绝对路径（`security-rejected` 403）；允许 `..` 段，但按文档目录规范化后必须仍在该文档的 binding 根内，越界为 `outside-root` 403。缺文件 404、非普通文件 400、超限 413、非白名单扩展名 `unsupported-format` 415、binding 不可用 503、binding 已失效 409；内嵌文档没有图片资源（404）。客户端只把相对 `src` 渲染为图片，`http(s)`、`data:` 与绝对路径按文本处理，不发起请求。
 - `doc/content-fixed` 为 applied，投影不可变 `state.fixedContents`；store append 写前、全量回放、快照覆盖段与固定索引都验证新增 task 证据的同 commit 屏障。Git 正文不写入看板 blob；获准来源记录在 project.gitContentRepository，身份层只提供本机绑定根。
 - `doc get` 读 blob；hash 不符 → `hash-chain-broken`。
 
@@ -812,13 +813,14 @@ events / health / projects / commands / shared）。
 | GET | /projects/:id/docs/external?includeUnregistered=0/1 | 外置文档登记列表（不读工作区） |
 | POST | /projects/:id/docs/external | 登记外置文档；body 为 doc.external.register 参数 |
 | GET | /projects/:id/docs/external/:docId?fresh=&preview= | 登记 + 观测；登记存在即 200（文件不可用只填 availability/code） |
+| GET | /projects/:id/docs/external/:docId/assets?path= | 文档内图片原始字节；只读、binding 根内、图片白名单、≤ 4 MiB |
 | PATCH | /projects/:id/docs/external/:docId | 元数据与状态（doc.external.update_meta） |
 | POST | /projects/:id/docs/external/:docId/relocate | 重定位（doc.external.relocate） |
 | POST | /projects/:id/docs/external/:docId/confirm | 写确认基线（doc.external.confirm） |
 | POST | /projects/:id/docs/external/:docId/unregister | 解除登记墓碑（doc.external.unregister） |
 | POST | /projects/:id/docs/external/:docId/fixed | 只读固定 Git 正文；fixed 或完整 commitOid/pathAtCommit，bindingId?；schemaVersion=1，不生成证据 |
 
-外置端点登记在 `lib/shared/contract.js` 的 `API_PATHS`（`docsExternal`、`docsExternalDoc`）。外置接口的返回带 `schemaVersion:1`；写入 body 必须是 JSON 对象，字段白名单是 `DOC_EXTERNAL_WRITE_FIELDS` + 信封字段 `cmdId`/`schemaVersion`，未知字段、非 1 的 `schemaVersion`、与 URL 不一致的 `docId` 都在 `service.open` 之前以 `invalid-command`(400) 拒绝，因此 400 不会触发冷项目恢复写入。`GET /projects/:id/docs/:docId` 仍只解析内嵌正文，访问外置记录返回 `external-doc-operation-required`(409)；`GET /projects/:id/docs` 两种来源都列，行内 `source` 为 `inline`/`external`，外置行没有 `hash`/`size`。
+外置端点登记在 `lib/shared/contract.js` 的 `API_PATHS`（`docsExternal`、`docsExternalDoc`）。外置接口的返回带 `schemaVersion:1`；写入 body 必须是 JSON 对象，字段白名单是 `DOC_EXTERNAL_WRITE_FIELDS` + 信封字段 `cmdId`/`schemaVersion`，未知字段、非 1 的 `schemaVersion`、与 URL 不一致的 `docId` 都在 `service.open` 之前以 `invalid-command`(400) 拒绝，因此 400 不会触发冷项目恢复写入。`GET /projects/:id/docs/:docId` 仍只解析内嵌正文，访问外置记录返回 `external-doc-operation-required`(409)；`GET /projects/:id/docs` 两种来源都列，行内 `source` 为 `inline`/`external`，外置行没有 `hash`/`size`。`assets` 是唯一返回非 JSON 的文档端点：成功时响应体是原始字节，`Content-Type` 按扩展名给出（`.svg` 为 `image/svg+xml`），并带 `Content-Length` 与 `Cache-Control: no-store`；失败仍走统一 JSON error envelope。它只读、不登记写入面、不产生事件或证据。
 
 返回：成功 `{ok:true, ...}`；失败 HTTP status + `{ok:false, error:{code,message,details}}`。
 
