@@ -480,7 +480,7 @@ export class ProjectService {
   async open(projectId)                 // ProjectHandle (throws not-found)
   async createProject({ workspacePath, name, actor }) // ProjectHandle
   async command(projectId, cmd)         // convenience: open + handle.command
-  async query(projectId, view, params)  // convenience
+  // 无 query 便捷方法：读查询先 open(projectId)，再 handle.query(view, params)
 }
 ~~~
 
