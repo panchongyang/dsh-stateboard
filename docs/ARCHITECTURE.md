@@ -289,7 +289,7 @@ MCP 写入由 `mcp-write.js` 校验项目授权、签发工作会话并适配允
 ![图 6：存储文件、验证顺序与显式修复](diagrams/store-recovery.svg)
 
 - commits.jsonl 是事实源；snapshot 校验水位后才用于加速，blobs 保存内容寻址字节。
-- writer 冷开先持锁并完整验证日志，再规范化尾部、读取快照与重放；只读回放不修尾。
+- writer 冷开先持锁，完整验证日志与快照身份，再回放快照+尾部并校验 schema，最后才规范化尾部；只读回放不修尾、不恢复任务。
 - 未知事件、坏链或不支持版本 fail-closed，不靠跳过坏行继续拼接状态。
 - fsck/health 只诊断；salvage/repair 是显式维护，prefix apply 需要停写、备份和确认数据损失。
 - 仅 writer 执行 recover；代码回退与日志修复都不自动回滚外部副作用。

@@ -39,14 +39,15 @@
 <text x="440" y="398" font-size="17">human 始终可验收；不是正确性担保</text>
 <rect x="808" y="290" width="360" height="120" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
 <text x="826" y="320" font-size="20" font-weight="700">治理 · blocked / canceled</text>
-<text x="826" y="348" font-size="17">block → blocked；unblock 回 ready</text>
-<text x="826" y="373" font-size="17">原 resumeTo=review 则回 review</text>
+<text x="826" y="348" font-size="17">block → blocked；unblock 三出口见下</text>
+<text x="826" y="373" font-size="17">resumeTo=review → review；其余见下</text>
 <text x="826" y="398" font-size="17">非终态 cancel；审计任务仅 human</text>
-<rect x="32" y="455" width="1136" height="130" rx="12" fill="white" stroke="#5F6368" stroke-width="2"/>
+<rect x="32" y="455" width="1136" height="155" rx="12" fill="white" stroke="#5F6368" stroke-width="2"/>
 <text x="50" y="485" font-size="20" font-weight="700">恢复与返工支路</text>
 <text x="50" y="513" font-size="17">in_progress → ready：release 或无 intent 回收；有 intent 的治理结算必须 stopped + sideEffects。</text>
 <text x="50" y="538" font-size="17">interrupt / 有 intent 回收 → interrupted；reconcile：resume → in_progress，completed → review，discard → ready。</text>
 <text x="50" y="563" font-size="17">review reject → in_progress（新租约）或 ready；done / canceled reopen → ready（仅 human）。</text>
+<text x="50" y="588" font-size="17">blocked → unblock：assignee 可恢复且 WIP/绑定允许 → in_progress（重新授租）；resumeTo=review → review；否则 ready。</text>
 <rect x="32" y="680" width="260" height="110" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
 <text x="50" y="710" font-size="20" font-weight="700">draft · 可写 head</text>
 <text x="50" y="738" font-size="17">草稿不占版本号</text>
