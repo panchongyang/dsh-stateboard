@@ -253,3 +253,17 @@ AI 容易沿着「发现缺陷 → 修复缺陷 → 增加机制」的路径持�
 最终追求的不是形式上的无人参与，而是：
 
 **让人类的每一次介入都发生在真正需要人类判断的地方，让 AI 在已授权范围内持续、可靠地完成交付。**
+
+## 9. 子代理交付边界
+
+以下是实施分工边界，不改变上文授权、任务租约或独立审计要求。
+
+- **Core 代理**：只写 `lib/core/**`、`test/core/core.test.mjs` 与同组 core 测试、
+  `scripts/deck.mjs`。不改 host/client。
+- **Client 代理**：只写 `src/client/**`、`test/client/client-smoke.mjs`、`test/client/unit/**`。
+  **不手改 `lib/client.js`**（构建产物，由 `npm run build:client` 生成）。不改 host/core。
+- **Host 代理**：只写 `lib/host/**`、`test/host/host-tools.test.mjs`、`test/host/routes.test.mjs`、
+  `test/host/host-preflight.mjs`。不改 core/client。
+- **文档/契约**：`docs/CONTRACT.md`、`docs/ARCHITECTURE.md`、`README.md`/`docs/CONTRIBUTING.md` 由文档维护者改；
+  跨面接口变更先改[实现契约](<CONTRACT.md>)与 `lib/shared/contract.js`，再改代码与快照测试。
+- 任何跨面接口变更先改[实现契约](<CONTRACT.md>)，再改代码。
