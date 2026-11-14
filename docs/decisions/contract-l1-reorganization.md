@@ -38,7 +38,7 @@ delegation: no — 单人有界重排；不追加下级委派。
 | 2 | unknown 不能关闭 open intent；治理结算 sideEffects 必填，可空，最多50条/16KiB | [§2.2](<../CONTRACT.md#22-命令清单>) |
 | 3 | unblock 三出口：可恢复 assignee 授租回 in_progress，resumeTo=review 回 review，其余 ready；不重建 intent | [§1.2](<../CONTRACT.md#12-任务状态机>) |
 | 4 | 普通 agent 可自验；审计门须独立 agent+20–4000字报告；human 不要求报告 | [§1.2](<../CONTRACT.md#12-任务状态机>) |
-| 5 | plan head draft/active/archived；active revise/adopt/release version+1；focus human-only 且不校验 projectRev | [§1.3](<../CONTRACT.md#13-计划模型>)、[§2.2](<../CONTRACT.md#22-命令清单>) |
+| 5 | plan head draft/active/archived；active revise/adopt/release version+1；focus human-only、不强制提供 projectRev（提供则走命令总线 CAS） | [§1.3](<../CONTRACT.md#13-计划模型>)、[§2.2](<../CONTRACT.md#22-命令清单>) |
 | 6 | GET 图片 assets 只读、正文已引用路径、binding 根内、6种扩展名、4MiB、no-store；非白名单415 | [§2.4](<../CONTRACT.md#24-文档>)、[§2.6](<../CONTRACT.md#26-host-表面>) |
 | 7 | commit 字段 v/seq/prev/hash/at/actor/cmdId/baseRev/events 与 snapshot v/seq/hash/state 均保留 | [§2.5](<../CONTRACT.md#25-存储格式与事件兼容>) |
 | 8 | EVENT_REGISTRY 四分类与6个 additive 类型保留；未知/需迁移拒读，快照覆盖段不能绕过 | [§2.5](<../CONTRACT.md#25-存储格式与事件兼容>) |
@@ -53,7 +53,7 @@ delegation: no — 单人有界重排；不追加下级委派。
 - `npm run check:release`：通过，189 package entries/189 files，8项技术检查；legacyMatches=0，README relativeMissing=0。未发布、未安装真实 profile。
 - D1 冻结文 `git diff --quiet -- docs/WORKSPACE-DOCUMENTS-CONTRACT.md`：通过。
 - 新旧行数（按物理行）：CONTRACT 1112→998（需求中的1110与实际基线相差2行）；AUTONOMOUS-DELIVERY 255→269；新增 CLI 91、MVP档案41、旧口径档案114行。
-- 现行纠偏：冷开必须先日志/快照身份校验与回放、schema 检查，再 writer 修尾；unblock 三种出口按实现补全；focus 不校验 projectRev；项目进度加权与计划计数分开；浏览器 bundle identity 为 dsh-stateboard；npm test/CI组合、客户端全量TS/TSX按当前脚本写，不保留旧承诺。
+- 现行纠偏：冷开必须先日志/快照身份校验与回放、schema 检查，再 writer 修尾；unblock 三种出口按实现补全；focus 不强制提供 projectRev，提供时仍走命令总线 CAS；项目进度加权与计划计数分开；浏览器 bundle identity 为 dsh-stateboard；npm test/CI组合、客户端全量TS/TSX按当前脚本写，不保留旧承诺。
 
 ## 4. 未解决项与边界
 

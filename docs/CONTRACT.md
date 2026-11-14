@@ -188,7 +188,7 @@
 - `task.create` 不接受 planRef：成员关系只能通过计划版本变化（publish/revise/adopt/release）。
 - 发布、修订、归位或任务依赖编辑不得在当前计划版本内新增任何连接同阶段任务的直接或间接依赖路径。阶段成员以版本的 steps 为准。已有路径可以保留或解除，解除后不得重建。修订和归位可把有先后关系的任务拆到不同阶段。
 - agent 优先推进当前阶段的可执行任务并逐项提交，之后集中独立审查。同阶段未全部提交时可先处理阻塞，包括存量依赖需要先验收的任务。阶段提示不改变领取资格或单任务验收规则。
-- 并发：head 级命令用 expectedRev，版本级命令用 baseVersion，focus 不校验 projectRev（重复聚焦为空操作）。
+- 并发：head 级命令用 expectedRev，版本级命令用 baseVersion；focus 不强制提供 projectRev，若提供则沿用命令总线 CAS（旧值仍 stale-revision），重复聚焦在前置通过后无事件。
 
 `focusPlanId` 是 human 的关注偏好，不限制项目只能有一个 active 计划。`plan.unarchive` 恢复 archivedFrom（draft 或 active）；draft 不建任务、不计进度；计划外任务与 orphaned 任务均合法。
 
@@ -453,7 +453,7 @@ export class BoardError extends Error {
 | plan.rename | planId, expectedRev, title | 只改 head.title，不产生版本；标题唯一 |
 | plan.archive | planId, expectedRev | → archived；无 in_progress / live lease；清 focus |
 | plan.unarchive | planId, expectedRev | 回到 archivedFrom（draft/active） |
-| plan.focus | planId \| null | human-only；写 project.focusPlanId（实现不校验 projectRev，重复聚焦为空操作） |
+| plan.focus | planId \| null | human-only；写 project.focusPlanId（不强制提供 projectRev；提供则走命令总线 CAS，旧值仍 stale-revision；重复聚焦无事件） |
 | plan.adopt | planId, baseVersion, taskIds, stepId | 把计划外/孤儿任务加入 step；version+1 |
 | plan.release | planId, baseVersion, taskIds | 把任务移出计划；version+1；任务保留 |
 
