@@ -19,7 +19,7 @@
 
 - 专用项目读取器在已有 writer 时读取其已发布状态，否则用 worker 验证锁外日志前缀；不打开 writer、不修尾、不恢复任务、不续租，见 [project-reader.js](<../lib/core/project-reader.js>) 和 [MCP 读取契约](<CONTRACT.md#267-可选本机-mcp>)。
 - 文档图片资源使用锁外状态读取，不走 open、命令或观测缓存写入，见 [assets.js](<../lib/core/documents/assets.js>) 与[文档契约](<CONTRACT.md#24-文档>)。
-- 五个管理工具可以 open/touch 会话；不能把上述专用只读保证推广到所有名为“读”的管理操作，见[工具约定](<CONTRACT.md#263-工具>)。
+- 读取不等于无写：普通 HTTP GET 或 open 后 query 的冷开可 recover/heal，五个管理工具还可 touch 会话；专用 reader/knowledge 链则不 open writer，不能把其保证推广到所有“读”操作，见[service.js](<../lib/core/service.js>)、[管理入口](<../lib/host/tools/shared.js>)与[纯度矩阵](<modules/read/contract.md#2-view路径与纯度矩阵>)。
 - brief 只有内存健康摘要；显式完整 health 在隔离 worker 中读取内容，诊断本身不修改状态、不执行证据，见 [health-audit.js](<../lib/core/health-audit.js>) 和[只读诊断](<CONTRACT.md#health--fsck-只读诊断>)。
 - knowledge 使用独立 worker 和可重建缓存，不参与命令、验收或恢复事务；锁外水位只供展示，不能充当领取或写入权威，见 [reader.js](<../lib/core/knowledge/reader.js>) 与[知识契约](<CONTRACT.md#历史知识读取与检索>)。
 
@@ -42,6 +42,8 @@ Git 可选；解析器只接受真实路径位于所有待读工作区和实现 
 ## 5. 数据不是指令，材料不是执行结果
 
 标题、正文、事件、证据和知识检索原文都作为数据；知识读取不扫描任意工作区文件或抓取任意 URL，command/test 只保留提交者材料，不执行、不签名、不复核退出码。hash 证明观测字节身份，不证明业务结论；检索排名和已有关系不裁定约束有效性，见[证据](<CONTRACT.md#验收项与证据>)与[知识读取](<CONTRACT.md#历史知识读取与检索>)。
+
+[prompt section](<../lib/host/prompt.js>)设置 interpolate=false，看板文本中的模板括号按字面保留，不交给宿主求值；单行净化不把数据升级为指令。
 
 浏览器不使用 innerHTML/dangerouslySetInnerHTML 渲染正文，动作资格来自 core 的 allowedOps；前端禁用按钮不能替代后端守卫，见[浏览器表面](<CONTRACT.md#浏览器表面>)、[client](<modules/client.md>) 与 [task](<modules/task.md>)。
 

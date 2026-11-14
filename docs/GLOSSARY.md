@@ -17,6 +17,7 @@
 | Fencing token（栅栏令牌） | 领取时递增、写入时与当前租约匹配的代际令牌，见[任务状态机](<CONTRACT.md#12-任务状态机>)。 |
 | Owner（持久归属） | 任务记录中的会话与令牌信息，不等同于有效运行时租约，见[只读诊断](<CONTRACT.md#health--fsck-只读诊断>)。 |
 | SessionBinding（会话绑定） | 受信入口建立的 sessionId/agentId、epoch 与活性记录，见[领域词汇](<CONTRACT.md#11-词汇表>)。 |
+| MCP 工作会话 | 服务端为授权项目签发的短期 sessionToken 与 agent 归因，不是 MCP 传输会话或任务租约，见[写凭据与工作会话](<CONTRACT.md#2671-写凭据与工作会话>)。 |
 | WorkIntent（执行意图） | 副作用前记录的执行 WAL，未结意图须停止结算或中断对账，见[Intent 结算](<CONTRACT.md#221-intent-结算rfc-3>)。 |
 | Attempt（执行尝试） | begin 开启的材料轮次，会退休此前尝试的证据，见[验收项与证据](<CONTRACT.md#验收项与证据>)。 |
 | Acceptance（验收项） | 任务的显式验收条目及可选材料种类要求，见[任务状态机](<CONTRACT.md#12-任务状态机>)。 |
@@ -39,6 +40,8 @@
 | Blob（内容寻址字节） | 以 sha256 定位的 inline 正文存储，不收纳固定 Git 正文，见[文档](<CONTRACT.md#24-文档>)。 |
 | Digest（项目简报） | 同 state/sessionId/includeRules 输入产生同文的有界纯文本摘要，见[Digest](<CONTRACT.md#digest>)。 |
 | Health / fsck（健康诊断） | 只读状态和内容诊断，不执行材料、不修复数据，见[只读诊断](<CONTRACT.md#health--fsck-只读诊断>)。 |
+| 读取纯度 | 区分纯渲染、无权威写入和整链零写；普通 open/query 与专用锁外 reader 的副作用不同，见[纯度矩阵](<modules/read/contract.md#2-view路径与纯度矩阵>)。 |
+| 适配差异 | 同一核心视图在传输入口的单位、空值和过滤行为可能有已声明差别，不据此互授权限，见[适配差异](<COMPATIBILITY.md#6-已声明的适配差异>)。 |
 | Coverage（知识覆盖） | 声明已验证/索引水位、材料可用性与截断范围的读取信息，见[知识读取与检索](<CONTRACT.md#历史知识读取与检索>)。 |
 | Source ref（知识来源引用） | 携带项目、提交和内容身份的稳定回读定位，不以缓存行号充当身份，见[知识读取与检索](<CONTRACT.md#历史知识读取与检索>)。 |
 

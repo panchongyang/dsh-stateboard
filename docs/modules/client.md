@@ -2,6 +2,8 @@
 
 文档定位：L2 模块入口；L1 行为权威为下列契约链接。代码层级：client：页面编排与展示层。
 
+模块细节：[设计](<client/design.md>) · [内部契约](<client/contract.md>)。
+
 ## 职责
 
 通过唯一 HTTP transport 读取和提交看板操作，并以页面容器与纯展示组件渲染结果。

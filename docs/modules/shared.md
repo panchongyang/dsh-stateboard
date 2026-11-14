@@ -2,6 +2,8 @@
 
 文档定位：L2 模块入口；L1 行为权威为下列契约链接。代码层级：shared：零依赖契约层。
 
+模块细节：[内部契约与边界取舍](<shared/contract.md>)。
+
 ## 职责
 
 提供跨 core、host 与客户端校验使用的枚举、事件分类及共享 schema。
@@ -10,7 +12,7 @@
 
 | 入口 | 结构职责 |
 |---|---|
-| [contract.js](<../../lib/shared/contract.js>) | 状态、命令、错误码、端点与工具名 |
+| [contract.js](<../../lib/shared/contract.js>) | 状态、命令、端点与工具名 |
 | [events.js](<../../lib/shared/events.js>) | 事件兼容分类 |
 | [knowledge.js](<../../lib/shared/knowledge.js>) | 知识工具 schema 与预算 |
 | [fixed-schema.js](<../../lib/shared/fixed-schema.js>) | 固定证据结构 |

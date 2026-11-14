@@ -53,3 +53,9 @@ inline 正文以 blob/hash 记录，external 保存 locator 与元数据；metaR
 | 文档/Git 内容漂移 | 维持内容审计错误边界；人工可显式刷新/豁免并保留记录 | [任务验收](<CONTRACT.md#12-任务状态机>) |
 
 execution 和 auto/policy 等兼容数据仅按记录回放，不开启命令执行或新自动完成；agent 自述、人工验收与内容指纹的显示不能相互冒充，见 [CONTRACT §4](<CONTRACT.md#4-兼容与降级>) 和[信任边界](<TRUST-BOUNDARIES.md>)。
+
+## 6. 已声明的适配差异
+
+- 单位差异：[同步 docView](<../lib/core/views.js>)（views.js:317–325）的 maxBytes 实际按 JS 字符串 length/slice（UTF-16 代码单元）截断，[MCP 完整视图](<../lib/core/project-reader-views.js>)（project-reader-views.js:14–17）另按 UTF-8 字节安全截断；同名参数不代表同一单位。
+- 空值差异：[planView](<../lib/core/views.js>)（views.js:186–227）对未知计划返回 plan:null，[MCP 适配](<../lib/core/project-reader-views.js>)（project-reader-views.js:50–53）对显式未知 planId 返回 not-found；未指定 ID 的 focus 空值不因此变为错误。
+- 过滤差异：[docsView](<../lib/core/views.js>)（views.js:307–314）不消费 query，[MCP 适配](<../lib/core/project-reader-views.js>)（project-reader-views.js:55–60）按标题做大小写不敏感过滤；这些是已声明的适配差异，不重定义 L1 或推导额外权限。
