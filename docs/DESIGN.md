@@ -164,6 +164,14 @@ Project 1 ─── * Plan 1 ─── * Task 1 ─── * Evidence
 
 ### 3.2 任务状态机
 
+![图 8：任务状态、租约审计门与计划生命周期](diagrams/task-plan-state.svg)
+
+- 任务主路径是 backlog → ready → in_progress → review → done；submit 不等于完成。
+- claim/begin/submit 受租约、fencing token 与版本守卫约束；中断后必须 reconcile。
+- 普通任务允许授权 agent 验收；审计任务要求独立 agent 报告，human 验收始终可用。
+- 计划 head 的现行状态是 draft/active/archived；版本表不可变，修订与成员调整产生新版本。
+- focus 仅由 human 设置；归档清空对应焦点并禁止新 claim；归档草稿恢复为 draft。
+
 **图只是示意，转移表才是事实源。** 实现时守卫从表生成，测试也对着表跑；不要在两处各写一份规则。
 
 ~~~mermaid
@@ -232,6 +240,14 @@ stateDiagram-v2
 - **依赖完成时的级联 ready 与主命令在同一个 commit 里**，不允许"任务 done 了但依赖还没 ready"的中间态。
 
 ### 3.3 计划、项目、文档
+
+![图 7：外置文档四维状态、固定证据与图片边界](diagrams/doc-evidence.svg)
+
+- 可用性、基线确认、Git 观测、管理状态是四个独立维度，文件变化不自动改变管理状态。
+- 外置正文由编辑器维护；登记与确认不等于对内容正确性的验收。
+- 提交 doc 证据时服务端自动固定干净的已提交 Git 字节；无法安全固定时标 current-only 和原因。
+- pinned 审计只针对固定对象，不追随当前正文；不可观测与真实身份/hash 不符要分别处理。
+- 图片只读、只限正文已引用路径和 binding 根内白名单文件，单文件上限 4 MiB，不获取 writer。
 
 **Plan（v2：多实例；设计见 [PLAN-V2.md](./PLAN-V2.md)）**
 

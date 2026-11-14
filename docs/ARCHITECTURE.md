@@ -7,7 +7,23 @@
 
 ---
 
+## 0. 系统上下文
+
+![图 1：系统上下文与信任边界](diagrams/context.svg)
+
+- 使用者通过 UI、DSH 工具或本机 MCP 操作同一个持久状态机。
+- DSH 提供身份与入口能力；ProjectBoard 的 core 负责领域守卫和提交。
+- 工作区文件与 Git 是只读观测来源，正文、标题与证据材料不是指令。
+- Git 可选且不负责分支或 worktree 管理；看板不执行 command/test 证据。
+
 ## 1. 分层与依赖方向
+
+![图 2：分层依赖与三个入口](diagrams/layers.svg)
+
+- 实线指向被 import 的层；shared 零依赖，core 不依赖 host 或 client。
+- client 与 host 之间是 HTTP 传输，不是 client import host；client 允许依赖 shared。
+- DSH、HTTP、MCP 分别建立身份，最终复用 core 的业务守卫。
+- 浏览器源码经开发期构建交付；后端 ESM 直接加载，不在运行时构建。
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -72,6 +88,13 @@
 ---
 
 ## 2. 模块清单
+
+![图 3：十二模块职责与主要数据流](diagrams/module-map.svg)
+
+- 十二个框按职责分组；精确文件集合仍以下面的 arch-map 为准。
+- 主写链是 host → service → handle → commands → store，命令域先守卫后生成事件。
+- read 将已发布状态投影为 DTO；views 不复制领域守卫，documents 有只读旁路。
+- knowledge 使用独立 worker 和可重建缓存，不参与命令事务、恢复或验收。
 
 ### 2.1 机器可校验的清单（arch-map）
 
@@ -207,6 +230,14 @@ DSH 运行时通过 `lib/index.js` → `lib/host/tools/index.js` 注册。路由
 
 ## 3. 一条命令的完整路径
 
+![图 4：写命令时序与失败边界](diagrams/command-write.svg)
+
+- 图以 HTTP 为例；鉴权先于命令分发，业务身份不能由请求正文自授。
+- handle 在工作副本上分发命令，守卫通过后才向 store 提交事件批次。
+- append + fsync 才能返回 committed:true；handle 显式接收 store 返回的 state。
+- 日志 I/O 结果不明时降只读，不能声称确定未提交；相同 cmdId 用于幂等。
+- meta/registry 警告与快照优化失败，不推翻已确认的日志提交。
+
 ```
 UI 事件
   → src/client/api/transport.ts command(projectId, body)   // 生成 cmdId，带 token
@@ -242,6 +273,26 @@ MCP 写入由 `mcp-write.js` 校验项目授权、签发工作会话并适配允
 历史知识有两个同名工具入口：DSH `tools/knowledge.js → knowledge/reader.js` 从受信会话 cwd 经 `resolveWorkspace` 确认项目；MCP `mcp-knowledge.js → project-reader.js → knowledge/reader.js` 复用项目工作会话授权。两侧均不打开 writer、不领取任务或 touch 租约，共用 `knowledge/worker.js` 与宿主单并发预算；原生读取器由注册器持有并经 `ctx.effect` 关闭，不依赖 MCP 开关。专用 worker 不占现有视图 worker 名额；完成、超时或关闭后释放。`snapshot` 校验日志并固定已发布水位，`records/content` 提取来源与重读原文，`build/sqlite-index` 维护根目录下独立的 `knowledge-cache/`，`search/read/relations` 负责有界交付与已有关系。共享业务 schema、描述、上限与工具名在 `lib/shared/knowledge.js`；DSH 直接注册 JSON Schema ToolDefinition，领域输入校验仍归 core，输出完整有界 JSON。索引没有 writer 回调，不参与命令提交；SQLite 不可用时有界扫描降级。模型联想与累计搜索流程留给调用 Agent。
 
 原生适配器将 DSH PTC 不支持的范围 schema 关键字机械转为参数说明，保持业务字段/必填/枚举一致，core 继续执行全部范围守卫。DSH `exec.signal` 作为读取器第二参数中的内部执行选项传入，取消单次 worker 并等待退出；取消、完成、超时与关闭均清理监听和名额，不把信号塞入业务输入或 workerData。
+
+### 3.1 读路径与审计隔离
+
+![图 5：内存读模型、隔离审计与锁外冷读](diagrams/read-isolation.svg)
+
+- brief 只取内存健康摘要，evidence unchecked 不等于完整审计通过。
+- 显式完整 health 使用隔离审计 worker；文件、blob、绑定和 Git 的重 I/O 不回到 prompt 热路径。
+- 专用 MCP/资源/知识只读链不取 writer、不恢复任务、不续租；普通管理工具的 open/touch 不在此保证内。
+- 同进程读取已发布状态；锁外有效日志前缀只作展示水位，不充当写入或领取权威。
+- docView 与完整 health 有 I/O，不能把全部 views 概括为纯函数。
+
+### 3.2 存储与恢复边界
+
+![图 6：存储文件、验证顺序与显式修复](diagrams/store-recovery.svg)
+
+- commits.jsonl 是事实源；snapshot 校验水位后才用于加速，blobs 保存内容寻址字节。
+- writer 冷开先持锁并完整验证日志，再规范化尾部、读取快照与重放；只读回放不修尾。
+- 未知事件、坏链或不支持版本 fail-closed，不靠跳过坏行继续拼接状态。
+- fsck/health 只诊断；salvage/repair 是显式维护，prefix apply 需要停写、备份和确认数据损失。
+- 仅 writer 执行 recover；代码回退与日志修复都不自动回滚外部副作用。
 
 ## 4. 关键不变量
 

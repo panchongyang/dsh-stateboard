@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800" role="img" aria-label="store-recovery">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#1A73E8"/></marker></defs>
+<rect width="1200" height="800" fill="white"/>
+<g font-family="Microsoft YaHei, Noto Sans SC, Segoe UI, sans-serif" fill="#202124">
+<text x="32" y="44" font-size="28" font-weight="700">图 6 · 存储与恢复：日志是事实，快照只是优化</text>
+<text x="32" y="76" font-size="17">实线 = 恢复顺序 / 数据来源；虚线 = 诊断与显式维护，不是启动时自动修复。</text>
+<rect x="32" y="120" width="255" height="130" rx="12" fill="#FEF7E0" stroke="#5F6368" stroke-width="2"/>
+<text x="50" y="150" font-size="20" font-weight="700">lock.json / claim / hb</text>
+<text x="50" y="178" font-size="17">合作式写锁 + nonce / pid</text>
+<text x="50" y="203" font-size="17">写入前复核当前锁</text>
+<text x="50" y="228" font-size="17">只读回放不获取此锁</text>
+<rect x="347" y="120" width="350" height="130" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="365" y="150" font-size="20" font-weight="700">commits.jsonl · 权威</text>
+<text x="365" y="178" font-size="17">每行一个原子 commit</text>
+<text x="365" y="203" font-size="17">version / seq / prev / hash</text>
+<text x="365" y="228" font-size="17">已登记事件兼容性检查</text>
+<rect x="757" y="120" width="411" height="130" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="775" y="150" font-size="20" font-weight="700">snapshot.json / blobs</text>
+<text x="775" y="178" font-size="17">snapshot：seq + hash + state</text>
+<text x="775" y="203" font-size="17">blobs：内容寻址字节</text>
+<text x="775" y="228" font-size="17">快照不能掩盖坏日志或未知事件</text>
+<rect x="32" y="345" width="255" height="140" rx="12" fill="#FEF7E0" stroke="#5F6368" stroke-width="2"/>
+<text x="50" y="375" font-size="20" font-weight="700">① writer 获取锁</text>
+<text x="50" y="403" font-size="17">只读冷读跳过此步</text>
+<text x="50" y="428" font-size="17">不自动接管跨主机锁</text>
+<text x="50" y="453" font-size="17">不阻挡无视锁的外部写者</text>
+<rect x="347" y="345" width="350" height="140" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="365" y="375" font-size="20" font-weight="700">② 完整验证日志</text>
+<text x="365" y="403" font-size="17">第一处坏链 / 未知事件即拒绝</text>
+<text x="365" y="428" font-size="17">完整无 LF 尾记录仍保留</text>
+<text x="365" y="453" font-size="17">仅不可解析的未终止半尾可丢弃</text>
+<rect x="757" y="345" width="411" height="140" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="775" y="375" font-size="20" font-weight="700">③ 规范化 → 快照 → 回放</text>
+<text x="775" y="403" font-size="17">仅 writer 在完整验证后规范化尾部</text>
+<text x="775" y="428" font-size="17">snapshot 校验 seq / hash 后回放尾部</text>
+<text x="775" y="453" font-size="17">无有效快照则从日志重建</text>
+<path d="M 159 250 V 345" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M 287 410 H 347" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M 522 250 V 345" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M 697 410 H 757" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M 963 250 V 345" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="757" y="565" width="411" height="130" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="775" y="595" font-size="20" font-weight="700">④ 发布 state / writer 恢复任务</text>
+<text x="775" y="623" font-size="17">仅 writer recover：有 intent → interrupted</text>
+<text x="775" y="648" font-size="17">无 intent → ready；记录 lease/expired</text>
+<text x="775" y="673" font-size="17">冷读不恢复任务、不改原日志</text>
+<path d="M 963 485 V 565" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="32" y="565" width="665" height="130" rx="12" fill="white" stroke="#5F6368" stroke-width="2"/>
+<text x="50" y="595" font-size="20" font-weight="700">fsck / health：只诊断；repair：停写后显式决定</text>
+<text x="50" y="623" font-size="17">fsck 检查不变量、证据与结构，不修状态、不执行材料。</text>
+<text x="50" y="648" font-size="17">坏链拒绝加载 → salvage 只读前缀 → 人工确认损失再 repair。</text>
+<text x="50" y="673" font-size="17">prefix apply：停写、拒绝现存锁、备份 fsync、复核、原子替换。</text>
+<path d="M 522 485 V 565" fill="none" stroke="#1A73E8" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+<text x="46" y="747" font-size="18">代码回退 ≠ 数据回退；repair 不回滚外部副作用，也不静默删掉后继已发生状态。</text>
+<text x="934" y="778" font-size="14">依据：CONTRACT / ARCHITECTURE</text>
+</g>
+</svg>
