@@ -164,6 +164,14 @@ Project 1 ─── * Plan 1 ─── * Task 1 ─── * Evidence
 
 ### 3.2 任务状态机
 
+![图 8：任务状态、租约审计门与计划生命周期](diagrams/task-plan-state.svg)
+
+- 任务主路径是 backlog → ready → in_progress → review → done；submit 不等于完成。
+- claim/begin/submit 受租约、fencing token 与版本守卫约束；中断后必须 reconcile。
+- 普通任务允许授权 agent 验收；审计任务要求独立 agent 报告，human 验收始终可用。
+- 计划 head 的现行状态是 draft/active/archived；版本表不可变，修订与成员调整产生新版本。
+- focus 仅由 human 设置；归档清空对应焦点并禁止新 claim；归档草稿恢复为 draft。
+
 **图只是示意，转移表才是事实源。** 实现时守卫从表生成，测试也对着表跑；不要在两处各写一份规则。
 
 ~~~mermaid
@@ -233,7 +241,15 @@ stateDiagram-v2
 
 ### 3.3 计划、项目、文档
 
-**Plan（v2：多实例；设计见 [PLAN-V2.md](./PLAN-V2.md)）**
+![图 7：外置文档四维状态、固定证据与图片边界](diagrams/doc-evidence.svg)
+
+- 可用性、基线确认、Git 观测、管理状态是四个独立维度，文件变化不自动改变管理状态。
+- 外置正文由编辑器维护；登记与确认不等于对内容正确性的验收。
+- 提交 doc 证据时服务端自动固定干净的已提交 Git 字节；无法安全固定时标 current-only 和原因。
+- pinned 审计只针对固定对象，不追随当前正文；不可观测与真实身份/hash 不符要分别处理。
+- 图片只读、只限正文已引用路径和 binding 根内白名单文件，单文件上限 4 MiB，不获取 writer。
+
+**Plan（v2：多实例；设计见 [计划模块](<modules/plan/contract.md>)）**
 
 - 计划是 initiative 级容器：一个项目可有 N 个计划；`PlanHead` 保存身份与状态（id/title/status/currentVersion），`PlanVersion` 保存不可变快照。
 - `draft`：可编辑，不建任务、不参与进度；只在计划列表可见，默认不进看板。
@@ -383,7 +399,7 @@ dsh-project-board/
 **构建决策**：浏览器半用 esbuild（仅开发期，`npm run build:client`）打包成单个
 `lib/client.js` + source map，**产物提交进仓库**、插件运行时不再构建；core/host 是
 手写 ESM，无构建步骤。构建工具隔离在 `tools/build`，根目录保持零运行时依赖。
-TypeScript 在 `tools/typescript/` 隔离安装，仅以 `noEmit` 做开发期后端检查；共享基础规则与 Node 专用配置分离，现有 JS 未全量开启语义检查。工具链试点与边界见 [TypeScript 开发工具链](<TYPESCRIPT.md>)；全量类型迁移、前端 TS/TSX 与严格化不属于当前实现。
+TypeScript 在 `tools/typescript/` 隔离安装，仅以 `noEmit` 做开发期后端检查；共享基础规则与 Node 专用配置分离，现有 JS 未全量开启语义检查。工具链试点与边界见 [TypeScript 开发工具链](<governance/TYPESCRIPT.md>)；全量类型迁移、前端 TS/TSX 与严格化不属于当前实现。
 
 理由：单包避免版本偏移和装配复杂度；内部模块边界已经足够清晰。等核心稳定、确实需要复用时再拆 `core` 包。单包也符合 dsh-button-plugin 已验证的装配方式（junction + cordis.patch.yml）。
 
@@ -464,7 +480,7 @@ tool call
 - 只读进程不缓存过期状态：每次读前 `stat` 日志的 size/mtime，变化则从上次 seq 增量重放；写权限只属于持锁进程。
 - meta.json 是项目身份的派生缓存：open 时若 log 的 `project` 与 meta 不一致（relocate 后写失败/被篡改），重写 meta.json 与 pathIndex；失败只记 `metaWarning`，不阻断打开。
 
-运行时硬切 schema v3：新 genesis/meta/project 为3；缺失版本按2并拒开，在可写尾修复前检查最终 schema。维护者停宿主后从发布包外显式迁移；追加 project/updated + 全量 task/updated + 受影响草稿的既有 plan/updated，不新增事件，不重写原提交。meta/snapshot3，已迁移 no-op。旧构建可能静默丢门，回滚仅恢复迁移前备份 + 旧构建，详见 [迁移](<MIGRATION.md>)。
+运行时硬切 schema v3：新 genesis/meta/project 为3；缺失版本按2并拒开，在可写尾修复前检查最终 schema。维护者停宿主后从发布包外显式迁移；追加 project/updated + 全量 task/updated + 受影响草稿的既有 plan/updated，不新增事件，不重写原提交。meta/snapshot3，已迁移 no-op。旧构建可能静默丢门，回滚仅恢复迁移前备份 + 旧构建，详见 [迁移](<operations/MIGRATION.md>)。
 
 ### 4.4 并发：单写者 + CAS + fencing
 
@@ -596,7 +612,7 @@ DSH 的 `agent/created` 是 serial + awaited 的，监听器抛错会导致创�
 
 ### 4.10 容量预算
 
-依据为 [容量合成基准](./CAPACITY.md)：单项目、10k/100k 提交、已有 snapshot、固定任务字段，无文档/证据/计划混合负载；100k 不进 CI。基准的机器、样本数和采样 RSS 限制见原记录。这些数字不是生产 SLA，也不是当前候选的性能复测结果。
+依据为 [容量合成基准](<decisions/capacity-100k-boundary.md>)：单项目、10k/100k 提交、已有 snapshot、固定任务字段，无文档/证据/计划混合负载；100k 不进 CI。基准的机器、样本数和采样 RSS 限制见原记录。这些数字不是生产 SLA，也不是当前候选的性能复测结果。
 
 参考预算如下。超出任一项触发评估，不是已实现的自动硬失败：
 
@@ -609,7 +625,7 @@ DSH 的 `agent/created` 是 serial + awaited 的，监听器抛错会导致创�
 
 超限动作：先在隔离合成 fixture 或获准的数据副本上复核目标负载，再按顺序评估①命令状态写时复制/差量，②日志分段+段索引，③保留哈希链校验的 snapshot 尾部读取，④listProjects 摘要缓存。不得以跳过完整性校验换取性能；本决策不直接改实现。
 
-发布引用本节及[容量基准](./CAPACITY.md)。超过参考预算、规模超过 100k、需要多项目高频查询，或目标机器内存低于基准机器的一半时，在发布说明标“容量边界待复核”，不能沿用基准数字宣称达标；需另行评估和验收。
+发布引用本节及[容量基准](<decisions/capacity-100k-boundary.md>)。超过参考预算、规模超过 100k、需要多项目高频查询，或目标机器内存低于基准机器的一半时，在发布说明标“容量边界待复核”，不能沿用基准数字宣称达标；需另行评估和验收。
 
 ---
 
@@ -757,7 +773,7 @@ DSH Web 的客户端是槽位制，没有第三方可用的 History 路由，也
 
 ### 6.2 视图
 
-- **Board**：列 = Backlog / Ready / In Progress / Review / Done；Blocked / Interrupted 放顶部 "Attention" 托盘；Canceled 默认隐藏。泳道可切 plan step / owner / priority。（2026-10-21 的视觉与交互重做见 [UI-REDESIGN.md](./UI-REDESIGN.md)：设计 tokens、组件规范、五页方案、截图与无障碍验收清单。）
+- **Board**：列 = Backlog / Ready / In Progress / Review / Done；Blocked / Interrupted 放顶部 "Attention" 托盘；Canceled 默认隐藏。泳道可切 plan step / owner / priority。（2026-10-21 的视觉与交互重做见 [客户端设计](<modules/client/design.md>)：设计 tokens、组件规范、五页方案、截图与无障碍验收清单。）
 - **Task drawer**：描述、验收清单（逐条勾选 + 证据）、证据列表（含 hash 校验状态）、事件时间线、work intent、依赖、操作按钮。按钮的可用性来自 `allowedOps`，不是前端猜。
 - **Plan**：step 列表 → 关联任务、进度、assumptions/risks、发布/修订；修订时显示 diff。
 - **Docs**：列表 + markdown 查看/编辑 + 修订历史 + diff + 关联任务；保存时带 baseRev，冲突弹合并。
@@ -778,7 +794,7 @@ DSH Web 的客户端是槽位制，没有第三方可用的 History 路由，也
 - **非法拖拽**：卡片弹回，toast 显示守卫原因（如 "deps 未完成：tsk_x"），并高亮阻塞项。
 - **只读模式**：另一个进程持锁时只读打开；项目 archived 拒绝业务写。哈希链中段损坏默认拒绝打开，不在 UI 把合法前缀伪装当前状态；前缀仅通过显式离线 salvage 查看（见 §4.3）。
 - **UI 降级**：如果 `main` 槽位在某个 DSH 版本不可用，保留内联 toolview + 只读 board；不要为了 UI 把核心状态机绑死。
-- **不做浏览器自动化测试**：纯逻辑用 Node 验证，交互按[贡献指南](<CONTRIBUTING.md>)由人验收。
+- **不做浏览器自动化测试**：纯逻辑用 Node 验证，交互按[贡献指南](<governance/CONTRIBUTING.md>)由人验收。
 
 ---
 

@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-label="command-write">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#1A73E8"/></marker></defs>
+<rect width="1200" height="900" fill="white"/>
+<g font-family="Microsoft YaHei, Noto Sans SC, Segoe UI, sans-serif" fill="#202124">
+<text x="32" y="44" font-size="28" font-weight="700">图 4 · 写命令时序：先守卫，后落盘，再发布状态</text>
+<text x="32" y="76" font-size="17">以下用 HTTP 写入作例子；DSH / MCP 身份来自各自入口，最终共用 core 守卫。</text>
+<rect x="27" y="110" width="156" height="58" rx="12" fill="#FEF7E0" stroke="#5F6368" stroke-width="2"/>
+<text x="45" y="140" font-size="20" font-weight="700">入口</text>
+<line x1="105" y1="180" x2="105" y2="670" stroke="#5F6368" stroke-width="2" stroke-dasharray="5 6"/>
+<rect x="212" y="110" width="156" height="58" rx="12" fill="#FEF7E0" stroke="#5F6368" stroke-width="2"/>
+<text x="230" y="140" font-size="20" font-weight="700">鉴权 / host</text>
+<line x1="290" y1="180" x2="290" y2="670" stroke="#5F6368" stroke-width="2" stroke-dasharray="5 6"/>
+<rect x="412" y="110" width="156" height="58" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="421" y="140" font-size="16" font-weight="700">handle.command</text>
+<line x1="490" y1="180" x2="490" y2="670" stroke="#5F6368" stroke-width="2" stroke-dasharray="5 6"/>
+<rect x="627" y="110" width="156" height="58" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="638" y="140" font-size="17" font-weight="700">commands 守卫</text>
+<line x1="705" y1="180" x2="705" y2="670" stroke="#5F6368" stroke-width="2" stroke-dasharray="5 6"/>
+<rect x="847" y="110" width="156" height="58" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="865" y="140" font-size="20" font-weight="700">store</text>
+<line x1="925" y1="180" x2="925" y2="670" stroke="#5F6368" stroke-width="2" stroke-dasharray="5 6"/>
+<rect x="1032" y="110" width="156" height="58" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="1050" y="140" font-size="20" font-weight="700">读模型</text>
+<line x1="1110" y1="180" x2="1110" y2="670" stroke="#5F6368" stroke-width="2" stroke-dasharray="5 6"/>
+<path d="M 105 220 H 290" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="112" y="208" font-size="16">token / origin / body</text>
+<path d="M 290 290 H 490" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="301" y="277" font-size="16">受信 actor + cmdId</text>
+<path d="M 490 360 H 705" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="500" y="347" font-size="16">CAS / 只读 / 去重</text>
+<text x="718" y="389" font-size="16">lease、依赖、审计门</text>
+<text x="718" y="414" font-size="16">工作副本生成 events</text>
+<path d="M 705 450 H 490" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="504" y="438" font-size="16">{ events, entityRev }</text>
+<path d="M 490 510 H 925" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="510" y="497" font-size="17" paint-order="stroke" stroke="white" stroke-width="4">append(commit)：seq / prev / hash + fsync</text>
+<path d="M 925 580 H 490" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="509" y="567" font-size="17" paint-order="stroke" stroke="white" stroke-width="4">返回应用事件后的 state；handle 显式接收</text>
+<path d="M 490 640 H 1110" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="512" y="627" font-size="17" paint-order="stroke" stroke="white" stroke-width="4">committed:true + events → 刷新投影</text>
+<rect x="32" y="704" width="350" height="140" rx="12" fill="white" stroke="#5F6368" stroke-width="2"/>
+<text x="50" y="734" font-size="20" font-weight="700">失败边界 A · 落盘前</text>
+<text x="50" y="762" font-size="17">鉴权失败拒绝进入命令路径</text>
+<text x="50" y="787" font-size="17">守卫失败：整条命令不落盘</text>
+<text x="50" y="812" font-size="17">cmdId 已提交：返回幂等结果</text>
+<rect x="415" y="704" width="350" height="140" rx="12" fill="white" stroke="#5F6368" stroke-width="2"/>
+<text x="433" y="734" font-size="20" font-weight="700">失败边界 B · 日志 I/O</text>
+<text x="433" y="762" font-size="17">确认回退成功：抛原错误，可重试</text>
+<text x="433" y="787" font-size="17">结果不明：log-write-uncertain</text>
+<text x="433" y="812" font-size="17">store / handle 降只读，不宣称未提交</text>
+<rect x="798" y="704" width="370" height="140" rx="12" fill="white" stroke="#5F6368" stroke-width="2"/>
+<text x="816" y="734" font-size="20" font-weight="700">成功边界 · 已 append + fsync</text>
+<text x="816" y="762" font-size="17">events 在守卫阶段生成、落盘后生效</text>
+<text x="816" y="787" font-size="17">meta / registry 失败仅 warnings</text>
+<text x="816" y="812" font-size="17">snapshot 失败不改变提交结果</text>
+<text x="934" y="878" font-size="14">依据：CONTRACT / ARCHITECTURE</text>
+</g>
+</svg>

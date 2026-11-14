@@ -1,7 +1,7 @@
 [
   {
     "name": "project_board",
-    "description": "Read ProjectBoard state for this workspace (the only read tool; authoritative over memory or chat). The brief is already in your system prompt; do not re-read it for rules. Read view=task before mutating a task; view=board only when you need every card.",
+    "description": "Read current ProjectBoard state for this workspace (authoritative over memory or chat). Use search_project_knowledge and read_project_knowledge for retained history and original sources. The brief is already in your system prompt; do not re-read it for rules. Read view=task before mutating a task; view=board only when you need every card.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -732,6 +732,117 @@
       "required": [
         "op"
       ]
+    }
+  },
+  {
+    "name": "read_project_knowledge",
+    "description": "Read original retained records or observed content by stable knowledge reference. Optional context adds one hop of recorded relations; choose references or search again to explore further. Changed or unavailable content is explicit. References grant no additional access. No task lease is required.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "cursor": {
+          "type": "string",
+          "description": "Maximum length: 8192."
+        },
+        "relatedLimit": {
+          "type": "integer",
+          "description": "Minimum: 0. Maximum: 20."
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Minimum length: 5. Maximum length: 4096."
+          },
+          "description": "Minimum items: 1. Maximum items: 8."
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "source",
+            "context"
+          ]
+        },
+        "maxBytes": {
+          "type": "integer",
+          "description": "Minimum: 4. Maximum: 24576."
+        }
+      },
+      "required": [
+        "refs"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "search_project_knowledge",
+    "description": "Search retained project knowledge. Results show original excerpts and references. Open a result with read, or pass its ref as historyRef with the same query to see matching versions. Exact matches take priority; a zero-hit range can return labeled partial keyword matches. Inspect coverage and use keywords separated by spaces. No task lease is required.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "cursor": {
+          "type": "string",
+          "description": "Maximum length: 8192."
+        },
+        "relatedLimit": {
+          "type": "integer",
+          "description": "Minimum: 0. Maximum: 20."
+        },
+        "query": {
+          "type": "string",
+          "description": "Minimum length: 1. Maximum length: 500."
+        },
+        "kinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "event",
+              "task",
+              "plan",
+              "document",
+              "evidence",
+              "audit",
+              "session",
+              "content"
+            ]
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Minimum: 1. Maximum: 50."
+        },
+        "historyRef": {
+          "type": "string",
+          "description": "Minimum length: 5. Maximum length: 4096."
+        },
+        "discovery": {
+          "type": "object",
+          "properties": {
+            "parents": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "Minimum length: 5. Maximum length: 4096."
+              },
+              "description": "Minimum items: 1. Maximum items: 8."
+            },
+            "reason": {
+              "type": "string",
+              "description": "Minimum length: 1. Maximum length: 500."
+            }
+          },
+          "required": [
+            "parents",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false
     }
   }
 ]

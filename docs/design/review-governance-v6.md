@@ -1,5 +1,7 @@
 # 设计草案：AI 驳回与第三方审计门（审查治理 v6）
 
+> 状态：已替代（现行语义见[实现契约](<../CONTRACT.md>)；正文保留方案或决策时的语境）。
+
 日期：2026-11-02
 状态：v6 方案待实现（用户拍板 B：无迁移 marker）
 基线：master `f9ca3e6`（证据只记录、提交进入 review、显式验收）
@@ -145,7 +147,7 @@
 - `project_task` 参数/描述/示例只出现 `requiresAudit`；`audit` 对象用于 verify/reject 报告。
 - `project_board` task/brief/board 摘要：`audit=1`、`lastAudit`；不再出现 `humanReview`。
 - 客户端源码 `src/client` 与构建产物：`requiresAudit` / `gate:audit`；Badge「需审计」；抽屉「审计门」；展示 lastAudit；不再出现「人审」。
-- CONTRACT/DESIGN/README/CHANGELOG 只写新名；`docs/MIGRATION.md` 记录旧名 → 新名迁移与回滚（docs 不进包）。
+- CONTRACT/DESIGN/README/CHANGELOG 只写新名；`docs/operations/MIGRATION.md` 记录旧名 → 新名迁移与回滚（docs 不进包）。
 - **发布包门禁**：`npm pack` 后在 tarball 的 `package/lib`、`package/src`、`package/bin`、`README.md`、`docs/CONTRACT.md` 内 grep `requiresHumanReview|gate:human`，必须为 0；否则 release gate 失败。脚本放 `scripts/check-release-purity.mjs`（不进包）。
 - 旧名只允许出现在：`scripts/migrate-gate-v3.mjs`、`scripts/check-release-purity.mjs`、`test/`、`docs/`、历史档案；运行时代码（`lib`/`src`/`bin`）grep 旧名必须为 0。
 - 客户端构建：改 `src/client` 后 `npm run build:client` 并核对产物，不直接改 `lib/client.js`。

@@ -1,6 +1,6 @@
 # ProjectBoard · dsh-stateboard
 
-DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、任务、外置文档与结果材料。当前版本 **0.3.1**，许可证 [BSD-3-Clause](<./LICENSE>)。
+DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、任务、外置文档与结果材料。当前版本 **0.3.1**，许可证 [BSD-3-Clause](<LICENSE>)。
 
 源码可从 [GitHub 仓库](https://github.com/panchongyang/dsh-stateboard) 下载。npm 安装使用公共 registry 上的同版本包，或使用已下载的同版本 tgz。
 
@@ -16,7 +16,7 @@ DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、
 
 项目板记录谁提交了什么、引用来自哪里、内容是否变化；**不替材料背书**。命令/测试由人或 agent 在外部执行，成功和失败都可作为材料记录；项目板不执行、不重跑、不验签这些结果。未漂移不等于结论正确，未观测不等于未漂移。`submit` 只进入 review，`verify` 是验收裁决而非系统正确性证明。
 
-两种安装来源装配相同的 `dsh-stateboard` bundle，包含 UI、五个 DSH agent 工具及可选本机 MCP，不附赠 CLI、worktree 编排或运维工具。DSH 是硬依赖，Git 是可选的只读增强；**没有 Git 也能完整使用核心流程**。
+两种安装来源装配相同的 `dsh-stateboard` bundle，包含 UI、七个 DSH agent 工具及可选本机 MCP，不附赠 CLI、worktree 编排或运维工具。DSH 是硬依赖，Git 是可选的只读增强；**没有 Git 也能完整使用核心流程**。
 
 ## 支持环境
 
@@ -46,7 +46,7 @@ DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、
 
 ```text
 # 本地包（把占位路径替换为实际 Windows 绝对路径）
-dsh plugin --profile PROFILE add "D:\Packages\dsh-stateboard-0.3.1.tgz"
+dsh plugin --profile PROFILE add "ABSOLUTE_TGZ"
 # 对应版本在公共 npm registry 可用后：
 dsh plugin --profile PROFILE add dsh-stateboard@0.3.1
 ```
@@ -58,7 +58,7 @@ dsh plugin --profile PROFILE add dsh-stateboard@0.3.1
 npm --prefix tools/build ci
 npm run build:client
 # 安装完整源码目录：
-dsh plugin --profile PROFILE add "D:\Projects\dsh-stateboard"
+dsh plugin --profile PROFILE add "ABSOLUTE_SOURCE"
 ```
 
 宿主安装/链接包并选择同名 bundle，包的 patch 插入 `id: project-board / name: dsh-stateboard`。不需要手工向 profile patch 追加 insert，不需要把宿主运行时链接进源码。重复 add 不应产生第二份选择。若 profile 含手工装配项，先备份并核对来源，避免重复 ID；不要批量覆盖配置。
@@ -135,7 +135,7 @@ bearer_token_env_var = "PROJECT_BOARD_MCP_WRITE_TOKEN"
 
 在 Codex 聊天中用 `open_work_session` 开始该项目的工作会话。可以读取已有卡片，或用 `create_task` 建卡、`update_task` 编辑、`ready_task` 将满足条件的待办置为就绪。随后用 `claim_task` 领取、`begin_task` 记录执行意图、`submit_task` 附证据提交审查。工作会话 token 保留在当前聊天内。写入默认关闭。停用写入口或轮换凭据后重新加载插件，既有会话失效。工具参数、续接与异常处理见随包的实现契约 §3.7。
 
-检查证据后，用 `verify_task` 显式验收普通任务（提交者也可以，无需报告）。审计门任务需要独立会话和报告；所有任务也可在网页人工验收。可按权限用 `reject_task` 带理由退回返工。MCP 与原生工具的覆盖差异见随包实现契约 §3.7.3。
+检查证据后，用 `verify_task` 显式验收普通任务（提交者也可以，无需报告）。审计门任务需要独立会话和报告；所有任务也可在网页人工验收。可按权限用 `reject_task` 带理由退回返工。写连接还可处理续租、阻塞和中断对账，管理计划和文档，记录检查点与交接。用 `get_project_view` 查看授权项目的看板、证据、计划或文档，完整参数见随包实现契约 §3.7。
 
 ## 约三分钟文字演示
 
@@ -224,11 +224,11 @@ node scripts/relocate-project.mjs --root "BOARD_ROOT" --project PROJECT_ID --to 
 
 ## 贡献与架构入口
 
-源码贡献请先读仓库的贡献指南与架构模块地图；它们属于完整源码，不随 npm 包提供。**本 README 的安装、演示、备份和回退说明不依赖那些文件或未公开网站**。实现语义参见随包的 [docs/CONTRACT.md](<./docs/CONTRACT.md>)。
+源码贡献请先读仓库的贡献指南与架构模块地图；它们属于完整源码，不随 npm 包提供。**本 README 的安装、演示、备份和回退说明不依赖那些文件或未公开网站**。实现语义参见随包的 [docs/CONTRACT.md](<docs/CONTRACT.md>)。
 
 架构入口：shared 是零依赖契约；core 是不依赖 DSH 的状态机、日志、租约、文档与读模型；host 把 DSH 工具/HTTP 翻译成命令；client 是 React UI。客户端运行时只加载已构建的 bundle，无运行时编译。新功能先改契约，领域守卫只放 core；npm 与源码提供相同能力。
 
-源码贡献入口为 `docs/CONTRIBUTING.md`，机器校验模块地图为 `docs/ARCHITECTURE.md`，维护流程为 `docs/RELEASE.md`，数据指南为 `docs/RECOVERY.md` / `docs/MIGRATION.md`。取得完整源码后可运行：
+源码贡献入口为 `docs/governance/CONTRIBUTING.md`，机器校验模块地图为 `docs/ARCHITECTURE.md`，维护流程为 `docs/operations/RELEASE.md`，数据指南为 `docs/operations/RECOVERY.md` / `docs/operations/MIGRATION.md`。取得完整源码后可运行：
 
 ```text
 npm run test:ci             # core + client，host可选依赖缺失可能明确SKIP

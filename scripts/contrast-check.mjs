@@ -4,7 +4,7 @@
  *
  * Enumerates the text/background pairs that actually occur in the stylesheet and
  * asserts WCAG AA (>= 4.5:1). Run: node scripts/contrast-check.mjs [--json]
- * Design contract: docs/UI-REDESIGN.md (semantic color tokens and contrast).
+ * Design contract: docs/modules/client/design.md (semantic color tokens and contrast).
  */
 const LIGHT = {
   canvas: '#f9fafb', surface: '#ffffff', surface2: '#f9fafb',

@@ -7,7 +7,7 @@
  * This is the safe verification entry for the planHeads migration. It never
  * opens the original directory, never appends history events, never adopts
  * tasks and never rewrites a snapshot: the source is only read for hashing and
- * for the copy. See docs/MIGRATION.md for the derivation rules and rollback
+ * for the copy. See docs/operations/MIGRATION.md for the derivation rules and rollback
  * boundaries.
  *
  * Usage:

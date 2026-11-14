@@ -25,6 +25,7 @@ export interface DocReaderProps {
   dirty?: boolean;
   onReload?: () => void;
   preview?: boolean;
+  imageUrl?: (src: string) => string | null;
 }
 
 
@@ -102,7 +103,7 @@ export function DocReader(props: DocReaderProps) {
         {' · ' + draft.body.length + ' 字符'}
         {props.dirty ? ' · 有未保存改动' : ''}
       </p>
-      <Markdown body={draft.body} empty="（空文档）" toc={true} scope="doc" />
+      <Markdown imageUrl={props.imageUrl} body={draft.body} empty="（空文档）" toc={true} scope="doc" />
     </div> : null,
   ];
 }

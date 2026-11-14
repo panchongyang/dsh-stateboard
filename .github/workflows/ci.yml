@@ -10,7 +10,7 @@ name: CI
 # Release train: validate the candidate against the designated train branch,
 # then check CI again on the integrated train commit. CI reports checks for a
 # revision. Merging into the train and publishing remain separate operations.
-# See docs/CONTRIBUTING.md for the handoff and release gates.
+# See docs/governance/CONTRIBUTING.md for the handoff and release gates.
 on:
   push:
   pull_request:
@@ -79,6 +79,11 @@ jobs:
       - name: Maintainability audit (hard gate)
         run: npm run audit:check
 
+      - name: Read-only documentation links, coverage and privacy
+        run: |
+          node --test scripts/check-docs.test.mjs
+          npm run check:docs
+
       - name: Packed release surface purity
         run: npm run check:release
 
@@ -100,5 +105,5 @@ jobs:
             echo '### Release train ready for local smoke deployment'
             printf 'Checked commit: `%s`\n\n' "$GITHUB_SHA"
             echo 'When the development workstation is online, sync this change into local master, deploy to the authorized development profile, and record smoke results.'
-            printf '\n[Release train procedure](%s/%s/blob/%s/docs/CONTRIBUTING.md)\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_SHA"
+            printf '\n[Release train procedure](%s/%s/blob/%s/docs/governance/CONTRIBUTING.md)\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_SHA"
           } >> "$GITHUB_STEP_SUMMARY"

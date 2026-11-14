@@ -1,76 +1,113 @@
 # 项目文档地图
 
-项目文档归口本目录；仓库根目录只保留对外 [README](../README.md)、agent 入口 [AGENTS.md](../AGENTS.md) 与 [LICENSE](../LICENSE)。本文按"要做什么"路由；摘要只帮定位，语义以各文档原文为准。
+按读者与稳定性分层；行为权威只在[实现契约](<CONTRACT.md>)，冻结内容按[冻结索引](<CONTRACT.md#3-冻结子契约索引1c>)读取。本文是唯一路由，不复制规则；写作与归档见[文档治理](<DOC-GOVERNANCE.md>)。
 
-**现行 / 历史**：产品方针、契约、架构、测试、发布、恢复等现行文档在顶层；带日期的评估以文首状态为准；`decisions/`、`design/`、`specs/` 是按需读的方案、规格与背景；`archive/`、`evidence/`、`.evidence/` 是历史材料，不参与现行路由。
+## 项目级契约、架构与横向入口
 
-## 入口与治理
+- [ProjectBoard 实现契约](<CONTRACT.md>)
+- [工作区文档外置 · D1 冻结契约](<WORKSPACE-DOCUMENTS-CONTRACT.md>)
+- [架构与模块地图](<ARCHITECTURE.md>)
+- [ProjectBoard（项目板）— DSH 跨会话项目状态机插件设计方案](<DESIGN.md>)
+- [术语表](<GLOSSARY.md>)
+- [信任边界](<TRUST-BOUNDARIES.md>)
+- [兼容与降级](<COMPATIBILITY.md>)
+- [文档治理：分层、归属与维护规则](<DOC-GOVERNANCE.md>)
 
-| 文档 | 内容 | 何时读 |
+图集：[上下文](<diagrams/context.svg>) · [分层](<diagrams/layers.svg>) · [模块](<diagrams/module-map.svg>) · [写入](<diagrams/command-write.svg>) · [读隔离](<diagrams/read-isolation.svg>) · [存储恢复](<diagrams/store-recovery.svg>) · [文档证据](<diagrams/doc-evidence.svg>) · [任务计划](<diagrams/task-plan-state.svg>)。
+
+## 治理（L0）
+
+源码协作入口：[AGENTS](<../AGENTS.md>)；随包入口：[README](<../README.md>)。
+
+- [人类审查上移与 AI 自主交付模型](<governance/AUTONOMOUS-DELIVERY.md>)
+- [后端可读性基线与渐进迁移](<governance/BACKEND-READABILITY.md>)
+- [项目框架约束](<governance/CONSTRAINTS.md>)
+- [贡献指南](<governance/CONTRIBUTING.md>)
+- [产品方针（ProjectBoard）](<governance/PRODUCT-PRINCIPLES.md>)
+- [ProjectBoard 独立测试环境](<governance/TEST-ENV.md>)
+- [分级测试与基线保护规范](<governance/TESTING-POLICY.md>)
+- [TypeScript 开发工具链](<governance/TYPESCRIPT.md>)
+- [任务确认后的完整工作流](<governance/task-delivery-workflow.md>)
+
+## 模块目录（L2 → L3 / L4）
+
+| 模块入口 | 设计（L3） | 内部契约（L4） |
 |---|---|---|
-| [README](../README.md) | 产品边界、支持矩阵、安装/演示/备份回退 | 对外使用、安装、发布说明 |
-| [AGENTS.md](../AGENTS.md) | 本仓库 agent 会话规则与必读清单 | 每个会话开工 |
-| [产品方针](PRODUCT-PRINCIPLES.md) | 三方针、评审两问、底线、偏离登记 | 评审设计/接口/代码、排优先级 |
-| [协作治理模型](AUTONOMOUS-DELIVERY.md) | 人类审需求、AI 审交付；PRD 作为授权依据与例外升级 | 判断授权范围、职责边界 |
-| [任务确认后的完整工作流](design/task-delivery-workflow.md) | 开工 → 实现 → 同步基线自验 → 独立审查 → 合入 → 验收 | 任务开工到合入 |
-| [贡献指南](CONTRIBUTING.md) | 环境、分层改动入口、测试与提交要求、发布边界 | 改代码或文档前 |
-| [TypeScript 开发工具链](TYPESCRIPT.md) | 隔离依赖、共享/后端规则、JS/TS 共存和检查边界 | 跑类型检查、扩展 TS 或前端配置 |
-| [后端可读性基线](<BACKEND-READABILITY.md>) | 关键阅读链、每函数中文用途口径、注释/类型渐进批次 | 阅读后端、规划注释或小批迁移 |
-| [CHANGELOG](CHANGELOG.md) | 版本变更记录 | 写发布说明 |
+| [shared](<modules/shared.md>) | 与内部契约合篇 | [内部契约](<modules/shared/contract.md>) |
+| [project](<modules/project.md>) | [设计](<modules/project/design.md>) | [内部契约](<modules/project/contract.md>) |
+| [command](<modules/command.md>) | [设计](<modules/command/design.md>) | [内部契约](<modules/command/contract.md>) |
+| [task](<modules/task.md>) | [设计](<modules/task/design.md>) | [内部契约](<modules/task/contract.md>) |
+| [plan](<modules/plan.md>) | [设计](<modules/plan/design.md>) | [内部契约](<modules/plan/contract.md>) |
+| [documents](<modules/documents.md>) | [设计](<modules/documents/design.md>) | [内部契约](<modules/documents/contract.md>) |
+| [evidence](<modules/evidence.md>) | [设计](<modules/evidence/design.md>) | [内部契约](<modules/evidence/contract.md>) |
+| [store](<modules/store.md>) | [设计](<modules/store/design.md>) | [内部契约](<modules/store/contract.md>) |
+| [read](<modules/read.md>) | [设计](<modules/read/design.md>) | [内部契约](<modules/read/contract.md>) |
+| [knowledge](<modules/knowledge.md>) | [设计](<modules/knowledge/design.md>) | [内部契约](<modules/knowledge/contract.md>) |
+| [host](<modules/host.md>) | [设计](<modules/host/design.md>) | [内部契约](<modules/host/contract.md>) |
+| [client](<modules/client.md>) | [设计](<modules/client/design.md>) | [内部契约](<modules/client/contract.md>) |
 
-## 契约、设计与架构
+## 操作与运维（L5）
 
-| 文档 | 内容 | 何时读 |
-|---|---|---|
-| [实现契约](CONTRACT.md) | 命令、事件、错误码、HTTP、存储与读模型的唯一对外契约 | 改行为、加命令、看错误语义 |
-| [设计背景](DESIGN.md) | 状态机、租约、日志、读模型与计划能力的设计取舍 | 理解契约为什么这样定 |
-| [架构与模块地图](ARCHITECTURE.md) | 分层依赖、模块清单（机器校验）、改动入口 | 新增/搬移模块、判断该改哪层 |
-| [计划 v2](PLAN-V2.md) | 多计划、不可变版本、生命周期与可写管理面 | 改计划/任务归属、读模型 |
-| [D1 冻结契约](WORKSPACE-DOCUMENTS-CONTRACT.md) | 外置文档、身份、固定证据的冻结语义 | 改文档/身份/固定证据前 |
-| [外置文档实现](EXTERNAL-DOCS.md) | 登记、定位、观测、基线、状态与工具表面 | 改外置文档核心/表面 |
-| [固定内容证据](DOC-EXTERNAL-EVIDENCE.md) | 固定引用的校验域、自动跟随与降级 | 改证据固定、审计或降级显示 |
-| [Git 执行边界](GIT-EXECUTION.md) | 只读 Git 的解析、允许/禁用调用面 | 改 Git 观测或维护脚本 |
-| [项目身份](IDENTITY.md) | 项目身份与本机绑定最小闭环 | 改绑定、搬迁、打开项目 |
+- [Changelog](<operations/CHANGELOG.md>)
+- [开发 CLI 与维护命令](<operations/CLI.md>)
+- [约三分钟脱敏文字演示](<operations/DEMO.md>)
+- [内嵌文档迁移与恢复 runbook](<operations/DOC-MIGRATION.md>)
+- [文档页（外置文档）人工验收清单](<operations/DOCS-UI-CHECKLIST.md>)
+- [安装、首次运行与卸载](<operations/INSTALL.md>)
+- [ProjectBoard 迁移入口](<operations/MIGRATION-ENTRY.md>)
+- [工作区搬迁、换机与 schema v3 升级](<operations/MIGRATION.md>)
+- [ProjectBoard 恢复与继续交付 Runbook](<operations/RECOVERY.md>)
+- [维护者发布准备、人工公开发布与部署](<operations/RELEASE.md>)
+- [ProjectBoard 使用说明](<operations/runbooks/projectboard-usage.md>)
+- [恢复与继续交付](<operations/runbooks/recovery-backup-then-repair.md>)
+- [文档渲染回归样例](<operations/runbooks/render-regression-samples.md>)
 
-## 测试、发布与数据
+## 保留方案（按文首状态读取）
 
-| 文档 | 内容 | 何时读 |
-|---|---|---|
-| [测试分级与基线保护](TESTING-POLICY.md) | 风险分级、独立候选、隔离要求 | 开工定测试范围 |
-| [独立测试环境](TEST-ENV.md) | 隔离 HOME/DSH/profile 的测试环境 | 跑宿主/端到端验证 |
-| [测试隐式契约与依赖清单](<design/test-implicit-contracts.md>) | 全部 wired 测试的规则、顺序、副作用、环境依赖与模块拆分顺序 | 测试分层、规模门禁和覆盖率口径收口 |
-| [发布与部署边界](RELEASE.md) | 候选准备、人工发布闸、部署授权、冻结清单 | 打包、发布、部署前 |
-| [安装与首次运行](INSTALL.md) | 安装来源、原生 bundle 装配、卸载 | 安装/交付 |
-| [三分钟演示](DEMO.md) | 脱敏文字演示脚本 | 演示、验收讲解 |
-| [恢复 Runbook](RECOVERY.md) | 一致备份、回退、故障恢复 | 数据损坏、回滚、搬迁前 |
-| [迁移与 schema 升级](MIGRATION.md) | 工作区搬迁、换机、schema v3 离线升级 | 升级、换机、回退数据 |
-| [迁移入口](MIGRATION-ENTRY.md) | 迁移相关文档的导航 | 不确定该看哪篇 |
-| [内嵌文档迁移](DOC-MIGRATION.md) | D6 内嵌 → 外置的离线迁移与恢复 | 迁移内嵌文档 |
+- [方案：看板 → 会话（反向跳转）](<design/board-to-session-jump.md>)
+- [实施方案：文档 ↔ 任务关联（反查 + 写校验 + 任务页资产区）](<design/doc-task-linking-implementation.md>)
+- [推进视图（Flow）](<design/flow-view.md>)
+- [I7：状态交接显式化](<design/invariant-i7-state-handoff.md>)
+- [多会话并发推进与计划—任务一致性](<design/multi-session-concurrency.md>)
+- [最小身份闭环与兼容验收方案](<design/oss-minimal-identity-loop.md>)
+- [实施方案：项目读取、业务准入与 writer 生命周期分离](<design/project-access-lifecycle-boundaries.md>)
+- [实施方案：项目摘要按字面文本进入宿主 Prompt（F01）](<design/prompt-literal-section.md>)
+- [方案：驳回/重做保委派人 · 接手交接审计 · 前置依赖可见](<design/reject-redo-preserve-assignee.md>)
+- [设计草案：AI 驳回与第三方审计门（审查治理 v6）](<design/review-governance-v6.md>)
+- [任务 worktree、Git 隔离与串行集成](<design/worktree-isolation-serial-integration.md>)
 
-## UI
+## 保留规格（按文首状态读取）
 
-| 文档 | 内容 | 何时读 |
-|---|---|---|
-| [UI 重做设计](UI-REDESIGN.md) | 设计系统、组件规范、五页方案、响应式与无障碍 | 改界面/样式 |
-| [文档页验收清单](DOCS-UI-CHECKLIST.md) | 外置文档页的人工验收项 | 交付/验收文档页 |
+- [并发推进分期、依赖及 R3 门禁](<specs/concurrency-phases-acceptance.md>)
+- [增补：过滤规则 v1.1（done 时间窗 + 多计划作用域）](<specs/filter-rules-v1-1-addendum.md>)
+- [方案：过滤规则与持久化 v1](<specs/filter-rules-v1.md>)
+- [规格：查询模块 v2（独立模块 · WHERE 表达式 · 与历史读模型分层）](<specs/query-module-v2.md>)
 
-## 专题、方案与历史
+## 决策与处置记录（不替代现行规则）
 
-| 文档 / 目录 | 内容 |
-|---|---|
-| [可维护性评估](MAINTAINABILITY.md) | 2026-10-22 基线的评估与模块拆分方案（有日期，结论非现行承诺） |
-| [容量基准](CAPACITY.md) | 10k/100k 提交的合成基准与发布容量边界（2026-10-28 实测） |
-| [设计方案](design/) | 已批准/待实施的方案与实施边界，是否已实现看各文状态 |
-| [前端分层基线](design/frontend-layering.md) | src/client 现→目标映射、六层依赖、轮询/导航归属与迁移批次 |
-| [规格](specs/) | 查询模块 v2（权威规格）、过滤规则、UI 2.0、D5 等 |
-| [决策记录](decisions/) | 决策与复议的背景依据；不替代现行契约 |
-| [Runbook](runbooks/) | 使用说明、恢复演练、文档渲染回归样例 |
-| `archive/` | 历史档案（本地，不入库），不是现行规则 |
-| `../evidence/`、`../.evidence/` | 本机证据与测试输出（不入库），不是现行规则 |
+- [决定](<decisions/auto-follow-fixed-evidence.md>)
+- [容量决策收口](<decisions/capacity-100k-boundary.md>)
+- [决策：ProjectBoard 自身的上下文成本](<decisions/context-cost.md>)
+- [L1 契约重排核对记录](<decisions/contract-l1-reorganization.md>)
+- [契约重排前的实现与维护口径档案](<decisions/contract-legacy-surfaces.md>)
+- [决策：会话快捷入口如何把 cwd 映射到项目](<decisions/cwd-project-mapping.md>)
+- [旧文档逐篇处置记录（2026-11-14）](<decisions/doc-disposition-2026-11-14.md>)
+- [决策：历史、审计、回滚的边界与分层](<decisions/history-audit-rollback-layering.md>)
+- [历史知识读取与检索验证记录](<decisions/history-knowledge-validation-2026-11-14.md>)
+- [决策：人审门用 requiresHumanReview 开关，agent 只能开不能关](<decisions/human-review-gate.md>)
+- [图片与数学公式：做不做（文档渲染 · 阶段6）](<decisions/image-math-tradeoffs.md>)
+- [MVP 范围与验收档案](<decisions/mvp-scope.md>)
+- [决策：计划能力 v2 —— 不嵌套任务，把计划升格为可管理的多实例](<decisions/plan-capability-v2.md>)
+- [决策：优先级语义与可视化口径](<decisions/priority-semantics.md>)
+- [产品方针复查：审查治理 v6（硬切迁移偏离 + AI 审计信任标签）](<decisions/product-policy-review-v6.md>)
+- [查询 v2 首任务：最小契约](<decisions/query-v2-first-task-contract.md>)
+- [RFC-1 · 历史读模型的实体索引口径（第二轮收敛）](<decisions/rfc-1-history-read-model.md>)
+- [RFC-3 状态收口与归档写闸](<decisions/rfc-3-state-closure.md>)
+- [RFC-4 增补：执行前校验、持久 execution 凭证与证据 supersede](<decisions/rfc-4-addendum-preflight.md>)
+- [RFC-4 证据强度与宿主执行](<decisions/rfc-4-evidence-strength.md>)
+- [RFC-5：证据漂移分级、固定版本与刷新](<decisions/rfc-5-evidence-drift.md>)
+- [Project Board 未来方向与下阶段唯一目标](<decisions/structured-continuous-knowledge-base.md>)
 
-## 写作约定
+## 维护与检查
 
-- 现行文档只写现在的事实：就地重写，不追加"以前/已废弃/日期更正"；历史原因、失败方案和实测数据放 `evidence/` 或 `decisions/` 档案。
-- 文档之间用相对路径互链；引用实现文件时写仓库相对路径。改了标题或移动文件后，全库搜旧路径并修正。
-- 公共文档不写本机绝对路径、真实 task/project/session id、私网地址或私密材料；npm 包内 README 必须自包含，只链接随包文件。
-- 目录职责：`CONTRACT`/`DESIGN`/`ARCHITECTURE` 是长期维护的现行文档；`design/`/`specs/` 是方案与规格；`decisions/` 是决策背景；`archive/` 是历史。
+新增/移动现行文档须更新本地图；执行 `npm run check:docs` 校验路径、Markdown 标题锚点、全图可达性和公共文档隐私。档案不参与路由，旧路径只在逐篇处置记录中以代码映射保留。
