@@ -21,15 +21,17 @@ function fixture() {
     doc_inline: { id: 'doc_inline', source: 'inline' },
   } };
   const binding = { bindingId: 'bnd_test', root };
-  const handle = { id: 'prj_test', state, service: { bindings: () => ({ activeFor: () => [binding] }) },
+  let opened = 0;
+  const service = {
+    bindings: () => ({ activeFor: () => [binding] }),
+    async open() { opened += 1; return handle; },
+    peekProjectState() { return state; },
+  };
+  const handle = { id: 'prj_test', state, service,
     command() { throw new Error('asset read must never acquire a writer'); } };
   let route;
-  let opened = 0;
   registerRoutes({ webServer: { register(value) { route = value; return () => {}; } }, on() { return () => {}; } },
-    { token: 'secret', ready: Promise.resolve(), service: {
-      async open() { opened += 1; return handle; },
-      peekReadOnlyHandle() { return handle; },
-    } });
+    { token: 'secret', ready: Promise.resolve(), service });
   function request(relPath, docId = 'doc_test', token = 'secret') {
     return new Promise((resolve) => {
       const req = { method: 'GET', url: '/project-board/api/projects/prj_test/docs/external/' + docId + '/assets' + (relPath === null ? '' : '?path=' + encodeURIComponent(relPath)), headers: { 'x-project-board-token': token } };
