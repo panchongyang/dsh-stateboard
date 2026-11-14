@@ -1,6 +1,6 @@
 # ProjectBoard · dsh-stateboard
 
-DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、任务、外置文档与结果材料。当前版本 **0.3.1**，许可证 [BSD-3-Clause](<./LICENSE>)。
+DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、任务、外置文档与结果材料。当前版本 **0.3.1**，许可证 [BSD-3-Clause](<LICENSE>)。
 
 源码可从 [GitHub 仓库](https://github.com/panchongyang/dsh-stateboard) 下载。npm 安装使用公共 registry 上的同版本包，或使用已下载的同版本 tgz。
 
@@ -46,7 +46,7 @@ DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、
 
 ```text
 # 本地包（把占位路径替换为实际 Windows 绝对路径）
-dsh plugin --profile PROFILE add "D:\Packages\dsh-stateboard-0.3.1.tgz"
+dsh plugin --profile PROFILE add "ABSOLUTE_TGZ"
 # 对应版本在公共 npm registry 可用后：
 dsh plugin --profile PROFILE add dsh-stateboard@0.3.1
 ```
@@ -58,7 +58,7 @@ dsh plugin --profile PROFILE add dsh-stateboard@0.3.1
 npm --prefix tools/build ci
 npm run build:client
 # 安装完整源码目录：
-dsh plugin --profile PROFILE add "D:\Projects\dsh-stateboard"
+dsh plugin --profile PROFILE add "ABSOLUTE_SOURCE"
 ```
 
 宿主安装/链接包并选择同名 bundle，包的 patch 插入 `id: project-board / name: dsh-stateboard`。不需要手工向 profile patch 追加 insert，不需要把宿主运行时链接进源码。重复 add 不应产生第二份选择。若 profile 含手工装配项，先备份并核对来源，避免重复 ID；不要批量覆盖配置。
@@ -224,11 +224,11 @@ node scripts/relocate-project.mjs --root "BOARD_ROOT" --project PROJECT_ID --to 
 
 ## 贡献与架构入口
 
-源码贡献请先读仓库的贡献指南与架构模块地图；它们属于完整源码，不随 npm 包提供。**本 README 的安装、演示、备份和回退说明不依赖那些文件或未公开网站**。实现语义参见随包的 [docs/CONTRACT.md](<./docs/CONTRACT.md>)。
+源码贡献请先读仓库的贡献指南与架构模块地图；它们属于完整源码，不随 npm 包提供。**本 README 的安装、演示、备份和回退说明不依赖那些文件或未公开网站**。实现语义参见随包的 [docs/CONTRACT.md](<docs/CONTRACT.md>)。
 
 架构入口：shared 是零依赖契约；core 是不依赖 DSH 的状态机、日志、租约、文档与读模型；host 把 DSH 工具/HTTP 翻译成命令；client 是 React UI。客户端运行时只加载已构建的 bundle，无运行时编译。新功能先改契约，领域守卫只放 core；npm 与源码提供相同能力。
 
-源码贡献入口为 `docs/CONTRIBUTING.md`，机器校验模块地图为 `docs/ARCHITECTURE.md`，维护流程为 `docs/RELEASE.md`，数据指南为 `docs/RECOVERY.md` / `docs/MIGRATION.md`。取得完整源码后可运行：
+源码贡献入口为 `docs/governance/CONTRIBUTING.md`，机器校验模块地图为 `docs/ARCHITECTURE.md`，维护流程为 `docs/operations/RELEASE.md`，数据指南为 `docs/operations/RECOVERY.md` / `docs/operations/MIGRATION.md`。取得完整源码后可运行：
 
 ```text
 npm run test:ci             # core + client，host可选依赖缺失可能明确SKIP

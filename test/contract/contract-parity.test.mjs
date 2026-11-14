@@ -104,6 +104,7 @@ assert.deepEqual(Object.values(API_PATHS), [
   '/projects/:id/docs/:docId',
   '/projects/:id/docs/external',
   '/projects/:id/docs/external/:docId',
+  '/projects/:id/docs/external/:docId/assets',
   '/projects/:id/health',
   '/projects/:id/commands',
 ]);

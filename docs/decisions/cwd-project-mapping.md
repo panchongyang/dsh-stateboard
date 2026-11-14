@@ -1,5 +1,7 @@
 # 决策：会话快捷入口如何把 cwd 映射到项目
 
+> 状态：已替代（现行语义见[实现契约](<../CONTRACT.md>)；正文保留方案或决策时的语境）。
+
 会话头部的入口要「打开当前工作区对应的项目板」。真正的难点不是按钮，而是映射规则：项目按 workspacePath 精确登记（host 侧 pathIndex），而会话 cwd 既可能是某个项目的子目录，也可能没有任何项目。
 
 ## 决策
@@ -12,7 +14,7 @@
 ## 规范化与比较规则
 
 - 分隔符统一成 `/`，去掉尾部 `/`。
-- Windows 风格路径（`X:/` 或 UNC）比较时忽略大小写；POSIX 路径保持大小写敏感——Linux 上两个只差大小写的仓库是两个项目。
+- Windows 风格路径（`X:/` 或 UNC）比较时忽略大小写；POSIX 路径保持大小写敏感——Linux 上两个只差大小写的仓库是两个项目。 <!-- docs-check-allow: 盘符根是路径语法示例占位符，不是本机路径或机器信息 -->
 - 兄弟目录的前缀不算祖先：`<本机路径>\proj2` 不属于 `<本机路径>\proj`。
 - 同一路径只可能有一个项目（host 的 pathIndex 保证），所以不需要消歧。
 
@@ -22,7 +24,7 @@
 
 ## 实现落点
 
-- [lib/client.js](../../lib/client.js)：`normalizeWorkspacePath` / `comparablePath` / `matchProjectByCwd` / `requestBoardJump` / `consumePendingJump`；入口注册在 `conversation.session.header.utilities`（id `project-board-jump`）。
+- [lib/client.js](<../../lib/client.js>)：`normalizeWorkspacePath` / `comparablePath` / `matchProjectByCwd` / `requestBoardJump` / `consumePendingJump`；入口注册在 `conversation.session.header.utilities`（id `project-board-jump`）。
 - 跳转两条路：面板已挂载时走 window 事件 `project-board:jump`；尚未挂载时把请求留在 `pendingJumpCwd`，由 BoardPage 首帧消费（只消费一次）。
 - 无项目分支复用 `CreateProject`，通过 `initialPath` / `hint` 预填路径并说明原因。
 - 测试：[客户端单测索引](<../../test/client/unit/README.md>) 覆盖精确、祖先、兄弟前缀、大小写、空值与 pending 只消费一次。

@@ -1,8 +1,10 @@
 # 产品方针复查：审查治理 v6（硬切迁移偏离 + AI 审计信任标签）
 
+> 状态：已替代（现行语义见[实现契约](<../CONTRACT.md>)；正文保留方案或决策时的语境）。
+
 日期：2026-11-02
-依据：`docs/PRODUCT-PRINCIPLES.md`（现行产品方针）
-对象：内部计划 v6、[审查治理 v6 设计草案](../design/review-governance-v6.md) rev 11
+依据：`docs/governance/PRODUCT-PRINCIPLES.md`（现行产品方针）
+对象：内部计划 v6、[审查治理 v6 设计草案](<../design/review-governance-v6.md>) rev 11
 
 ## 结论
 

@@ -1,10 +1,12 @@
 # 任务 worktree、Git 隔离与串行集成
 
+> 状态：待实施（本篇为方案/规格，不构成能力已交付声明）。
+
 ## 状态与范围
 
 配套草稿计划：多会话并发推进：计划任务解耦、worktree 隔离与串行集成（内部草稿，未发布）。本文为待实施设计，不表示已有 worktree 管理器、Git 强制隔离或多工作区绑定。当前只整理文档，不创建分支/worktree，不运行 Git、测试或服务。
 
-共同设计依据见[《设计草案：多会话并发推进与计划—任务一致性》](./multi-session-concurrency.md)；分期和验收见[《实施与验收草案：并发推进分期、依赖及 R3 门禁》](../specs/concurrency-phases-acceptance.md)。
+共同设计依据见[《设计草案：多会话并发推进与计划—任务一致性》](<multi-session-concurrency.md>)；分期和验收见[《实施与验收草案：并发推进分期、依赖及 R3 门禁》](<../specs/concurrency-phases-acceptance.md>)。
 
 ## 1. 隔离单位
 
@@ -88,6 +90,6 @@ projectId + repoId
 5. 命令 cwd、文件证据和候选 commit 匹配；其他任务改动不造成证据串线。
 6. 分支分别通过但集成失败时，最终交付门保持关闭；未授权不得部署或回收工作区。
 
-相关规范：[分级测试与基线保护规范](../TESTING-POLICY.md)（R3/基线保护）、[RFC-4 addendum：preflight](../decisions/rfc-4-addendum-preflight.md)（执行凭证）、[cwd 映射决策](../decisions/cwd-project-mapping.md)（cwd 映射边界）。
+相关规范：[分级测试与基线保护规范](<../governance/TESTING-POLICY.md>)（R3/基线保护）、[RFC-4 addendum：preflight](<../decisions/rfc-4-addendum-preflight.md>)（执行凭证）、[cwd 映射决策](<../decisions/cwd-project-mapping.md>)（cwd 映射边界）。
 
 delegation: no — 本次只整理执行隔离设计；未创建或操作任何 worktree、分支、Git 锁或运行进程。
