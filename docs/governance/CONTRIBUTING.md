@@ -19,6 +19,9 @@ npm run test:types               # 工具链正反例
 npm --prefix tools/build ci       # 需要构建客户端时
 npm run build:client
 npm run test:ci                   # core + client
+npm run test:parity               # 实际原生注册与回环 MCP
+npm --prefix tools/dsh-sdk ci --legacy-peer-deps --ignore-scripts
+node --test test/host/agent-sdk.test.mjs # 真实 SDK；缺依赖失败
 npm run test:host                 # 兼容宿主开发依赖装配后
 npm run audit:check
 npm run check:architecture
@@ -63,3 +66,7 @@ npm run check:release:readiness
 ## 发布不等于部署
 
 详见[维护者发布流程](<../operations/RELEASE.md>)。本地 commit、技术门禁、人工验收、公开仓/registry 发布与目标宿主部署各自独立。`private:true` 是人工发布闸，readiness 红时记录所有 technical blockers 和 manual gates，不能改 private 伪造通过。任何检查都不是 push、tag、publish、公开仓转换或重启授权。
+
+## Agent 等价门禁
+
+共同工具定义、实际注册和行为测试进入默认 core 与独立 CI；真实 SDK 使用固定开发依赖子集，校验七工具 schema、生成器和原始输出。release handoff 必须等待等价、SDK、offline 与双平台性能检查。main/release 系列的[远端规则](https://github.com/panchongyang/dsh-stateboard/rules/27379162)强制要求这五项检查且没有绕过账号。

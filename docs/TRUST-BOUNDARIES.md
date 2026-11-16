@@ -9,11 +9,11 @@
 | DSH 原生工具 | 受信 exec.agent 会话及其 cwd 建立项目与 agent actor | 参数不能自报 human 角色；知识读取不因调用而创建项目或绑定 | [工具注册](<../lib/host/tools/index.js>)、[生命周期](<../lib/host/lifecycle.js>) |
 | 网页 HTTP | 通过来源与进程 token 校验后授予内部网页 capability，core actor 为 human/web | body/query/header 自报身份不参与授权，不设置 CORS 放行 | [auth.js](<../lib/host/auth.js>)、[routes.js](<../lib/host/routes.js>) |
 | MCP 概览读取 | loopback 监听、请求来源与独立 read Bearer token | 不获得正文、fencing token 或工作区根路径 | [MCP 传输](<../lib/host/mcp-http.js>)、[概览工具](<../lib/host/mcp-tools.js>) |
-| MCP 项目工作会话 | write 开关、项目白名单、独立 write Bearer token，再签发项目级 sessionToken | 不接受 actor/sessionId/role 自授；不获得 human-only 操作 | [mcp-write.js](<../lib/host/mcp-write.js>) |
+| MCP 项目工作会话 | write 开关、项目白名单、独立 write Bearer token，再签发绑定逻辑 actor 与项目的 context | 不接受 actor/sessionId/role 自授；不获得 human-only 操作 | [mcp-write.js](<../lib/host/mcp-write.js>) |
 
-网页要求非空的 x-project-board-token，来源校验先于 token；Sec-Fetch-Site 出现时只接受 same-origin/none，Origin 非空且不是字符串 null 时必须与 Host 同 host。token 是进程生成并注入网页的能力，不是业务参数。MCP 读写密钥不同，工作会话由服务端建立 actor；重载使其失效。参数、token 长度与协议规则不在此复制，见 [HTTP](<CONTRACT.md#265-http>)、[MCP](<CONTRACT.md#267-可选本机-mcp>)及[写会话](<CONTRACT.md#2671-写凭据与工作会话>)。
+网页要求非空的 x-project-board-token，来源校验先于 token；Sec-Fetch-Site 出现时只接受 same-origin/none，Origin 非空且不是字符串 null 时必须与 Host 同 host。token 是进程生成并注入网页的能力，不是业务参数。MCP 读写密钥不同，工作会话由服务端建立 actor；重载使其失效。参数、token 长度与协议规则不在此复制，见 [HTTP](<CONTRACT.md#265-http>)、[MCP](<CONTRACT.md#267-可选本机-mcp>)及[写会话](<CONTRACT.md#2671-共同接口与身份上下文>)。
 
-面向 Agent 的业务能力由 DSH 与 MCP 两侧适配同一 core 守卫；传输身份不同不改变领域权限。知识工具在 MCP 使用项目工作会话授权，概览 read token 不获得正文权限，见[原生工具](<CONTRACT.md#263-工具>)与[知识读取](<CONTRACT.md#历史知识读取与检索>)。
+面向 Agent 的业务能力由 DSH 与 MCP 共用同一七工具目录、校验、执行与 renderer；传输身份不同不改变领域权限。知识工具在 MCP 使用项目工作会话授权，概览 read token 不获得正文权限，见[原生工具](<CONTRACT.md#263-工具>)与[知识读取](<CONTRACT.md#历史知识读取与检索>)。
 
 ## 2. 只读与冷读
 
@@ -51,4 +51,6 @@ Git 可选；解析器只接受真实路径位于所有待读工作区和实现 
 
 普通任务允许授权 agent 显式验收；审计门要求独立会话与自述报告，但这种独立性不抵抗同一操作者的新会话分身。human verify 始终可用且不要求审计报告；人工刷新/豁免漂移需显式参数和原因并保留记录：refresh 更新证据链头后该漂移可清零，acknowledge 保留旧快照且健康仍如实告警，不隐藏内容问题。agent 不得使用人工漂移参数或把自述标为人类/系统核验，见 [CONTRACT §1.2](<CONTRACT.md#12-任务状态机>) 和 [audit.js](<../lib/core/audit.js>)。
 
-焦点、重开、强制操作等角色边界在 core 再判定；授权网页 capability 生成 human actor，MCP 工作会话不获得这些人工权限，见[命令清单](<CONTRACT.md#22-命令清单>)、[计划命令](<CONTRACT.md#223-plan-v2-命令>)与[MCP 完整视图](<CONTRACT.md#2673-计划文档会话与完整视图>)。
+焦点、重开、强制操作等角色边界在 core 再判定；授权网页 capability 生成 human actor，MCP 工作会话不获得这些人工权限，见[命令清单](<CONTRACT.md#22-命令清单>)、[计划命令](<CONTRACT.md#223-plan-v2-命令>)与[MCP 完整视图](<CONTRACT.md#2673-有界摘要与精读>)。
+
+管理视图的 DSH/MCP 调用均会 open/touch；只有元数据投影和知识查询保持无 writer/touch。相同目录不授予概览凭据正文权限，准入先于 writer。

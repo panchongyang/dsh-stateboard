@@ -26,7 +26,7 @@
 - [CONTRACT §2.3 Query 与视图](<../CONTRACT.md#23-query-与视图>)。
 - [CONTRACT §2.7 Digest](<../CONTRACT.md#digest>)。
 - [CONTRACT §2.6.4 Prompt](<../CONTRACT.md#264-prompt>)。
-- [CONTRACT §2.6.7.3 完整 MCP 视图](<../CONTRACT.md#2673-计划文档会话与完整视图>)。
+- [CONTRACT §2.6.7.3 完整 MCP 视图](<../CONTRACT.md#2673-有界摘要与精读>)。
 
 ## 依赖方向
 

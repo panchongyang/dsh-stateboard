@@ -28,7 +28,7 @@ shared 没有独立运行生命周期，设计取舍并入本篇，不另立业�
 |---|---|---|
 | [contract.js](<../../../lib/shared/contract.js>) | TASK_STATES、ACTIVE_STATES、TERMINAL_STATES；COMMAND_OPS 与派生 TASK_OPS；EVIDENCE_KINDS、DOC_KINDS | 领域枚举及命令词汇；不是状态跃迁实现 |
 | 同上 | DOC_EXTERNAL_WRITE_FIELDS、DOC_EXTERNAL_HTTP_ENVELOPE | 外置写白名单与 HTTP 信封字段，host 在 writer 打开前使用 |
-| 同上 | TOOL_NAMES、API_PATHS、MCP_READ_TOOLS、MCP_WRITE_TOOLS | 工具名称与路由模板；不是注册器或完整端点目录 |
+| 同上 | TOOL_NAMES、API_PATHS、MCP_READ_TOOLS、MCP_WRITE_TOOLS | 工具名称与路由模板；MCP_READ_TOOLS/MCP_WRITE_TOOLS 仅保留内部兼容词汇，不是现行注册目录 |
 | 同上 | PROJECT_READ_PAGE_DEFAULT/MAX、PROJECT_READ_ID_PATTERNS | 专用读取页界和 ID 形状；不是项目权限 |
 | 同上 | PROJECT_WORK_TRIGGER、PLAN_STAGE_WORK_GUIDANCE | 共用使用/阶段提示文字；不改变操作资格 |
 | [events.js](<../../../lib/shared/events.js>) | EVENT_REGISTRY、EVENT_CLASSES、eventClass | 事件名到兼容类别及默认拒绝分类 |
@@ -70,7 +70,7 @@ client 当前直接 import 的共享实现只有 verification.js，没有直接 
 | 提示与预算 | 共享文字、schema 及限额服务于入口行为；改动须核对模型可见描述、核心验证与输出/取消边界 |
 
 新增错误码不通过“加 shared 枚举”完成：修改 L1 定义及实际 BoardError/适配/展示测试。
-未知错误必须保留安全 code/message，不因客户端词典缺项吞为成功；MCP 的脱敏仍由 host 承担。
+未知错误必须保留安全 code/message，不因客户端词典缺项吞为成功；完整权限领域错误由共同 host 封装；概览权限在执行前拒绝正文读取。
 新增领域枚举也不能仅扩数组：检查归一化、状态机、投影、UI 未知值与双端 schema。
 
 ## 5. 事件分类与未知值

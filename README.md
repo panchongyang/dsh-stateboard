@@ -115,9 +115,9 @@ bearer_token_env_var = "PROJECT_BOARD_MCP_TOKEN"
 
 Codex 可以列项目、列任务和读取详情。需要暂停入口时，在 DSH 插件配置中将 `mcp.enabled` 设为 `false` 并重新加载插件。
 
-执行明确的任务、续做已知项目或交付已有任务时，先用 `get_work_context` 获取开工上下文。传入已确认的 `projectId`，知道任务时再传 `taskId`，即可读取该任务的验收条件、阻塞和下一步。只知道项目时，确认返回的候选后再写入。
+DSH 与 MCP 使用相同的七个工具、业务参数和返回文本。先用 `project_session op=projects` 查找项目，再用 `op=open projectId=...` 获取私密的 `context`。MCP 后续调用携带它；DSH 省略时沿用宿主当前工作区。执行或续做任务前，先读 `project_board view=work_context context=... taskId=...`，核对验收条件、阻塞和下一步。
 
-需要让 Codex 管理和接手任务时，可在同一 `mcp` 配置下另开写入，并填写明确授权的项目 ID。以下 ID 是占位符，实际值从 `list_projects` 获取。
+需要让 Codex 管理和接手任务时，可在同一 `mcp` 配置下另开写入，并填写明确授权的项目 ID。以下 ID 是占位符，实际值从 `project_session op=projects` 获取。
 
 ~~~yaml
       write:
@@ -133,9 +133,9 @@ url = "http://127.0.0.1:33109/mcp"
 bearer_token_env_var = "PROJECT_BOARD_MCP_WRITE_TOKEN"
 ~~~
 
-在 Codex 聊天中用 `open_work_session` 开始该项目的工作会话。可以读取已有卡片，或用 `create_task` 建卡、`update_task` 编辑、`ready_task` 将满足条件的待办置为就绪。随后用 `claim_task` 领取、`begin_task` 记录执行意图、`submit_task` 附证据提交审查。工作会话 token 保留在当前聊天内。写入默认关闭。停用写入口或轮换凭据后重新加载插件，既有会话失效。工具参数、续接与异常处理见随包的实现契约 §3.7。
+在完整权限连接中重新 `project_session op=open`，将返回的 context 保留在当前聊天内。用 `project_task op=create/update/ready` 建卡、编辑、置为就绪，再用 `op=claim/begin/submit` 领取、记录执行意图和附证据提交审查。写入默认关闭；停用写入口或轮换凭据并重新加载插件后，既有 context 失效。每次变更是新命令，结果不确定时先读卡对账，不盲重试。
 
-检查证据后，用 `verify_task` 显式验收普通任务（提交者也可以，无需报告）。审计门任务需要独立会话和报告；所有任务也可在网页人工验收。可按权限用 `reject_task` 带理由退回返工。写连接还可处理续租、阻塞和中断对账，管理计划和文档，记录检查点与交接。用 `get_project_view` 查看授权项目的看板、证据、计划或文档，完整参数见随包实现契约 §3.7。
+检查证据后，用 `project_task op=verify` 显式验收普通任务（提交者也可以，无需报告）。审计门任务需要独立会话和报告；所有任务也可在网页人工验收。`op=reject` 带理由退回返工。计划、文档和交接分别使用 `project_plan`、`project_doc`、`project_session`。`project_board view=task` 返回有界摘要，`view=task_detail` 按 section 或最多三个 sections 精读并提供来源与分页信息。升级后刷新工具目录、重新 open；旧 MCP 原子工具已替换。完整参数及迁移映射见随包实现契约 §2.6.7。
 
 ## 约三分钟文字演示
 

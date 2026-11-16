@@ -17,7 +17,7 @@
 | Fencing token（栅栏令牌） | 领取时递增、写入时与当前租约匹配的代际令牌，见[任务状态机](<CONTRACT.md#12-任务状态机>)。 |
 | Owner（持久归属） | 任务记录中的会话与令牌信息，不等同于有效运行时租约，见[只读诊断](<CONTRACT.md#health--fsck-只读诊断>)。 |
 | SessionBinding（会话绑定） | 受信入口建立的 sessionId/agentId、epoch 与活性记录，见[领域词汇](<CONTRACT.md#11-词汇表>)。 |
-| MCP 工作会话 | 服务端为授权项目签发的短期 sessionToken 与 agent 归因，不是 MCP 传输会话或任务租约，见[写凭据与工作会话](<CONTRACT.md#2671-写凭据与工作会话>)。 |
+| MCP 工作会话 | 服务端为授权项目签发的短期 sessionToken 与 agent 归因，不是 MCP 传输会话或任务租约，见[写凭据与工作会话](<CONTRACT.md#2671-共同接口与身份上下文>)。 |
 | WorkIntent（执行意图） | 副作用前记录的执行 WAL，未结意图须停止结算或中断对账，见[Intent 结算](<CONTRACT.md#221-intent-结算rfc-3>)。 |
 | Attempt（执行尝试） | begin 开启的材料轮次，会退休此前尝试的证据，见[验收项与证据](<CONTRACT.md#验收项与证据>)。 |
 | Acceptance（验收项） | 任务的显式验收条目及可选材料种类要求，见[任务状态机](<CONTRACT.md#12-任务状态机>)。 |

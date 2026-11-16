@@ -13,6 +13,7 @@
 | 入口 | 结构职责 |
 |---|---|
 | [contract.js](<../../lib/shared/contract.js>) | 状态、命令、端点与工具名 |
+| [agent-tools.js](<../../lib/shared/agent-tools.js>) | 共同 context 与精读预算 |
 | [events.js](<../../lib/shared/events.js>) | 事件兼容分类 |
 | [knowledge.js](<../../lib/shared/knowledge.js>) | 知识工具 schema 与预算 |
 | [fixed-schema.js](<../../lib/shared/fixed-schema.js>) | 固定证据结构 |

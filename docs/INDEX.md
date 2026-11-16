@@ -62,6 +62,12 @@
 - [恢复与继续交付](<operations/runbooks/recovery-backup-then-repair.md>)
 - [文档渲染回归样例](<operations/runbooks/render-regression-samples.md>)
 
+## Agent 接口与上下文
+
+- [共同七工具与精读](<design/agent-query-context.md>)
+- [累计上下文成本](<decisions/agent-query-context-cost-2026-11-16.md>)
+- [双端基线差异及处置](<decisions/agent-tool-parity-audit-2026-11-16.md>)
+
 ## 保留方案（按文首状态读取）
 
 - [方案：看板 → 会话（反向跳转）](<design/board-to-session-jump.md>)

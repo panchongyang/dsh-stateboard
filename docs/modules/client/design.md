@@ -98,7 +98,7 @@ health 当前允许请求重叠，清理只清 interval；不能宣称所有页�
 外置表单绑定打开时的 metaRev/hash，不能拿新观测给旧草稿重设确认基线。
 
 transport 从 globalThis.__PROJECT_BOARD__ 读取 base/token，token 只进请求头，不进业务 payload。
-来源与 token 的认证在[host](<../host/contract.md#2-输入校验与身份域>)，网页 actor 也由 host 建立。
+来源与 token 的认证在[host](<../host/contract.md#2-身份与权限>)，网页 actor 也由 host 建立。
 页面凭据不是任务租约、MCP token 或模型供应商密钥。
 [page-access](<../../../src/client/model/page-access.ts>)记录装配缺失/token 失配提示，并用修订号保护迟到成功。
 重新载入有丢草稿风险，只有用户确认后执行，不自动刷新或重放写入。

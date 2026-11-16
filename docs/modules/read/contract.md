@@ -34,7 +34,7 @@
 | healthAsync | 捕获快照、worker 外部观测 | 无权威写入；有调度状态和 worker 生命周期 |
 | buildDigest | 已传入 brief/session/options | 纯渲染，无时钟与 I/O |
 | open 后 query / 普通 HTTP GET | 先 service.open 再 query | 冷开可 recover/heal，不能声称整链零写 |
-| 原生管理工具读 | resolveHandle/open/touch 后 query | 可有恢复写和内存续租，不自动创建项目 |
+| DSH/MCP 共同管理工具读 | resolveHandle/open/touch 后 query | 可有恢复写和内存续租，不自动创建项目 |
 | 专用 project-reader | writer 发布态或 lock=false 前缀 | 不 open writer、不修尾/恢复/续租 |
 | knowledge 读端口 | 已保留来源及发布锚点 | 无权威写入；可写可重建派生缓存 |
 
@@ -44,12 +44,12 @@
 
 内部 view 接收可信 handle 形状，不能拿任意 JSON 冒充已验证状态。
 taskId/docId 必须由调用方提供；缺失或未知按实体查找失败处理。
-planView 的未知 planId 返回 plan:null；完整 MCP 适配可将显式未知 ID 转 not-found。
+planView 的未知 planId 返回 plan:null；两端共同工具保持这一行为。
 plansView 的 includeArchived 仅严格 false 排除归档。
 docsView 本身不执行 query 文本过滤；完整 reader 适配单独过滤标题。
 eventsView 仅对整数 after/limit 应用默认与限幅，不是通用分页 schema。
 docView 的 maxBytes 名称不能替代单位核对：同步实现按字符串 length/slice 截断。
-MCP 完整视图另以 UTF-8 字节安全截断，不能从同步实现推导其预算。
+两端既有文档读取沿用共同 DSH 默认值和字符计数；task_detail 的新预算按 UTF-8 字节，携带 source/scope/coverage 和续读水位。
 
 isolatedHealth 的 maxAgeMs 必须有限、正且不超过实现上限；默认 30 秒。
 错误参数和超时没有“上次健康”回退；输入域见[调度器](<../../../lib/core/health-audit.js>)。

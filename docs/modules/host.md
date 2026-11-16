@@ -13,15 +13,16 @@
 | 入口 | 结构职责 |
 |---|---|
 | [lib/index.js](<../../lib/index.js>) | 插件入口与服务装配 |
-| [tools/index.js](<../../lib/host/tools/index.js>) | 原生工具注册 |
+| [tools/index.js](<../../lib/host/tools/index.js>) | 双端共同工具目录与注册 |
+| [agent-context.js](<../../lib/host/agent-context.js>) | 逻辑身份与项目上下文 |
 | [routes.js](<../../lib/host/routes.js>) | HTTP 鉴权与资源分发 |
 | [auth.js](<../../lib/host/auth.js>) | 网页 capability 与 human actor |
 | [lifecycle.js](<../../lib/host/lifecycle.js>) | DSH 会话绑定 |
 | [prompt.js](<../../lib/host/prompt.js>) | 提示词注入 |
 | [mcp.js](<../../lib/host/mcp.js>) | 可选监听与关闭 |
 | [mcp-http.js](<../../lib/host/mcp-http.js>) | MCP 传输鉴权 |
-| [mcp-write.js](<../../lib/host/mcp-write.js>) | 写凭据与工作会话 |
-| [mcp-knowledge.js](<../../lib/host/mcp-knowledge.js>) | MCP 知识工具映射 |
+| [mcp-write.js](<../../lib/host/mcp-write.js>) | 写凭据准入与在途收口 |
+| [mcp-knowledge.js](<../../lib/host/mcp-knowledge.js>) | 共同知识目录的兼容导出 |
 
 ## 对外面
 

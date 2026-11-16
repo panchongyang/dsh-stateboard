@@ -26,7 +26,7 @@
 - [CONTRACT §2.2 任务命令](<../CONTRACT.md#22-命令清单>)。
 - [CONTRACT §2.2.1 Intent 结算](<../CONTRACT.md#221-intent-结算rfc-3>)。
 - [CONTRACT §2.6.3 原生工具](<../CONTRACT.md#263-工具>)。
-- [CONTRACT §2.6.7.2 MCP 任务工具](<../CONTRACT.md#2672-任务写操作>)。
+- [CONTRACT §2.6.7.2 MCP 任务工具](<../CONTRACT.md#2672-权限错误与迁移>)。
 
 ## 依赖方向
 

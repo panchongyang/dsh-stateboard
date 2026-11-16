@@ -94,7 +94,7 @@ checkState 在私有浅投影上派生兼容 plan head，不能借诊断修复�
 
 [项目读取器](<../../../lib/core/project-reader.js>)先查同进程已发布 writer。
 概览可直接从 writer.store.state 构造有界副本，避免读到命令工作态。
-完整视图即使有 writer，也把捕获数据送 worker 进行投影和脱敏。
+reader 的保留完整投影能力即使有 writer，也将捕获数据送 worker；Agent 管理视图直接走共同 DSH handle，不调用该保留投影。
 没有 writer 时，worker 用 lock=false store 验证并回放可观测前缀。
 读取前后文件指纹变化时有限重试，不修尾、不恢复任务。
 
@@ -123,7 +123,7 @@ doc 有同步 blob I/O；同步 health 还会读取证据与 Git，不能放 pro
 隔离审计有状态 structured clone、worker 启动及外部内容重读成本。
 其当前并发/队列界限在调度器定义，不是吞吐或容量保证。
 冷读还要验证完整日志，快照不免除兼容检查；worker 只隔离阻塞位置。
-完整 MCP 视图有正文和总输出预算，超限须缩窄读取。
+共同任务摘要有界；task_detail 显式选择最多三个部分并共用 UTF-8 预算，超限按水位分页。
 
 阅读顺序：
 

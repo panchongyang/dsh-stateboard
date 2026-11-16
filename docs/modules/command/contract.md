@@ -79,7 +79,7 @@ _appendEvents 返回 commit 或空值；非空提交后必须满足 state 别名
 已提交 cmdId 在只读闸之后去重、在 CAS/领域计算之前返回成功去重结果。
 同 cmdId 不比较新 payload；重试必须表示同一原意，不能拿旧 id 发新操作。
 新 cmdId 的空事件结果不进入持久 Set，再调用仍要通过前置校验。
-renew 不写 commit，其 MCP 运行时去重不等同持久命令去重。
+renew 不写 commit；两端每次调用均计入续租额度，不额外按 MCP 来源去重。
 
 touch 仅影响同 session/epoch 的内存活性与有界续期，不记业务进展。
 时间相关领取预览不替代命令校验；所有写仍须通过实时领域守卫。

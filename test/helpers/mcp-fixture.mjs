@@ -51,12 +51,13 @@ export async function listener(t, service, write, env = ENV) {
 export async function success(mcp, name, args, token) {
   const body = await mcp.call(name, args, token);
   assert.equal(body.result?.isError, undefined, JSON.stringify(body));
-  assert.ok(body.result?.structuredContent, JSON.stringify(body));
-  return body.result.structuredContent;
+  assert.equal(body.result?.structuredContent, undefined);
+  return JSON.parse(body.result.content[0].text);
 }
 
 export function denied(body, code) {
   assert.equal(body.result?.isError, true, JSON.stringify(body));
-  assert.deepEqual(Object.keys(body.result.structuredContent).sort(), ['code', 'message']);
-  assert.equal(body.result.structuredContent.code, code);
+  const result = JSON.parse(body.result.content[0].text);
+  assert.deepEqual(Object.keys(result).sort(), ['code', 'details', 'message', 'next', 'ok', 'status']);
+  assert.equal(result.code, code);
 }

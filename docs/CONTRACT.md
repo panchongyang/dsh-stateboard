@@ -109,7 +109,7 @@
 
 **reject**
 
-- review 无 live lease 时任意 agent/human（含 worker 自驳）可 reject，reason 必填；有 live lease 时非 human 仅持有者且校验 fencingToken。原 assignee 可自动接回时授予新租约并回 in_progress，其余回 ready；unassign 仅 human。MCP 工作会话通过新领取接回，记录 assignment cause 为 `explicit-claim`。rejection 记录 reason/at/by/byKind/auditId（可选）。带 audit 写 fail lastAudit；无 audit 不新建记录。事件仍为 task/rejected。任意 agent 驳回带来的乒乓 DoS 是接受的边界，没有自动限流。
+- review 无 live lease 时任意 agent/human（含 worker 自驳）可 reject，reason 必填；有 live lease 时非 human 仅持有者且校验 fencingToken。原 assignee 可自动接回时授予新租约并回 in_progress，其余回 ready；unassign 仅 human。两端共享同一自动恢复策略，不按传输来源分支。rejection 记录 reason/at/by/byKind/auditId（可选）。带 audit 写 fail lastAudit；无 audit 不新建记录。事件仍为 task/rejected。任意 agent 驳回带来的乒乓 DoS 是接受的边界，没有自动限流。
 
 **block**
 
@@ -699,22 +699,22 @@ export function apply(ctx, config) { ... }
 
 | 工具 | 关键参数 |
 |---|---|
-| `project_board` | view: brief/board/task/plan/plans/docs/doc/events/health; taskId?; docId?; planId?; limit?; maxBytes?; fresh? |
+| `project_board` | view: brief/board/task/plan/plans/docs/doc/events/health/tasks/task_overview/work_context/task_detail; taskId?; docId?; planId?; limit?; maxBytes?; fresh?; section?/sections?; offset?; atRev?; evidenceId?; acceptanceId?; kind?; includeSuperseded? |
 | `project_plan` | op: create/publish/revise/rename/archive/unarchive/focus/adopt/release; planId?; expectedRev?; baseVersion?; stepId?; taskIds?; title?; goal?; assumptions?; risks?; steps? |
 | `project_task` | op: create/update/gate/ready/claim/begin/renew/submit/verify/reject/block/interrupt/unblock/release/reconcile/cancel/reopen; taskId?; expectedRev?; requiresAudit?; audit?; unassign?（human-only）; intent?; sideEffects?; ... |
-| `project_doc` | op: get/put/list/link + register/inspect/update_meta/relocate/confirm/unregister/list_external/get_fixed; docId?; title?; kind?; body?; baseRev?; links?; maxBytes?; bindingId?; relPath?; expectedMetaRev?; expectedContentHash?; status?; reason?; includeUnregistered?; fresh?; preview? |
-| `project_session` | op: init/checkpoint/handoff; name?; note; nextActions? |
+| `project_doc` | op: get/put/list/link + register/inspect/update_meta/relocate/confirm/unregister/list_external/get_fixed; docId?; title?; kind?; body?; baseRev?; links?; maxBytes?; bindingId?; relPath?; expectedMetaRev?; expectedContentHash?; status?; reason?; includeUnregistered?; fresh?; preview?; fixed?; commitOid?; pathAtCommit? |
+| `project_session` | op: init/checkpoint/handoff/projects/open; name?; note?; nextActions?; projectId?; limit?; after? |
 | `search_project_knowledge` | query; kinds?; limit?; cursor?; relatedLimit?; historyRef?; discovery? |
 | `read_project_knowledge` | refs; mode?; maxBytes?; cursor?; relatedLimit? |
 
-- **双入口一致性**：面向 Agent 的业务能力在 DSH 与 MCP 同步交付，共享 core 守卫和业务契约，禁止只注册一端。已有聚合工具可通过 MCP 独立工具映射；知识工具两侧同名并共用 `lib/shared/knowledge.js` 的业务 schema 与描述。业务参数、来源/覆盖、分页及领域错误语义一致；身份校验与协议错误封装按各自入口执行，不互相授予额外权限。变更需覆盖两侧实际注册、schema 和调用回归。
-- DSH PTC 的 schema 类型渲染只支持结构子集：知识工具适配器把共享 schema 的数值/长度/数量范围机械转换为字段 description，保留字段、必填、枚举与对象结构；范围仍由同一 core 强制，MCP 保留原范围关键字。测试覆盖真实 DSH TypeScript/Python SDK 渲染，不能仅凭注册成功判定模型能看到参数。
+- **双入口一致性**：唯一 `agentTools` 目录同步注册两端，名称、描述、参数 schema、校验、执行、来源/覆盖、分页、模型文本与领域错误相同。所有工具都有共同的可选 context；入口身份与授权差异仅见 §2.6.7。禁止另建独立工具映射或单端业务适配，变更必须通过两侧实际注册、schema 和调用门禁。
+- DSH PTC 的 schema 类型渲染只支持结构子集：知识工具把共享 schema 的数值/长度/数量范围机械转换为字段 description；两端使用完全相同的转换结果，范围由共同 core 强制。测试使用固定的真实 DSH SDK 校验 schema、TypeScript/Python SDK、特殊 JSON 值和原始输出，缺依赖不跳过。
 - 解析 cwd：`exec.agent.session.header.cwd`；无 agent → 抛错。
-- 五个管理工具通过 handle 读取/写入，并调用 `handle.touch(exec.agent.id)` 续租。两个知识工具只经 `resolveWorkspace` 确认项目，不 open writer、不 touch、不自动创建项目或绑定。
+- 管理读取和变更通过 handle，并调用 `handle.touch(exec.agent.id)` 续租；projects/open 和三个元数据视图不 open writer、不 touch。两个知识工具只经 `resolveWorkspace` 确认项目，不 open writer、不 touch、不自动创建项目或绑定。
 - 知识工具传递 DSH `exec.signal`；取消只结束该次请求，等待 worker 退出并释放全局读取名额，不关闭其他请求或禁用后续读取。取消信号是内部执行选项，不进入业务参数或来源引用；缓存可能已产生可重建进度，取消不构成权威写入或完整读取证明。
 - actor：`{kind:'agent', sessionId: exec.agent.id, agentId: exec.agent.id, callId: exec.callId, via:'tool'}`。
 - `project_plan publish` 在无项目时用 cwd 创建。
-- 工具错误：把 `BoardError` 转成 `new Error(JSON.stringify({code,message,details,next}))`。
+- 工具错误：共同封装 `BoardError` 为带品牌的 `{ok:false,code,message,status,details,next}`；两端保留相同领域信息，MCP 不解析任意异常字符串冒充领域错误。未知内部异常不透传。
 - 管理工具 `output.schema` 用宽松 `{type:'object'}`；`output.render` 返回一段短文本；`presentCall` 返回 `{card:'generic', title, kind:'other', rawInput:args}`。知识工具输出完整的有界结果 JSON，禁止再次摘要截掉原文、引用、游标或覆盖情况。
 - 工具描述必须写清：先读后写、expectedRev、submit 不带 done；普通任务可由任意授权 agent verify（含提交者）；审计门需独立 agent 带 audit.report，human 始终可验收。
 
@@ -809,71 +809,36 @@ task/board/brief 的审计门摘要使用 `audit=1`，最近验收使用 `lastAu
 
 #### 2.6.7 可选本机 MCP
 
-`mcp.enabled` 默认关闭。插件配置省略 `mcp` 或 `enabled`、设为 `false`、传入非布尔值均不启动监听。仅配置自身的布尔值 `enabled: true` 启用。`mcp.port` 默认 `33109`，取 1 至 65535 的整数。配置、凭据或绑定失败时记录安全提示，网页和 DSH 工具继续运行。开关随插件配置加载生效，插件卸载关闭监听和读取工作。
+DSH 与 MCP 发布完全相同的七个工具（§2.6.3）：名称、描述、业务参数 schema、校验、执行函数和模型文本渲染都来自唯一的 `agentTools` 注册目录。MCP 只处理传输与凭据，不能自建领域命令、回执或投影。默认结果只有共享 renderer 的文本，不重复附送全量 structuredContent。普通写调用沿用 DSH：每次生成新命令 ID，调用 ID 不是幂等键；不确定结果必须先读卡和对账，不能盲重试创建。
 
-启用时，端点为 `http://127.0.0.1:<port>/mcp`，与网页路由独立。传输层使用无会话的 Streamable HTTP JSON 响应，支持 `2025-11-25`、`2025-06-18` 和 `2025-03-26`。每个请求均校验本机地址、来源以及 `Authorization: Bearer …`。DSH 进程环境中的 `PROJECT_BOARD_MCP_TOKEN` 必须是 32 字节随机密钥的小写十六进制表示。Codex 配置通过环境变量引用相同凭据。该凭据能读取本机项目和任务的下述视图。密钥由启动环境保管。
+`mcp.enabled` 默认关闭，仅自身布尔值 true 启用；端口默认 33109，绑定 IPv4 loopback。每次请求校验本机来源与 Bearer，拒绝跨域。支持 JSON Streamable HTTP 2025-11-25、2025-06-18、2025-03-26。读凭据为环境变量 PROJECT_BOARD_MCP_TOKEN 的 32 字节小写 hex；完整凭据为独立的 PROJECT_BOARD_MCP_WRITE_TOKEN，并须 mcp.write.enabled=true 与非空 projectIds allowlist。配置失败时 MCP 安全关闭，原生工具继续可用。卸载等待在途操作后关闭资源。
 
-| 工具 | 参数 | 返回 |
-|---|---|---|
-| `list_projects` | `limit?`, `after?` | `{projects, nextCursor}`。项目包含 id、名称、阶段和读取水位。不可读项目明确标记 `available:false` 并附安全错误。 |
-| `list_tasks` | `projectId`, `state?`, `limit?`, `after?` | `{projectId, projectRev, tasks, nextCursor}`。卡片包含 id、标题、状态、任务版本和优先级。 |
-| `get_task` | `projectId`, `taskId` | `{projectId, projectRev, task}`。详情额外包含描述、验收项及证据计数。 |
-| `get_work_context` | `projectId`, `taskId?` | 从同一只读水位获取开工上下文。指定任务时返回任务详情，未指定时给出待确认的任务候选。 |
+##### 2.6.7.1 共同接口与身份上下文
 
-列表默认 30 条，上限 100，按 ID 排序。`nextCursor` 为下一页的 `after`，空值表示结束。每次读取独立取已验证水位。任务长字段和验收项数量有上限，`truncated` 标记裁剪。MCP 任务视图不公开 fencing token、运行时租约、工作区路径或证据正文。
+七个 schema 都带同一个可选 `context` 字段；它只选定项目和已授权逻辑工作会话，不是角色、actor、cwd 或绕过授权的参数。
 
-明确指定任务、续做已知项目或交付已有任务时，先使用 `get_work_context`。项目 ID 须由可信上下文提供或经 `list_projects` 确认。工具不按本地路径、标题或名称猜测归属。返回 `{projectId, projectRev, project:{name,phase}, task, candidates, candidateCount, nextAction, stageWork}`，阶段提示与 brief 同义。
+- `project_session op=projects` 支持 limit/after，读取项目元数据；`op=open projectId` 返回私密 context、projectId、scope 和 expiresAt，不打开 writer。原生 DSH 的 open 可省略 projectId，默认已绑定工作区。
+- DSH 普通调用省略 context 时继续使用宿主 owning agent/cwd。提供 context 时必须属于同一 owning agent；不能借 MCP 或其他 agent 的 context 更换审计身份。
+- MCP 普通调用必须带 context。每次 open 无既有 context 时创建独立逻辑 agent；携带已有 context 切换项目保留该逻辑 agent。连接/传输会话不能作为 agent 身份，多 agent 共用连接也不混用状态。
+- context 有效期 24 小时、进程内有效、最多 2048 个未过期句柄；每次调用重查当前入口权限与项目 allowlist。过期或重启后先读卡，对账未完成意图，再恢复工作。读取凭据不能使用完整凭据的 context。
+- 管理工具首次使用该逻辑 agent/project 时建立一次 worker binding，并发首次调用合并；之后沿用 DSH touch/租约机制。驳回、解阻符合条件时自动接回执行。知识检索及元数据投影不打开 writer、不 touch。
+- 初始化新工作区仍需要可信宿主 cwd；MCP open 仅选择已登记项目。human-only 操作沿用同一个 core 拒绝与人工兜底，不开放角色伪装。
+- 原生显式跨项目调用不改变 owning cwd 的系统提示与默认目标，退出时释放所有已接触项目。MCP 完整凭据实例关闭时先拒绝新调用、等待在途请求，再 detach 本实例的工作者、释放租约并废止 context；不影响其他入口或凭据实例，不能自动把返工交给已关闭身份。
 
-- 指定 `taskId` 时返回 `get_task` 的任务详情，加上 `requiresAudit` 和 `blocker`。阻塞信息来自当前任务记录，返回 `{code,note,truncated}` 或 `null`，code 上限 128、note 上限 400 个 UTF-16 代码单元。任务不存在返回 `not-found`。候选为空。
-- 只指定项目时 `task:null`。候选是最多 5 个未结任务的摘要，先按 interrupted、in_progress、review、blocked、ready、backlog 排序，同状态按最近更新、再按 ID 排序。即使只有一张候选也须确认它与用户请求一致。`candidateCount` 是全部未结任务数。
-- 项目查询的 `nextAction` 为 `select_task` 或 `no_open_task`。按 backlog、ready、in_progress、review、blocked、interrupted、done、canceled 的顺序，任务查询分别返回 `check_dependencies`、`check_claim`、`check_work_session`、`check_review`、`inspect_blocker`、`reconcile`、`read_outcome`、`read_outcome`。这些值只按已记录的任务状态给出提示。操作资格由写入口按项目、会话、租约和审计守卫重新判定。
+##### 2.6.7.2 权限、错误与迁移
 
-同进程 writer 已打开时，从它已发布的状态取视图。其他情况下在锁外验证并投影可观测的日志前缀。其他进程正在写入时，锁外读取无法确认日志是否已完成同步，读取水位只供展示。读取不会创建项目、获取 writer、修尾、恢复任务或续租。视图中的 `in_progress` 来自日志状态，活跃租约由运行时另行判断。
+读取凭据保留原元数据权限：projects/open，以及 project_board 的 tasks、task_overview、work_context；不能读取证据正文、文件路径或租约令牌。完整凭据可在 allowlist 内调用全部七工具。不同权限使用同一目录，操作准入发生在业务执行和 writer/touch 之前；readOnlyHint 不是鉴权。原生与 MCP 在同一授权业务上下文下返回相同领域错误 `{ok:false,code,message,status,details,next}`。未知内部异常不透传任意异常信息。
 
-##### 2.6.7.1 写凭据与工作会话
+旧 MCP 原子工具不再注册或执行。迁移映射：list_projects → project_session projects；open_work_session → project_session open；list_tasks/get_task/get_work_context → project_board tasks/task_overview/work_context；*_task → project_task op=*；manage_plan → project_plan；manage_document → project_doc；checkpoint/handoff_work_session → project_session checkpoint/handoff；get_project_view 的文档扩展操作 → project_doc，其余 → project_board。知识工具名称保留，移除 projectId/sessionToken，改用共同 context。旧 requestId 幂等语义不延续；客户端刷新 tools/list、重开 context，并在重试任何变更前核对已提交状态。此切换不迁移、删除或改写项目数据与事件历史。
 
-- 写入需同时启用 MCP 和 `mcp.write.enabled: true`，并设置 `mcp.write.projectIds` 为非空项目 ID 数组。另在启动环境提供独立的 `PROJECT_BOARD_MCP_WRITE_TOKEN`，同为 32 字节随机密钥的小写十六进制表示。缺失、格式错误或与读凭据相同均只关闭写入。每个凭据只发现和调用本类工具。网页与 DSH 工具沿用各自的授权。
-- 写操作始终使用显式 `projectId`。项目授权、参数白名单、工作会话及其项目范围均在打开 writer 前校验。有效写请求打开冷项目时，沿用现有的 writer 恢复流程。工作区绑定继续负责目录发现和文件证据边界。
-- `open_work_session({projectId})` 签发该项目的 `{sessionToken, expiresAt}`。每个 Agent 工作会话分别申请并保留自己的 token，同一工作会话处理任务和审查时复用它。它是会话凭据，24 小时内可重连，插件重新加载或 DSH 重启时失效。签发不打开项目或写入日志。首次成功领取或对账恢复将 `session/bound` 与任务事件写在同一 commit。服务端根据签发的工作会话生成 `actor`，归因为 `kind:agent`、`via:mcp` 及该会话独有的 `codex:mcp:<id>`。既有 `codex:mcp` 归因随历史保留。请求不可提供 actor、session ID 或角色。
-- 禁用写开关、从授权清单移除项目或轮换写凭据后重新加载插件，既有工作会话失效。已经提交的记录保留，现有租约由 core 到期或重启恢复流程收口。归因粒度为共享此写凭据的 Codex 集成及其服务端工作会话。
+##### 2.6.7.3 有界摘要与精读
 
-##### 2.6.7.2 任务写操作
+project_board view=task 和任务写回执渲染使用同一有界文本摘要；附 source 水位、摘要覆盖标记与精读入口。view=task_detail 接收 taskId、section 或 1–3 个唯一 sections（description/acceptance/evidence/audit/timeline/operations/documents/intent），多个部分共用一个响应预算；可以直接读已知目标，无须强制先取摘要。evidence 可按 evidenceId、acceptanceId、kind、includeSuperseded 过滤，默认包含历史证据。timeline 明确只覆盖最近 30 条任务事件。
 
-下列工具均接受 `projectId`、`sessionToken` 和 `requestId`，可选 `projectRev` 用于项目 CAS。已有任务的操作还需要 `taskId` 和当前任务 `rev`（参数 `expectedRev`）。每次新操作给一个新的 `requestId`（1 至 128 个字母、数字、点、下划线或连字符）。`begin_task`、`submit_task`、`release_task`、`interrupt_task`、`renew_task` 和 `block_task` 要求领取返回的 `fencingToken`。
+精读按 UTF-8 字节 offset/maxBytes 分页，默认 8192、上限 24576，最小 4；不拆 UTF-8 字符。返回 source（项目/任务修订）、scope（过滤范围）、coverage（总字节、实际返回、nextOffset、truncated）。续读携带 atRev，任务变动返回 stale-revision，不能拼接不同任务版本。空匹配明确总字节与过滤范围，不伪装为读完全部证据。摘要之后的第二次读取不得隐式扩展计划全文、全部 evidence 或 audit；调用者明确选择 section。完整历史可用知识读取入口。
 
-| 工具 | 额外参数 | 结果 |
-|---|---|---|
-| `create_task` | `title`, `acceptance`, `description?`, `priority?`, `weight?`, `deps?`, `labels?`, `requiresAudit?` | 创建独立任务并返回系统生成的 `taskId`。依赖就绪时进入 `ready`，否则进入 `backlog`。 |
-| `update_task` | `title?`, `acceptance?`, `description?`, `priority?`, `weight?`, `deps?`, `labels?`, `requiresAudit?`, `reason?` | 编辑元数据。状态、依赖、租约归属和审计门沿用 `task.update` 的 agent 校验。 |
-| `ready_task` | — | 验收项齐全且依赖完成时将 `backlog` 置为 `ready`。 |
-| `claim_task` | — | 领取既有可领任务，返回 `lease: {fencingToken, expiresAt}`。 |
-| `begin_task` | `summary`, `plannedSteps?`, `expectedArtifacts?` | 执行前写入 open intent。 |
-| `submit_task` | `evidence`, `note?` | 沿用 core 证据校验，成功进入 `review`。 |
-| `verify_task` | `audit?`, `note?`, `reason?` | 普通任务允许任意授权 Agent（含提交者）在 `review` 记录通过；审计门要求独立 Agent 并提供 `audit`。成功后进入 `done`。 |
-| `reject_task` | `reason`, `audit?`, `fencingToken?`, `intent?` | 驳回 `review`，沿用 core 的租约、意图和返工规则。持有活动租约时须携带该租约的 token。 |
-| `release_task` | `note?`, `intent?` | 放回 `ready`。有 open intent 时传 `intent: {outcome:"stopped", sideEffects, note?}`。 |
-| `interrupt_task` | `note`, `sideEffects?` | 执行结果未知时进入 `interrupted`。 |
-| `gate_task` | `requiresAudit: true` | 按 Agent 规则启用审计门。 |
-| `renew_task` | — | 续租并返回当前会话的 `lease`。同一租约的同一进度周期内，原样重试复用已成功的续租。续租不写日志。 |
-| `block_task` | `code?`, `note?`, `intent?` | 租约持有者登记阻塞。有未结意图时须声明已停止和已观察到的副作用。 |
-| `unblock_task` | `note?` | 解除阻塞。MCP 会话按既有规则重新领取可领任务。 |
-| `reconcile_task` | `choice`（`resume`、`completed`、`discard`）、`note`, `evidence?`, `fencingToken?` | 对账进入执行、审查或就绪。恢复逾期且未结的意图需要原租约令牌。选择 `resume` 时返回该次提交授予调用会话的 `lease`。 |
-| `cancel_task` | `reason?`, `intent?`, `fencingToken?` | 按 Agent 规则取消普通任务。有活动租约时须由持有者提供 token。 |
+固定 Git 读取两端共同执行绑定内安全边界。已有原生视图的默认值和领域行为由共同 handler 决定，不能在 MCP 再施加不同参数上限、裁剪、错误映射或额外幂等。
 
-MCP 审查沿用 §1.2 的 `audit={report,checklist?:[{item,ok,note?}]}`、验收项和证据漂移校验。审计门的独立性按会话和既有 worker 记录判断，无法识别由同一操作者另开的会话。Agent 的验收和审计报告均为自述。人类可验收所有任务。漂移时可驳回返工或交给人类处理。MCP 不接受漂移刷新、豁免或清除委派参数。
-
-成功返回 `{projectId, taskId, projectRev, taskRev, state, deduped}`，版本和状态是响应时可见的已提交状态。提交和验收回执可包含仅带错误码和严重程度的证据警告。原样重试同一工作会话、工具和参数会去重。创建重试返回原任务 ID。主动续租的去重范围是同一进程、租约和进度周期。改动参数会产生新命令并重新校验版本与租约。领取重试只有在原授予的租约仍可用时才返回其 token，其他情况返回 `lease:null`。收到 `lease:null`、`stale-revision` 或 `fencing-stale` 时先重新读卡。出现 `log-write-uncertain` 或工作会话失效时，先核对日志和实际副作用再继续。租约沿用项目 TTL 与宽限期，超期或重启后按 §1.2 回收。驳回、解阻或重开可以产生待重新领取的任务，系统不向 MCP 会话隐式发放新租约。MCP 工具错误仅返回稳定错误码和安全提示。
-
-##### 2.6.7.3 计划、文档、会话与完整视图
-
-以下工具使用写连接的项目授权和工作会话。每次变更提供 `projectId`、`sessionToken`、`requestId`，可选 `projectRev`。原样重试已提交的变更时返回当前已提交版本及 `deduped:true`。
-
-- `manage_plan` 支持 `create`、`publish`、`revise`、`rename`、`archive`、`unarchive`、`adopt`、`release`。发布已有草稿时传 `planId` 和 `expectedRev`，按保存的草稿发布。创建并发布时传标题及阶段定义。修改计划和成员沿用原生工具的计划头版本和 `baseVersion` 规则。返回 `{projectId,projectRev,planId,planRev,version,status,deduped}`。
-- `manage_document` 支持外置文档 `register`、`update_meta`、`relocate`、`confirm`、`unregister`，以及沿用现有项目策略的内嵌档案 `put`、`link`。外置文档沿用绑定、路径和 `expectedMetaRev` 校验。返回 `{projectId,projectRev,docId,docRev,deduped}`。
-- `checkpoint_work_session` 和 `handoff_work_session` 接受 `note` 与可选 `nextActions`，记录当前会话说明。返回 `{projectId,projectRev,deduped}`。
-- `get_project_view` 接受 `projectId`、`sessionToken` 和 `view`。支持 `brief`、`board`、`task`（`taskId`）、`plans`、`plan`（`planId?`）、`docs`（`query?`）、`doc`（`docId`、`maxBytes?`）、`list_external`（`includeUnregistered?`）、`inspect`（`docId`、`preview?`）、`get_fixed`（`docId` 和 `fixed` 或 `commitOid` 与 `pathAtCommit`、`bindingId?`）、`events`（`limit?`、`after?`）和 `health`。返回 `{projectId,projectRev,view,...}`。视图通过受限 worker 读取且不获取 writer。有同进程 writer 时使用已发布状态及其运行时租约，冷读时实时租约资格标记为不可用。诊断返回代码和计数，视图不返回租约令牌或绑定根目录。固定 Git 读取仅在绑定内的仓库中进行。文档正文与预览最多 24 KiB，截断时有 `truncated` 标记。超出输出上限时返回 `result-too-large`，可改用单实体或分页视图。
-
-工作区初始化依赖 DSH 已验证的工作区上下文。计划焦点、人工重开、漂移豁免和人工验收沿用原生授权入口。
 
 #### 浏览器表面
 
@@ -926,7 +891,7 @@ window.__ModuleLoader__.load({
 
 知识读取是独立派生读模型，来源限定任务板已保留的任务、计划、事件、登记文档、证据、审查和已有关系。外置正文通过登记/证据引用进入；不扫描工作区、不执行证据命令、不抓取任意 URL、不另存外置正文副本。仅对实际保留且仍可读取的材料重建，未记录/未保留的历史不补造；手动重置基线不在本版范围。
 
-DSH 原生工具与 MCP 项目授权通道均提供 `search_project_knowledge` 与 `read_project_knowledge`。DSH 从受信 agent 会话 cwd 按既有项目身份规则解析项目，不接受调用参数指定项目或路径；MCP 另需 `projectId/sessionToken`，沿用工作会话和项目范围授权，概览 read token 不获得正文权限。两侧均不要求任务租约或写入 intent，MCP 两工具 `readOnlyHint=true`；核心无权威写入，独立缓存可写且可失效。原生注册不依赖 MCP 开关，卸载时关闭其读取器；两侧共用宿主知识 worker 并发上限。
+DSH 原生工具与 MCP 项目授权通道均提供 `search_project_knowledge` 与 `read_project_knowledge`。两端使用共同 context 选择授权项目；DSH 省略时从受信 owning agent 的 cwd 解析，不接受任意路径或角色覆盖。MCP 必须带由完整凭据 open 得到的 context，概览凭据不获得正文权限。两侧均不要求任务租约或写入 intent，MCP 两工具 `readOnlyHint=true`；核心无权威写入，独立缓存可写且可失效。原生注册不依赖 MCP 开关，卸载时关闭其读取器；两侧共用宿主知识 worker 并发上限。
 
 - search 业务参数：`query`；可选 `kinds[]/limit/cursor/relatedLimit/historyRef`。带修订或内容版本的任务、计划和文档记录按实体折叠，重复出现的证据或审查按记录身份折叠。活动事件独立保留。每组展示最新匹配来源，按组内最佳相关性排序。可用该组的 `ref` 作为 `historyRef`，带相同查询和类型条件列出匹配的历史来源。原有引用仍可直接回读。扫描降级在当前窗口内折叠。可选 `discovery:{parents[],reason}` 仅说明调用 Agent 的扩展搜索线索，标为 caller-suggested，不落项目关系。`related` 附带明确记录关系，`via.fromHit` 为本页 `hits` 的零基下标。历史相邻事件在 read 的 context 模式中展开。Agent 可以自由提出新关键词、跨概念继续搜索，不设置累计联想轮数、总跳数或搜索方向门禁。
 - 优先执行完整词项查询。已索引范围或扫描窗口零命中时，才尝试有界词组放宽；`queryMatch` 标明搜索阶段，放宽命中带 `matchedGroups/missingGroups`。显式词组最多 6 个；连续短中文可用相邻双字作为词组。至少匹配两个词组且匹配数超过半数；完整标识符照常作为单组匹配。放宽结果不是语义推断或拼写纠正。

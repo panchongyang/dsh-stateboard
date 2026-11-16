@@ -57,7 +57,7 @@ try {
   const board = tools.get('project_board');
   assert.ok(board.parameters && board.parameters.properties && board.parameters.properties.view, 'project_board.view parameter');
   assert.ok(Array.isArray(board.parameters.required) && board.parameters.required.includes('view'));
-  assert.deepEqual(board.parameters.properties.view.enum, ['brief', 'board', 'task', 'plan', 'plans', 'docs', 'doc', 'events', 'health']);
+  assert.deepEqual(board.parameters.properties.view.enum, ['brief', 'board', 'task', 'plan', 'plans', 'docs', 'doc', 'events', 'health', 'tasks', 'task_overview', 'work_context', 'task_detail']);
   assert.equal(typeof board.execute, 'function');
   assert.equal(typeof board.output.render, 'function');
 

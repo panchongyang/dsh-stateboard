@@ -113,3 +113,20 @@ test('the isolated R3 launcher includes every matrix worker', () => {
   assert.deepEqual(workers.sort(), ['core-boundaries.mjs', 'core-lifecycle.mjs', 'core-matrix.mjs']);
   for (const name of workers) assert.ok(launcher.includes('test/matrix/' + name), name + ' is not launched');
 });
+
+// 责任：等价和真实 SDK 门禁必须执行且阻断发布交接，不能只存在 job 名称。
+test('agent parity and real SDK checks gate default verification and release handoff', () => {
+  const workflow = fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8');
+  assert.equal(pkg.scripts['test:parity'], 'node scripts/run-suite.mjs parity');
+  for (const file of suiteFiles('parity')) assert.ok(suiteFiles('core').includes(file));
+  assert.ok(suiteFiles('parity').length >= 4);
+  const parity = workflow.split('  agent-parity:')[1].split('\n  agent-sdk:')[0];
+  assert.match(parity, /run: npm run test:parity/);
+  const sdk = workflow.split('  agent-sdk:')[1].split('\n  performance:')[0];
+  assert.match(sdk, /npm --prefix tools\/dsh-sdk ci/);
+  assert.match(sdk, /node --test test\/host\/agent-sdk.test.mjs/);
+  assert.doesNotMatch(parity + sdk, /continue-on-error|if:/);
+  const handoff = workflow.split('  release-train-handoff:')[1];
+  const required = handoff.match(/needs:\s*\[([^\]]+)\]/)[1].split(',').map(s => s.trim());
+  for (const job of ['offline', 'performance', 'agent-parity', 'agent-sdk']) assert.ok(required.includes(job), job);
+});

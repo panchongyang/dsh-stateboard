@@ -44,6 +44,7 @@ lib/index.js
 lib/client.js
 lib/shared/contract.js
 lib/shared/events.js
+lib/shared/agent-tools.js
 lib/shared/knowledge.js
 lib/shared/fixed-schema.js
 lib/shared/verification.js
@@ -113,6 +114,7 @@ lib/host/tools/*.js
 lib/host/lifecycle.js
 lib/host/prompt.js
 lib/host/auth.js
+lib/host/agent-context.js
 lib/host/mcp.js
 lib/host/mcp-http.js
 lib/host/mcp-tools.js

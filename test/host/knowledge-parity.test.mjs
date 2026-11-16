@@ -44,12 +44,7 @@ function structuralSchema(value) {
 
 // 责任：真实 PTC 渲染必须保留参数类型；注册成功不能代替模型可见的 SDK 检查。
 test('DSH PTC TypeScript and Python SDKs expose knowledge arguments and their limits', async t => {
-  let ptc;
-  try { ptc = await import('@deepseek-ai/dsh-tool-executor-ptc'); }
-  catch (error) {
-    if (error.code === 'ERR_MODULE_NOT_FOUND' && error.message.includes('@deepseek-ai/dsh-tool-executor-ptc')) return t.skip('optional DSH PTC executor is not installed');
-    throw error;
-  }
+  const ptc = await import('@deepseek-ai/dsh-tool-executor-ptc');
   const f = await knowledgeFixture(t);
   const native = host(t, f.stateDir);
   const schemas = [SEARCH, READ].map(name => {
@@ -79,17 +74,12 @@ test('native and MCP expose the same business schemas and exchange history refer
   await f.h.command(cmd('task.update', { taskId, expected: { entityRev: 1 }, description: '新记录，部署验证，未主动重启。' }));
   const native = host(t, f.stateDir);
   const mcp = await listener(t, f.svc, { enabled: true, projectIds: [f.projectId] });
-  const { sessionToken } = await success(mcp, 'open_work_session', { projectId: f.projectId });
-  const scope = { projectId: f.projectId, sessionToken };
+  const { context } = await success(mcp, 'project_session', { op: 'open', projectId: f.projectId });
+  const scope = { context };
   const catalog = (await mcp.post(WRITE, 'tools/list', {})).result.tools;
   for (const name of [SEARCH, READ]) {
     const tool = catalog.find(entry => entry.name === name);
-    const schema = structuredClone(tool.inputSchema);
-    delete schema.properties.projectId;
-    delete schema.properties.sessionToken;
-    schema.required = schema.required.filter(key => !['projectId', 'sessionToken'].includes(key));
-    // DSH PTC 不支持范围关键字，允许只把范围转入 description；结构/枚举/必填必须相同。
-    assert.deepEqual(structuralSchema(native.tools.get(name).parameters), structuralSchema(schema));
+    assert.deepEqual(native.tools.get(name).parameters, tool.inputSchema);
     assert.equal(native.tools.get(name).description, tool.description);
   }
   const before = tree(f.h.meta.dir);
@@ -162,8 +152,8 @@ test('native cold reads and identity refusals do not open a writer or alter reta
   const reject = (name, args, who, code) => assert.rejects(call(native, name, args, who), error => error.code === code);
   await reject(SEARCH, { query: 'x' }, {}, 'forbidden-role');
   await reject(SEARCH, { query: 'x' }, execAt(''), 'invalid-command');
-  await reject(SEARCH, { query: 'x', projectId: foreign.projectId }, exec, 'invalid-command');
-  await reject(SEARCH, { query: 'x', sessionToken: 'forged' }, exec, 'invalid-command');
+  await reject(SEARCH, { query: 'x', projectId: foreign.projectId }, exec, 'INVALID_ARGS');
+  await reject(SEARCH, { query: 'x', sessionToken: 'forged' }, exec, 'INVALID_ARGS');
   await reject(SEARCH, { query: 'x', limit: 51 }, exec, 'invalid-command');
   await reject(SEARCH, { query: 'x'.repeat(501) }, exec, 'invalid-command');
   await reject(READ, { refs: Array(9).fill(ownRef) }, exec, 'invalid-command');
@@ -187,8 +177,8 @@ test('native disposal cancels its worker and releases the shared MCP concurrency
   await addTask(f.h, '共享读取名额');
   const native = host(t, f.stateDir);
   const mcp = await listener(t, f.svc, { enabled: true, projectIds: [f.projectId] });
-  const { sessionToken } = await success(mcp, 'open_work_session', { projectId: f.projectId });
-  const scope = { projectId: f.projectId, sessionToken };
+  const { context } = await success(mcp, 'project_session', { op: 'open', projectId: f.projectId });
+  const scope = { context };
   const started = Promise.withResolvers();
   const lookup = ProjectService.prototype.lookupLiveWriter;
   t.mock.method(ProjectService.prototype, 'lookupLiveWriter', function (projectId) {
@@ -219,7 +209,7 @@ test('native search and read honor execution cancellation without closing their 
   assert.deepEqual(tree(f.stateDir), before);
   const ref = (await call(native, SEARCH, { query: '请求取消' }, exec)).hits[0].ref;
   const mcp = await listener(t, f.svc, { enabled: true, projectIds: [f.projectId] });
-  const { sessionToken } = await success(mcp, 'open_work_session', { projectId: f.projectId });
+  const { context } = await success(mcp, 'project_session', { op: 'open', projectId: f.projectId });
   const lookup = ProjectService.prototype.lookupLiveWriter;
   let started;
   t.mock.method(ProjectService.prototype, 'lookupLiveWriter', function (projectId) {
@@ -234,7 +224,7 @@ test('native search and read honor execution cancellation without closing their 
     await started.promise;
     controller.abort(reason);
     await cancelled;
-    const scope = { projectId: f.projectId, sessionToken };
+    const scope = { context };
     assert.ok((await success(mcp, SEARCH, { ...scope, query: '请求取消' })).hits.length > 0);
     assert.ok((await call(native, READ, { refs: [ref] }, exec)).records[0].content);
   }

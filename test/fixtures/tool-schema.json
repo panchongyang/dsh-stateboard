@@ -7,7 +7,6 @@
       "properties": {
         "view": {
           "type": "string",
-          "description": "task = full task + allowedOps; plan = one plan (planId or focus).",
           "enum": [
             "brief",
             "board",
@@ -17,8 +16,94 @@
             "docs",
             "doc",
             "events",
-            "health"
-          ]
+            "health",
+            "tasks",
+            "task_overview",
+            "work_context",
+            "task_detail"
+          ],
+          "description": "task = bounded summary + allowedOps; task_detail = selected section, optionally filtered/paged. plan = one plan (planId or focus). Metadata credentials permit only tasks/task_overview/work_context."
+        },
+        "section": {
+          "type": "string",
+          "enum": [
+            "description",
+            "acceptance",
+            "evidence",
+            "audit",
+            "timeline",
+            "operations",
+            "documents",
+            "intent"
+          ],
+          "description": "task_detail: read only this section; known sections can be requested directly without a summary call."
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "description",
+              "acceptance",
+              "evidence",
+              "audit",
+              "timeline",
+              "operations",
+              "documents",
+              "intent"
+            ]
+          },
+          "description": "task_detail: alternatively select 1–3 unique sections in one bounded response; do not combine with section."
+        },
+        "atRev": {
+          "type": "integer",
+          "description": "task_detail: require this task revision when continuing a page."
+        },
+        "offset": {
+          "type": "integer",
+          "description": "task_detail: UTF-8 byte offset from nextOffset; default 0."
+        },
+        "evidenceId": {
+          "type": "string",
+          "description": "task_detail section=evidence: optional exact evidence ID."
+        },
+        "acceptanceId": {
+          "type": "string",
+          "description": "task_detail section=evidence: optional acceptance ID."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "file",
+            "command",
+            "doc",
+            "url",
+            "note",
+            "test"
+          ],
+          "description": "task_detail section=evidence: optional kind filter."
+        },
+        "includeSuperseded": {
+          "type": "boolean",
+          "description": "task_detail section=evidence: defaults true; false selects only active evidence."
+        },
+        "after": {
+          "type": "string",
+          "description": "tasks: nextCursor from previous page."
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "backlog",
+            "ready",
+            "in_progress",
+            "review",
+            "done",
+            "blocked",
+            "canceled",
+            "interrupted"
+          ],
+          "description": "tasks: optional state filter."
         },
         "taskId": {
           "type": "string",
@@ -47,6 +132,10 @@
         "fresh": {
           "type": "boolean",
           "description": "Reprint a view that would collapse to \"unchanged since <seq>\"."
+        },
+        "context": {
+          "type": "string",
+          "description": "Opaque project context from project_session op=open. Reuse it for this logical agent; keep it private. Native DSH may omit it to use its owning session."
         }
       },
       "required": [
@@ -79,8 +168,8 @@
         },
         "fixed": {
           "type": "object",
-          "description": "Legacy explicit Git byte identity returned by get_fixed; auto doc evidence does not need it.",
           "additionalProperties": false,
+          "description": "Legacy explicit Git byte identity returned by get_fixed; auto doc evidence does not need it.",
           "properties": {
             "v": {
               "type": "integer"
@@ -200,13 +289,13 @@
         },
         "status": {
           "type": "string",
-          "description": "Management state for update_meta.",
           "enum": [
             "draft",
             "in_review",
             "adopted",
             "archived"
-          ]
+          ],
+          "description": "Management state for update_meta."
         },
         "reason": {
           "type": "string"
@@ -222,6 +311,10 @@
         "preview": {
           "type": "boolean",
           "description": "inspect: include the bounded preview text."
+        },
+        "context": {
+          "type": "string",
+          "description": "Opaque project context from project_session op=open. Reuse it for this logical agent; keep it private. Native DSH may omit it to use its owning session."
         }
       },
       "required": [
@@ -267,10 +360,10 @@
         },
         "taskIds": {
           "type": "array",
-          "description": "Required for adopt/release.",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Required for adopt/release."
         },
         "title": {
           "type": "string",
@@ -385,6 +478,10 @@
               "tasks"
             ]
           }
+        },
+        "context": {
+          "type": "string",
+          "description": "Opaque project context from project_session op=open. Reuse it for this logical agent; keep it private. Native DSH may omit it to use its owning session."
         }
       },
       "required": [
@@ -403,8 +500,22 @@
           "enum": [
             "init",
             "checkpoint",
-            "handoff"
+            "handoff",
+            "projects",
+            "open"
           ]
+        },
+        "projectId": {
+          "type": "string",
+          "description": "open: confirmed project ID. Native DSH defaults to its bound workspace."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "projects: page size, default 30, maximum 100."
+        },
+        "after": {
+          "type": "string",
+          "description": "projects: previous nextCursor."
         },
         "name": {
           "type": "string",
@@ -419,6 +530,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "context": {
+          "type": "string",
+          "description": "Opaque project context from project_session op=open. Reuse it for this logical agent; keep it private. Native DSH may omit it to use its owning session."
         }
       },
       "required": [
@@ -470,8 +585,8 @@
         },
         "intent": {
           "type": "object",
-          "description": "Settles an open intent; outcome=stopped requires sideEffects (observed, not verified).",
           "additionalProperties": false,
+          "description": "Settles an open intent; outcome=stopped requires sideEffects (observed, not verified).",
           "properties": {
             "outcome": {
               "type": "string",
@@ -521,7 +636,6 @@
         },
         "sideEffects": {
           "type": "array",
-          "description": "For op=interrupt: side effects already observed.",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -549,7 +663,8 @@
               "kind",
               "ref"
             ]
-          }
+          },
+          "description": "For op=interrupt: side effects already observed."
         },
         "title": {
           "type": "string"
@@ -610,8 +725,8 @@
         },
         "audit": {
           "type": "object",
-          "description": "Self-declared verify/reject report; required only for agent verify on audit-gated tasks. Never executes evidence.",
           "additionalProperties": false,
+          "description": "Self-declared verify/reject report; required only for agent verify on audit-gated tasks. Never executes evidence.",
           "properties": {
             "report": {
               "type": "string",
@@ -727,6 +842,10 @@
               "ref"
             ]
           }
+        },
+        "context": {
+          "type": "string",
+          "description": "Opaque project context from project_session op=open. Reuse it for this logical agent; keep it private. Native DSH may omit it to use its owning session."
         }
       },
       "required": [
@@ -766,6 +885,10 @@
         "maxBytes": {
           "type": "integer",
           "description": "Minimum: 4. Maximum: 24576."
+        },
+        "context": {
+          "type": "string",
+          "description": "Opaque project context from project_session op=open. Reuse it for this logical agent; keep it private. Native DSH may omit it to use its owning session."
         }
       },
       "required": [
@@ -837,6 +960,10 @@
             "reason"
           ],
           "additionalProperties": false
+        },
+        "context": {
+          "type": "string",
+          "description": "Opaque project context from project_session op=open. Reuse it for this logical agent; keep it private. Native DSH may omit it to use its owning session."
         }
       },
       "required": [

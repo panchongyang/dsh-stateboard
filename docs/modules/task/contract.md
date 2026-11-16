@@ -65,7 +65,7 @@ assertLease 校验执行 session 与 fencingToken；human 特例必须按具体�
 leaseOf 对“到期仍可续”与“应回收”分开判断，不能仅比较 expiresAt 与当前时间。
 时钟运算通过注入 clock；touch/renew 共用无进展期限，二者都不算真实进展。
 显式 renew 消耗续租次数，touch 不按每次读取消费次数。
-renew 无事件、不推进 rev；MCP 同 cmdId 仅在当前 lease 内运行时去重。
+renew 无事件、不推进 rev；两端每次调用均计入续租额度。
 
 回收与业务在同一工作投影、同一 commit；业务被拒连回收一起丢弃。
 原持有者对可回收 open intent 的恢复例外仅适用 interrupt/reconcile。
