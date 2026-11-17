@@ -1,12 +1,14 @@
 # 并发推进分期、依赖及 R3 门禁
 
+> 状态：已替代（现行语义见[实现契约](<../CONTRACT.md>)；正文保留方案或决策时的语境）。
+
 ## 当前授权与交付状态
 
 配套计划：多会话并发推进：计划任务解耦、worktree 隔离与串行集成（内部草稿，未发布）。计划保持 draft，任务仅为草稿定义，不物化成 ready/backlog 任务，不领取、不 begin、不实施。本次不操作源码、Git、worktree、测试实例、配置或服务。
 
 本文是未来实施与验收方案，所有验证项均待实施，不能把此清单或先前测试结果当作本功能已验收。用户后续明确批准发布/开工前，不进行下一阶段。
 
-设计依据：[《设计草案：多会话并发推进与计划—任务一致性》](../design/multi-session-concurrency.md)、[《设计草案：任务 worktree、Git 隔离与串行集成》](../design/worktree-isolation-serial-integration.md)。
+设计依据：[《设计草案：多会话并发推进与计划—任务一致性》](<../design/multi-session-concurrency.md>)、[《设计草案：任务 worktree、Git 隔离与串行集成》](<../design/worktree-isolation-serial-integration.md>)。
 
 ## 1. 阶段、任务与真实依赖
 
@@ -44,7 +46,7 @@ D1 冻结后，C1→S1 与 W1→W2→E1 两条开发道可并行；S2 等两道�
 
 ## 3. 测试风险与受保护基线
 
-本次规划属于 R0，不运行运行时测试或运维命令。后续能力涉及租约、状态机、宿主执行、持久化和证据，整体按 R3；沿用[分级测试与基线保护规范](../TESTING-POLICY.md)的基线保护与晋级规则。
+本次规划属于 R0，不运行运行时测试或运维命令。后续能力涉及租约、状态机、宿主执行、持久化和证据，整体按 R3；沿用[分级测试与基线保护规范](<../governance/TESTING-POLICY.md>)的基线保护与晋级规则。
 
 开工时登记：风险/理由、真实基线 commit、候选分支与 worktree、独立测试进程、HOME、agents、workspace、board 与认证、合成 fixture、验证命令、回退和 delegation。不得在稳定分支、日常 DSH 或真实数据上直接修改/试测；真实数据副本需用户单独授权。
 

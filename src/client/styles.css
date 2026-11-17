@@ -874,6 +874,9 @@ body[data-ds-dark-theme] .pb-root,
 .pb-md { display: flex; flex-direction: column; gap: 18px; font-size: 16px; line-height: 1.9; word-break: break-word; }
 .pb-md__h { margin: 20px 0 0; font-size: 20px; font-weight: 660; line-height: 1.45; letter-spacing: .01em; }
 .pb-md__p { margin: 0; white-space: pre-wrap; }
+.pb-md__figure { margin: 0; max-width: 100%; }
+.pb-md__img { display: block; max-width: 100%; height: auto; }
+.pb-md__figure figcaption { margin-top: 6px; color: var(--pb-text-2); font-size: var(--pb-fs-sm); }
 .pb-md__list { margin: 0; padding-left: 22px; }
 .pb-md__pre {
   margin: 0;

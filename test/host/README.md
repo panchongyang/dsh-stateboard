@@ -10,6 +10,7 @@
 | [host-preflight.mjs](host-preflight.mjs) | 保证插件在宿主冷启动时完整注册工具，并等待 webServer 后补挂路由和 token。 | `test:host` |
 | [host-tools.test.mjs](host-tools.test.mjs) | 验证宿主工具从计划发布到任务交付、历史文档读取和会话事件的集成接线。 | `test:host` |
 | [identity-host.test.mjs](identity-host.test.mjs) | 保证宿主会话在主 checkout 和 linked worktree 共用项目且证据根不漂移。 | `test:host` |
+| [knowledge-parity.test.mjs](knowledge-parity.test.mjs) | 验证 DSH/MCP 知识工具的注册、PTC 参数展示、引用互读、完整原文、权限拒绝和取消/关闭生命周期。 | `test:host` |
 | [routes.test.mjs](routes.test.mjs) | 验证项目 HTTP API 的成功主流程、鉴权、输入校验与错误状态映射。 | `test:host` |
 
 ## 不覆盖

@@ -1,5 +1,7 @@
 # 方案：驳回/重做保委派人 · 接手交接审计 · 前置依赖可见
 
+> 状态：已替代（现行语义见[实现契约](<../CONTRACT.md>)；正文保留方案或决策时的语境）。
+
 > 起因（2026-10-22）：三条用户体验问题——① 驳回/重做直接回「就绪」，委派人丢了；② 任务缺少接手/交接审计；③ 未就绪任务看不出在等哪个前置。
 > 做法：只读代码 + 一个内部探针（当时用于核对，未随仓库分发），没有改任何产品代码。落板 7 个任务（T1-T7），依赖链在文末。
 
@@ -102,7 +104,7 @@ grantedPayload: ["taskId","sessionId","agentId","epoch","token","acquiredAt","ex
 - 读模型：`taskView` 增 `assignee` 与 `ownership`（倒序、上限 50）；`allowedOps` 增 `handoff`。
 - 新命令 `task.handoff`：human 或租约持有者；`to.sessionId` + `reason` 必填；目标必须已绑定且未 detach；效果 = 撤销旧租约 + 授给目标 + 保持 in_progress + 一条 `cause='handoff'` 记录。这是「交接」第一次成为一等动作。
 - `release` 的 note、`reject` 的 reason、`block` 的 note 一律进 assignment（并保留原有 task 字段）。
-- 与既有规划的关系：[历史、审计、回滚的分层](../decisions/history-audit-rollback-layering.md)决定的「审计 / 历史(A) / 回滚(B)」；本项属于**写侧事实 + 任务级归属链**，A（历史读模型）的 entity 索引以后直接消费 `task/assignment`，不重做一套。
+- 与既有规划的关系：[历史、审计、回滚的分层](<../decisions/history-audit-rollback-layering.md>)决定的「审计 / 历史(A) / 回滚(B)」；本项属于**写侧事实 + 任务级归属链**，A（历史读模型）的 entity 索引以后直接消费 `task/assignment`，不重做一套。
 
 ### C. 未就绪任务的前置可见性（T3）
 

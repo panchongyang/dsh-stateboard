@@ -13,6 +13,7 @@ import { targetErrorView } from '../model/external-payloads.ts';
 import { Button, ErrorState, IconButton, LoadingState } from '../components/primitives.tsx';
 import { IconArrowLeft, IconRefresh } from '../components/icons.tsx';
 import { Markdown } from '../components/content.tsx';
+import { useDocImages } from '../hooks/use-doc-images.ts';
 import { useExternalInspect, useExternalWrite } from '../hooks/use-external-docs.ts';
 import { ConfirmForm, MetaForm, RelocateForm, UnregisterForm } from './external-forms.tsx';
 
@@ -42,6 +43,7 @@ export interface LinksProps {
   onOpenTask?: (id: string) => void;
 }
 export interface PreviewBlockProps {
+  projectId: string;
   view: View.DocView;
   record: View.Doc;
 }
@@ -181,6 +183,7 @@ function PreviewBlock(props: PreviewBlockProps) {
   const markdown = preview.kind === 'text' && isMarkdownPath(props.record.locator && props.record.locator.relPath);
   const [raw, setRaw] = useState(false);
   const showRaw = raw || preview.truncated;
+  const imageUrl = useDocImages(props.projectId, props.record.id!, markdown && !showRaw && preview.kind === 'text' ? preview.text || '' : '');
   if (preview.kind !== 'text') {
     return <section className="pb-ext-body" aria-label="正文">
       <div className="pb-ext-nopreview" role="status">{preview.notice}</div>
@@ -194,7 +197,7 @@ function PreviewBlock(props: PreviewBlockProps) {
     {showRaw
       ? <pre className="pb-ext-preview pb-mono" tabIndex={0}>{preview.text}</pre>
       : <div className="pb-ext-preview pb-ext-preview--md">
-        <Markdown body={preview.text} empty="（空文件）" scope="ext" />
+        <Markdown imageUrl={imageUrl} body={preview.text} empty="（空文件）" scope="ext" />
       </div>}
     <p className="pb-hint pb-ext-body__foot">
       {preview.truncated
@@ -300,7 +303,7 @@ export function ExternalDocPanel(props: ExternalDocPanelProps) {
     </div> : null}
     {form && activeMode!.origin !== 'tech' ? form : null}
     <Links record={record} tasks={props.tasks} onOpenTask={props.onOpenTask} />
-    {view ? <PreviewBlock view={view} record={record} /> : null}
+    {view ? <PreviewBlock projectId={props.projectId} view={view} record={record} /> : null}
     <TechDetails {...Object.assign({ form: form && activeMode!.origin === 'tech' ? form : null }, shared)} />
   </section>;
 }

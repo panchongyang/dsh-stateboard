@@ -1,12 +1,14 @@
 # 多会话并发推进与计划—任务一致性
 
+> 状态：待实施（本篇为方案/规格，不构成能力已交付声明）。
+
 ## 状态与授权边界
 
 配套草稿计划：多会话并发推进：计划任务解耦、worktree 隔离与串行集成（内部草稿，未发布）。
 
 本文是待实施的目标设计，不表示下述能力已经实现。计划保持 draft，不发布、不生成可领取任务。当前授权仅限整理计划与文档；不领取任务、不写实现、不操作 Git/worktree、不更改并发配额或运行环境。发布及实施须有用户后续明确授权。
 
-配套文档为[《设计草案：任务 worktree、Git 隔离与串行集成》](./worktree-isolation-serial-integration.md)和[《实施与验收草案：并发推进分期、依赖及 R3 门禁》](../specs/concurrency-phases-acceptance.md)。
+配套文档为[《设计草案：任务 worktree、Git 隔离与串行集成》](<worktree-isolation-serial-integration.md>)和[《实施与验收草案：并发推进分期、依赖及 R3 门禁》](<../specs/concurrency-phases-acceptance.md>)。
 
 ## 1. 已确认的实现基础
 
@@ -65,10 +67,10 @@
 
 ## 6. 相关既有项目资料
 
-- [计划能力 v2](../decisions/plan-capability-v2.md)：计划多实例、唯一任务工作单元及计划/阶段/任务分工的决策资料；实现事实以冻结候选源码为准。
-- [cwd 映射决策](../decisions/cwd-project-mapping.md)：会话快捷入口的 cwd 映射边界；客户端祖先匹配不等于宿主身份绑定。
-- [RFC-4 addendum：preflight](../decisions/rfc-4-addendum-preflight.md)：执行前校验、execution 凭证及 evidence supersede 资料。
-- [分级测试与基线保护规范](../TESTING-POLICY.md)：R0–R3 测试与受保护基线规范；后续实现按 R3 执行。
+- [计划能力 v2](<../decisions/plan-capability-v2.md>)：计划多实例、唯一任务工作单元及计划/阶段/任务分工的决策资料；实现事实以冻结候选源码为准。
+- [cwd 映射决策](<../decisions/cwd-project-mapping.md>)：会话快捷入口的 cwd 映射边界；客户端祖先匹配不等于宿主身份绑定。
+- [RFC-4 addendum：preflight](<../decisions/rfc-4-addendum-preflight.md>)：执行前校验、execution 凭证及 evidence supersede 资料。
+- [分级测试与基线保护规范](<../governance/TESTING-POLICY.md>)：R0–R3 测试与受保护基线规范；后续实现按 R3 执行。
 
 ## 7. 当前交付边界
 

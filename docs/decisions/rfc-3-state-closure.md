@@ -1,5 +1,7 @@
 # RFC-3 状态收口与归档写闸
 
+> 状态：已替代（现行语义见[实现契约](<../CONTRACT.md>)；正文保留方案或决策时的语境）。
+
 - 状态：Proposed（人审前）
 - 日期：2026-10-28
 - 范围：`task.block`/`unblock` 与 open intent；新增 `task.interrupt`；`release`/`cancel`/`reject`/`override` 的 intent 收口；archived 项目的写闸与归档前置；DESIGN T/I 表 diff；错误码；向后兼容；S4 租约活性约束。

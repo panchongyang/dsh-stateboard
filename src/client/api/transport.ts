@@ -130,5 +130,20 @@ export function updateExternalDoc(projectId: string, docId: string, body: Extern
 export function externalDocAction(projectId: string, docId: string, action: string, body: ExternalBody): Promise<unknown> {
   return externalWrite(externalBase(projectId) + '/' + encodeURIComponent(docId) + '/' + action, 'POST', body);
 }
+/** Asset URLs contain no capability; only this transport sends its token header. */
+export function docAssetUrl(projectId: string, docId: string, relPath: string): string {
+  return (cfg()?.base || '') + externalBase(projectId) + '/' + encodeURIComponent(docId) + '/assets?path=' + encodeURIComponent(relPath);
+}
+
+export async function getDocAsset(projectId: string, docId: string, relPath: string, signal: AbortSignal): Promise<Blob> {
+  const config = cfg();
+  if (!config?.token) throw new Error('页面凭据尚未装配');
+  const response = await fetch(docAssetUrl(projectId, docId, relPath), {
+    headers: { 'x-project-board-token': config.token }, cache: 'no-store', signal,
+  });
+  if (!response.ok) throw new Error('图片不可用');
+  return response.blob();
+}
+
 export function getHealth(projectId: string): Promise<HealthResponse> { return api('/projects/' + encodeURIComponent(projectId) + '/health'); }
 export function createProjectApi(body: { name?: string; workspacePath?: string }): Promise<CreateProjectResponse> { return api('/projects', { method: 'POST', body: JSON.stringify(body) }); }

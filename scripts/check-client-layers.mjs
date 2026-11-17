@@ -3,7 +3,7 @@
  * Client-half layering gate.
  *
  * The target layout is pages/components/hooks/model/utils/api (see
- * docs/design/frontend-layering.md). This checker enforces the cross-layer
+ * docs/modules/client/design.md). This checker enforces the cross-layer
  * directions, same-layer cycles, the single fetch boundary and the file-size
  * ceiling. During S3 the flat src/client root and views/ are "legacy": they
  * keep the global rules (fetch/node/lib boundaries, size) but skip the layer

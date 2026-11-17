@@ -1,5 +1,7 @@
 # 容量决策收口
 
+> 状态：已替代（现行语义见[实现契约](<../CONTRACT.md>)；正文保留方案或决策时的语境）。
+
 档案：记录本轮冻结决策与检查，不是新的性能实测或发布许可。
 
 本轮属 R0；候选为历史记录，本机留证、不随仓库分发。只改README、DESIGN及决策档案三份Markdown，未改实现/测试/脚本/package/配置。
@@ -12,7 +14,7 @@
 
 ## 现有材料与补齐
 
-接手时ready、2/2 met、2file旧证据。工具摘要未显示旧ref和历史未提交原因，没有臆造原因。已读既有[基准](../CAPACITY.md)与 [DESIGN 预算](../DESIGN.md)，结论已经存在；本轮补 [README 发布入口](../../README.md)，就地明确 [DESIGN 预算](../DESIGN.md) 的参考/超限动作边界，两处同值且互相引用。新attempt重新提供file证据，不依赖旧met直接验收。
+接手时ready、2/2 met、2file旧证据。工具摘要未显示旧ref和历史未提交原因，没有臆造原因。已读既有[基准](<capacity-100k-boundary.md>)与 [DESIGN 预算](<../DESIGN.md>)，结论已经存在；本轮补 [README 发布入口](<../../README.md>)，就地明确 [DESIGN 预算](<../DESIGN.md>) 的参考/超限动作边界，两处同值且互相引用。新attempt重新提供file证据，不依赖旧met直接验收。
 
 ## 真实检查与独立核对
 

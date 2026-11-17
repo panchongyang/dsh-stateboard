@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="950" viewBox="0 0 1200 950" role="img" aria-label="task-plan-state">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#1A73E8"/></marker></defs>
+<rect width="1200" height="950" fill="white"/>
+<g font-family="Microsoft YaHei, Noto Sans SC, Segoe UI, sans-serif" fill="#202124">
+<text x="32" y="44" font-size="28" font-weight="700">图 8 · 任务与计划：执行权、验收门、版本管理分开</text>
+<text x="32" y="76" font-size="17">主路径画箭头，恢复 / 治理支路列在下方；精确前置条件与错误以 CONTRACT 为准。</text>
+<rect x="32" y="130" width="180" height="85" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="50" y="160" font-size="20" font-weight="700">backlog</text>
+<text x="50" y="188" font-size="17">等待依赖</text>
+<rect x="272" y="130" width="180" height="85" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="290" y="160" font-size="20" font-weight="700">ready</text>
+<text x="290" y="188" font-size="17">满足依赖</text>
+<rect x="512" y="130" width="205" height="85" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="530" y="160" font-size="20" font-weight="700">in_progress</text>
+<text x="530" y="188" font-size="17">持租约执行</text>
+<rect x="777" y="130" width="180" height="85" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="795" y="160" font-size="20" font-weight="700">review</text>
+<text x="795" y="188" font-size="17">材料待验收</text>
+<rect x="1017" y="130" width="151" height="85" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="1035" y="160" font-size="20" font-weight="700">done</text>
+<text x="1035" y="188" font-size="17">验收记录</text>
+<path d="M 212 172 H 272" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="221" y="157" font-size="14">ready</text>
+<path d="M 452 172 H 512" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="459" y="157" font-size="14">claim</text>
+<path d="M 717 172 H 777" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="719" y="157" font-size="14">submit</text>
+<path d="M 957 172 H 1017" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="966" y="157" font-size="14">verify</text>
+<rect x="32" y="290" width="360" height="120" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="50" y="320" font-size="20" font-weight="700">执行门 · lease + fencing + rev</text>
+<text x="50" y="348" font-size="17">claim 分配递增 token；begin 写 intent</text>
+<text x="50" y="373" font-size="17">submit 关 intent；只进入 review</text>
+<text x="50" y="398" font-size="17">过期回收 / 重启：有 intent 才中断</text>
+<rect x="422" y="290" width="356" height="120" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="440" y="320" font-size="20" font-weight="700">审计门 · requiresAudit</text>
+<text x="440" y="348" font-size="17">普通任务：任意授权 agent 可验收</text>
+<text x="440" y="373" font-size="17">审计任务：独立 agent + audit.report</text>
+<text x="440" y="398" font-size="17">human 始终可验收；不是正确性担保</text>
+<rect x="808" y="290" width="360" height="120" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="826" y="320" font-size="20" font-weight="700">治理 · blocked / canceled</text>
+<text x="826" y="348" font-size="17">block → blocked；unblock 三出口见下</text>
+<text x="826" y="373" font-size="17">resumeTo=review → review；其余见下</text>
+<text x="826" y="398" font-size="17">非终态 cancel；审计任务仅 human</text>
+<rect x="32" y="455" width="1136" height="155" rx="12" fill="white" stroke="#5F6368" stroke-width="2"/>
+<text x="50" y="485" font-size="20" font-weight="700">恢复与返工支路</text>
+<text x="50" y="513" font-size="17">in_progress → ready：release 或无 intent 回收；有 intent 的治理结算必须 stopped + sideEffects。</text>
+<text x="50" y="538" font-size="17">interrupt / 有 intent 回收 → interrupted；reconcile：resume → in_progress，completed → review，discard → ready。</text>
+<text x="50" y="563" font-size="17">review reject → in_progress（新租约）或 ready；done / canceled reopen → ready（仅 human）。</text>
+<text x="50" y="588" font-size="17">blocked → unblock：assignee 可恢复且 WIP/绑定允许 → in_progress（重新授租）；resumeTo=review → review；否则 ready。</text>
+<rect x="32" y="680" width="260" height="110" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="50" y="710" font-size="20" font-weight="700">draft · 可写 head</text>
+<text x="50" y="738" font-size="17">草稿不占版本号</text>
+<text x="50" y="763" font-size="17">publish 原子创建任务</text>
+<rect x="422" y="680" width="326" height="110" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="440" y="710" font-size="20" font-weight="700">active · 当前 head</text>
+<text x="440" y="738" font-size="17">publish → version 1</text>
+<text x="440" y="763" font-size="17">revise / adopt / release → v+1</text>
+<rect x="878" y="680" width="290" height="110" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="896" y="710" font-size="20" font-weight="700">archived · 管理状态</text>
+<text x="896" y="738" font-size="17">无 in_progress / live lease</text>
+<text x="896" y="763" font-size="17">禁止 claim；不删除计划</text>
+<path d="M 292 735 H 422" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="329" y="722" font-size="16">publish</text>
+<path d="M 748 735 H 878" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="780" y="722" font-size="16">archive</text>
+<path d="M 1023 790 V 830 H 586 V 790" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="712" y="852" font-size="16">unarchive：此处画 active；草稿归档后回 draft</text>
+<text x="32" y="899" font-size="17">版本表 id@version 不可变；focus 仅 human 改 projectRev，归档焦点计划时清空；进度从任务推导。</text>
+<text x="988" y="928" font-size="14">依据：CONTRACT / DESIGN</text>
+</g>
+</svg>

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="910" viewBox="0 0 1200 910" role="img" aria-label="doc-evidence">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#1A73E8"/></marker></defs>
+<rect width="1200" height="910" fill="white"/>
+<g font-family="Microsoft YaHei, Noto Sans SC, Segoe UI, sans-serif" fill="#202124">
+<text x="32" y="44" font-size="28" font-weight="700">图 7 · 文档与证据：四维状态独立，固定内容不追随正文</text>
+<text x="32" y="76" font-size="17">文件由编辑器维护；ProjectBoard 登记元数据、观测字节、记录提交材料，不代写外置正文。</text>
+<rect x="32" y="120" width="550" height="135" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="50" y="150" font-size="20" font-weight="700">维度 1 · 文件可用性 availability</text>
+<text x="50" y="178" font-size="17">readable / missing / outside_root / 其他不可用</text>
+<text x="50" y="203" font-size="17">读取失败仍保留登记；不能伪造可读或文件存在</text>
+<rect x="618" y="120" width="550" height="135" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="636" y="150" font-size="20" font-weight="700">维度 2 · 基线确认 confirmation</text>
+<text x="636" y="178" font-size="17">unconfirmed / matches_baseline / changed_since_confirm</text>
+<text x="636" y="203" font-size="17">not_comparable：上下文改变或不可比较</text>
+<rect x="32" y="285" width="550" height="135" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="50" y="315" font-size="20" font-weight="700">维度 3 · Git 观测 git.state</text>
+<text x="50" y="343" font-size="17">committed / modified / untracked / ignored</text>
+<text x="50" y="368" font-size="17">not_a_repo / git_unavailable；只读且可选</text>
+<rect x="618" y="285" width="550" height="135" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="636" y="315" font-size="20" font-weight="700">维度 4 · 管理状态 status</text>
+<text x="636" y="343" font-size="17">draft → in_review → adopted；可按规则归档</text>
+<text x="636" y="368" font-size="17">文件变化、读取、confirm 不自动改变管理状态</text>
+<rect x="32" y="495" width="300" height="130" rx="12" fill="#FEF7E0" stroke="#5F6368" stroke-width="2"/>
+<text x="50" y="525" font-size="20" font-weight="700">提交 doc 证据</text>
+<text x="50" y="553" font-size="17">调用方只传 kind + docId</text>
+<text x="50" y="578" font-size="17">服务端自动观测与固定</text>
+<text x="50" y="603" font-size="17">不传 fixed、不额外审批</text>
+<rect x="422" y="495" width="338" height="130" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="440" y="525" font-size="20" font-weight="700">pinned · 已固定</text>
+<text x="440" y="553" font-size="17">已提交且干净、可安全还原</text>
+<text x="440" y="578" font-size="17">Git commit / path / blob / hash</text>
+<text x="440" y="603" font-size="17">同一 commit 写 content-fixed</text>
+<rect x="830" y="495" width="338" height="130" rx="12" fill="#E8F0FE" stroke="#5F6368" stroke-width="2"/>
+<text x="848" y="525" font-size="20" font-weight="700">current-only · 当前文件</text>
+<text x="848" y="553" font-size="17">Git 缺失 / 修改 / filter 等降级</text>
+<text x="848" y="578" font-size="17">保留 fixedReason，不阻塞主流程</text>
+<text x="848" y="603" font-size="17">不冒充已固定版本</text>
+<path d="M 332 536 H 422" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M 332 595 H 377 V 659 H 997 V 625" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="430" y="651" font-size="15">不能安全固定时：自动降级；真实结构 / 来源 / hash 不符仍是硬错误</text>
+<rect x="32" y="720" width="1136" height="135" rx="12" fill="white" stroke="#5F6368" stroke-width="2"/>
+<text x="50" y="750" font-size="20" font-weight="700">图片资源 · 外置文档只读旁路</text>
+<text x="50" y="778" font-size="17">正文独占一行引用 → 按文档目录解析 → binding 根内、白名单、单文件 ≤ 4 MiB。</text>
+<text x="50" y="803" font-size="17">同文档读取鉴权；仅已引用路径；不取 writer、不写事件 / 快照 / 观测缓存；no-store。</text>
+<text x="50" y="828" font-size="17">pinned 证据审固定对象，不追当前正文；图片资源不是 Git 固定证据，也不是任意文件服务器。</text>
+<text x="925" y="888" font-size="14">依据：CONTRACT / EXTERNAL-DOCS</text>
+</g>
+</svg>

@@ -1,0 +1,243 @@
+[
+  {
+    "name": "integer",
+    "accepted": true,
+    "violations": []
+  },
+  {
+    "name": "large integer",
+    "accepted": true,
+    "violations": []
+  },
+  {
+    "name": "fraction",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be an integer"
+    ]
+  },
+  {
+    "name": "negative zero",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be a finite JSON number"
+    ]
+  },
+  {
+    "name": "NaN",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be a finite JSON number"
+    ]
+  },
+  {
+    "name": "infinity",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be a finite JSON number"
+    ]
+  },
+  {
+    "name": "string",
+    "accepted": true,
+    "violations": []
+  },
+  {
+    "name": "boolean",
+    "accepted": true,
+    "violations": []
+  },
+  {
+    "name": "null",
+    "accepted": true,
+    "violations": []
+  },
+  {
+    "name": "undefined JSON",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be a lossless JSON value"
+    ]
+  },
+  {
+    "name": "missing required",
+    "accepted": false,
+    "violations": [
+      "missing required property \"value.v\""
+    ]
+  },
+  {
+    "name": "undefined required",
+    "accepted": false,
+    "violations": [
+      "missing required property \"value.v\""
+    ]
+  },
+  {
+    "name": "valid record",
+    "accepted": true,
+    "violations": []
+  },
+  {
+    "name": "unknown field",
+    "accepted": false,
+    "violations": [
+      "\"value.other\" is not a declared property (additionalProperties: false)"
+    ]
+  },
+  {
+    "name": "open extra undefined",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be a lossless JSON object"
+    ]
+  },
+  {
+    "name": "null prototype",
+    "accepted": true,
+    "violations": []
+  },
+  {
+    "name": "other realm object",
+    "accepted": true,
+    "violations": []
+  },
+  {
+    "name": "Date",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be an object"
+    ]
+  },
+  {
+    "name": "Map",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be an object"
+    ]
+  },
+  {
+    "name": "spoofed Object prototype",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be an object"
+    ]
+  },
+  {
+    "name": "enumerable symbol",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be a lossless JSON object"
+    ]
+  },
+  {
+    "name": "non enumerable object key",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be a lossless JSON object"
+    ]
+  },
+  {
+    "name": "getter",
+    "accepted": true,
+    "violations": []
+  },
+  {
+    "name": "throwing getter",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be a lossless JSON value"
+    ]
+  },
+  {
+    "name": "array",
+    "accepted": true,
+    "violations": []
+  },
+  {
+    "name": "other realm array",
+    "accepted": true,
+    "violations": []
+  },
+  {
+    "name": "array non enumerable index",
+    "accepted": true,
+    "violations": []
+  },
+  {
+    "name": "array extra key",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be a dense lossless JSON array"
+    ]
+  },
+  {
+    "name": "sparse array",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be a dense lossless JSON array"
+    ]
+  },
+  {
+    "name": "array subclass",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be a dense lossless JSON array"
+    ]
+  },
+  {
+    "name": "cycle",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be a lossless JSON object"
+    ]
+  },
+  {
+    "name": "shared DAG",
+    "accepted": true,
+    "violations": []
+  },
+  {
+    "name": "deep JSON",
+    "accepted": true,
+    "violations": []
+  },
+  {
+    "name": "enum accepted",
+    "accepted": true,
+    "violations": []
+  },
+  {
+    "name": "enum rejected",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be one of [\"a\",\"b\"]"
+    ]
+  },
+  {
+    "name": "const rejected",
+    "accepted": false,
+    "violations": [
+      "\"value\" must be 3"
+    ]
+  },
+  {
+    "name": "oneOf accepted",
+    "accepted": true,
+    "violations": []
+  },
+  {
+    "name": "oneOf ambiguous",
+    "accepted": false,
+    "violations": [
+      "\"value\" must match exactly one oneOf branch (matched 2)"
+    ]
+  },
+  {
+    "name": "oneOf none",
+    "accepted": false,
+    "violations": [
+      "\"value\" must match exactly one oneOf branch (matched 0)"
+    ]
+  }
+]

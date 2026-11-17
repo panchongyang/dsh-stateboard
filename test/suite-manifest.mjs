@@ -14,6 +14,7 @@ export const suites = {
     'test/client/client-races.test.mjs',
     'test/client/unit/bundle-logic.test.mjs',
     'test/client/unit/doc-view.test.mjs',
+    'test/client/unit/doc-images.test.mjs',
     'test/client/unit/external-docs.test.mjs',
     'test/client/unit/flow-layout.test.mjs',
     'test/client/unit/logic.test.mjs',
@@ -26,6 +27,12 @@ export const suites = {
     'test/core/digest.test.mjs',
   ] },
   integration: { budgetMs: 480000, files: [
+    'test/host/mcp-write.test.mjs',
+    'test/host/mcp-parity.test.mjs',
+    'test/contract/agent-parity.test.mjs',
+    'test/contract/agent-view-parity.test.mjs',
+    'test/contract/agent-workflow-parity.test.mjs',
+    'test/contract/agent-sdk-corpus.test.mjs',
     'test/client/bundle-contract.test.mjs',
     'test/client/styles-contract.test.mjs',
     'test/client/views-render.test.mjs',
@@ -40,6 +47,9 @@ export const suites = {
     'test/core/handle-lifecycle.test.mjs',
     'test/core/identity-conflicts.test.mjs',
     'test/core/identity.test.mjs',
+    'test/core/knowledge.test.mjs',
+    'test/core/knowledge-sources.test.mjs',
+    'test/core/knowledge-faults.test.mjs',
     'test/core/intent-settlement.test.mjs',
     'test/core/lease-edit.test.mjs',
     'test/core/lease-reclaim.test.mjs',
@@ -68,6 +78,7 @@ export const suites = {
     'test/docs/doc-migration-write.test.mjs',
     'test/docs/doc-migration.test.mjs',
     'test/docs/doc-read.test.mjs',
+    'test/docs/doc-asset.test.mjs',
     'test/docs/evidence-audit.test.mjs',
     'test/docs/evidence-restart.test.mjs',
     'test/docs/evidence-runner.test.mjs',
@@ -107,18 +118,21 @@ export const suites = {
     'test/ops/typescript-toolchain.test.mjs',
   ] },
   host: { budgetMs: 300000, files: [
+    'test/host/agent-sdk.test.mjs',
     'test/docs/doc-external-routes.test.mjs',
     'test/docs/doc-external-tools.test.mjs',
     'test/docs/doc-inline-write-boundaries.test.mjs',
     'test/host/host-audit.test.mjs',
     'test/host/host-tools.test.mjs',
     'test/host/identity-host.test.mjs',
+    'test/host/knowledge-parity.test.mjs',
     'test/host/mcp-http.test.mjs',
+    'test/host/mcp-knowledge.test.mjs',
     'test/host/mcp-lifecycle.test.mjs',
-    'test/host/mcp-write.test.mjs',
     'test/host/routes.test.mjs',
   ] },
   perf: { budgetMs: 300000, files: [
+    'test/ops/knowledge-performance.test.mjs',
     'test/ops/core-performance.test.mjs',
     'test/ops/project-list-performance.test.mjs',
     'test/ops/prompt-health-isolation.test.mjs',
@@ -132,6 +146,7 @@ export const offline = ['unit', 'integration', 'cli', 'ops'];
 export const hostPreflight = 'test/host/host-preflight.mjs';
 export const clientFiles = () => [...suites.unit.files, ...suites.integration.files].filter(file => file.startsWith('test/client/') && !file.endsWith('/client-races.test.mjs'));
 export function suiteFiles(name) {
+  if (name === 'parity') return suites.integration.files.filter(file => file.startsWith('test/contract/agent-') || ['test/host/mcp-write.test.mjs', 'test/host/mcp-parity.test.mjs'].includes(file));
   if (name === 'core' || name === 'ci') return offline.flatMap(layer => suites[layer].files);
   if (name === 'fast') return ['unit', 'integration'].flatMap(layer => suites[layer].files);
   if (name === 'client') return clientFiles();

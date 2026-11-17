@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780" role="img" aria-label="context">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#1A73E8"/></marker></defs>
+<rect width="1200" height="780" fill="white"/>
+<g font-family="Microsoft YaHei, Noto Sans SC, Segoe UI, sans-serif" fill="#202124">
+<text x="32" y="44" font-size="28" font-weight="700">图 1 · 系统上下文：状态归系统，执行归使用者</text>
+<text x="32" y="76" font-size="17">虚线框 = 信任 / 文件访问边界；箭头 = 调用或只读观测，不代表代码依赖。</text>
+<rect x="300" y="112" width="862" height="380" rx="16" fill="none" stroke="#5F6368" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="316" y="140" font-size="18" font-weight="700">本机 DSH 宿主边界 · 单机单用户</text>
+<rect x="32" y="215" width="220" height="150" rx="12" fill="#F3E8FD" stroke="#5F6368" stroke-width="2"/>
+<text x="50" y="245" font-size="20" font-weight="700">使用者</text>
+<text x="50" y="273" font-size="17">人：浏览器 UI</text>
+<text x="50" y="298" font-size="17">Agent：DSH 工具</text>
+<text x="50" y="323" font-size="17">外部 Agent：本机 MCP</text>
+<rect x="340" y="175" width="300" height="130" rx="12" fill="#FEF7E0" stroke="#5F6368" stroke-width="2"/>
+<text x="358" y="205" font-size="20" font-weight="700">DSH 宿主</text>
+<text x="358" y="233" font-size="17">会话身份 / 生命周期</text>
+<text x="358" y="258" font-size="17">网页来源、token、MCP 凭据</text>
+<rect x="770" y="175" width="350" height="190" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="788" y="205" font-size="20" font-weight="700">ProjectBoard 看板</text>
+<text x="788" y="233" font-size="17">任务 / 计划 / 文档 / 证据</text>
+<text x="788" y="258" font-size="17">命令守卫 → 原子提交日志</text>
+<text x="788" y="283" font-size="17">UI、digest 是同一状态的投影</text>
+<text x="788" y="308" font-size="17">单项目单写者</text>
+<path d="M 252 255 H 340" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="267" y="243" font-size="15">调用</text>
+<path d="M 640 235 H 770" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="660" y="222" font-size="16">受信身份</text>
+<text x="344" y="410" font-size="17">标题、正文与证据 ref 是数据，不是指令；不执行 command/test 材料。</text>
+<text x="344" y="448" font-size="17">MCP 只在本机按独立凭据授权；不是 LAN / 多用户权限系统。</text>
+<rect x="300" y="530" width="862" height="200" rx="16" fill="none" stroke="#5F6368" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="316" y="558" font-size="18" font-weight="700">项目工作区 binding 根 · 外部字节不等于领域事实</text>
+<rect x="340" y="581" width="300" height="115" rx="12" fill="#E8F0FE" stroke="#5F6368" stroke-width="2"/>
+<text x="358" y="611" font-size="20" font-weight="700">文件 / 可选 Git</text>
+<text x="358" y="639" font-size="17">编辑器维护外置文档与图片</text>
+<text x="358" y="664" font-size="17">Git 只读；不管理分支或工作树</text>
+<rect x="770" y="581" width="350" height="115" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
+<text x="788" y="611" font-size="20" font-weight="700">安全观测边界</text>
+<text x="788" y="639" font-size="17">路径必须在绑定根内</text>
+<text x="788" y="664" font-size="17">缺 Git 自动降级，不伪造固定版本</text>
+<path d="M 1120 340 H 1140 V 637 H 1120" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="860" y="519" font-size="17">只读读取 / 固定证据</text>
+<path d="M 770 637 H 640" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="934" y="758" font-size="14">依据：CONTRACT / ARCHITECTURE</text>
+</g>
+</svg>

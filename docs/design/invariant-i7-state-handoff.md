@@ -1,5 +1,7 @@
 # I7：状态交接显式化
 
+> 状态：已替代（现行语义见[实现契约](<../CONTRACT.md>)；正文保留方案或决策时的语境）。
+
 - `MemoryStore.append` / `JsonlStore.append` 现在返回应用事件后的 `state`。
 - `ProjectHandle._appendEvents` 显式 `this.state = this.store.append(commit)`，随后
   `assertStateAttached(this)`；`handle.state !== store.state` 时抛 `state-desync`（500）。
