@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Development-only pinned DSH SDK verification; never a runtime dependency.",
+  "overrides": {
+    "zod": "4.6.6"
+  },
   "dependencies": {
     "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/dsh-tools": "0.2.2-rc.1",
