@@ -24,11 +24,11 @@ DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、
 |---|---|
 | 产品 | `dsh-stateboard@0.4.0`，BSD-3-Clause |
 | 操作系统 | Windows 11 x64；macOS / Linux 未测试、不承诺可用 |
-| DSH 支持带 | `0.2.1-rc.2` 至 `0.2.2-rc.1`；上界不自动跟随 latest 扩展 |
-| Web 宿主 Node | DSH `0.2.2-rc.1` 要求 **Node >=24.9**；其它支持带内版本仍须满足各自宿主要求 |
+| DSH 支持带 | `0.2.1-rc.2` 至 `0.2.2-rc.3`。支持范围以此表为准 |
+| Web 宿主 Node | DSH `0.2.2-rc.1` 至 `0.2.2-rc.3` 要求 **Node >=24.9**。其它支持带内版本按各自的宿主要求选择 Node |
 | 插件 engines | `Node >=22` 只是 core/client 基线，**不是 Node 22 Web 宿主支持承诺** |
-| 验证范围 | 本地隔离宿主覆盖两来源装配、工具/HTTP/客户端包、首次建项目、无 Git 降级、重装重启；不代表逐一实测支持带内所有版本/Node组合 |
-| 未验证 | 在线 registry 的 DSH 安装、浏览器真实交互、LLM 推理；Node 22 core 留有一次锁竞争失败记录；未覆盖组合不得视为通过 |
+| 验证范围 | Windows 11 x64 与 Node 24.22.2 上，DSH `0.2.2-rc.2`、`0.2.2-rc.3` 均通过源码和本地 tgz 的隔离安装，覆盖七个原生工具、HTTP、客户端包、首次建项目、无 Git 降级、重装重启和卸载 |
+| 未验证 | 浏览器真实交互、LLM 推理及支持带内的其它未覆盖版本与 Node 组合。Node 22 core 留有一次锁竞争失败记录 |
 
 先安装兼容的 DSH Web 宿主，使 `dsh` 在 PATH。无需 pm2、固定端口、作者目录或固定 profile。profile 必须包含宿主 Web composition；仅有 agent composition 的环境没有看板 UI。
 
