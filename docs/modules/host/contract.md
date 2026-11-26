@@ -6,7 +6,7 @@
 
 [agentTools](<../../../lib/host/tools/index.js>) 是唯一 Agent 目录。原生 registerTools 与 MCP projectTools 使用同一对象的名称、描述、schema、execute、output.schema 和 renderer；不得另建业务分发、回执或隐形旧写入口。兼容 tools.js 与 mcp-knowledge.js 只转发共同定义。
 
-[definition](<../../../lib/host/tools/definition.js>) 编译无 peer 依赖的定义，并校验 lossless JSON、类型与枚举；core 继续检查业务字段、CAS、租约和角色。原始输出先通过共同边界，再渲染；MCP 仅发送相同文本，不重复附送 structuredContent。真实固定 SDK 门禁验证 schema、TS/Python 生成器、特殊值 corpus 和七工具原始输出，缺依赖必须失败。
+[definition](<../../../lib/host/tools/definition.js>) 校验 lossless JSON、类型和枚举，core 继续检查业务字段、CAS、租约与角色。知识的模型文本由共同 renderer 构建；MCP 可显式选取结构对象序列化文本，但不同时附送 structuredContent。真实 SDK 门禁校验原始结构与渲染入口。
 
 ## 2. 身份与权限
 
@@ -28,13 +28,13 @@ MCP 显式 enabled=true、合法端口和独立 Bearer 才启用；逐请求校�
 
 ## 4. 业务与读写边界
 
-管理调用共用 DSH resolveHandle/open/touch；首次显式 context 管理调用按 actor/project attach 一次，并发复用同一 Promise。每次变更生成新命令；调用 ID 不是幂等键。自动恢复、续租计数与错误不能按入口来源分支。
+HTTP、原生与 MCP 统一进入 application 读写端口，不共享传输授权。普通写所需的首次会话绑定由模型和业务同批发布；显式生命周期 attach、activity、grant 不由查询触发。每次变更生成新命令；调用 ID 不是幂等键。
 
-元数据和知识读取不打开 writer、不 touch；普通 HTTP GET 仍可能 open/recover，图片走锁外 peek。固定 Git 读取两端限制在绑定内仓库。task 摘要有界，task_detail 的 section/sections 共享一个 UTF-8 预算并返回 source/scope/coverage；来源与截断不能省略。
+管理读、知识与图片均不打开 writer；图片通过统一只读观察端口返回原始字节，旧 Git 只交付来源记录。精读与身份水位见 [L1](<../../CONTRACT.md#2673-有界摘要与精读>)。
 
 ## 5. 提示与去重
 
-project:brief 动态 section 的 order=9000、interpolate=false；看板文字是数据。sessionProjects 只追踪 owning cwd 的默认提示目标，显式跨项目 context 不覆盖它。所有使用过的 handle 另存 sessionHandles，用于退出释放。
+project:brief 动态 section 的 order=9000、interpolate=false；看板文字是数据。sessionProjects 跟踪 owning cwd 的默认提示目标，显式跨项目 context 不覆盖它；生命周期追踪项目值引用而非 writer。
 
 RULES 的唯一权威副本在 core digest；promptFibers 已安装时 brief 不重复投递规则，其他视图按同会话、同参数、逐字节相同才返回 unchanged。fresh 强制重印；不能只比较 projectRev，也不能在输出生成后裁剪缓存前缀。
 

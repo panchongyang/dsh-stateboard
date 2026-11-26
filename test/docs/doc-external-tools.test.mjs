@@ -131,7 +131,7 @@ try {
   assert.equal(first.observation.size, fs.statSync(file).size);
   assert.equal(first.observation.cached, false);
   assert.equal(first.confirmation.state, 'unconfirmed');
-  assert.equal(first.git.state, 'not_a_repo');
+  assert.equal(first.git, null, 'P5 observation reports no Git state');
   assert.ok(first.observation.preview.text.includes('# Spec'));
 
   const cached = await docTool.execute({ op: 'inspect', docId }, exec);
@@ -193,7 +193,7 @@ try {
     docId, 'metaRev: 2', 'locator: bindingId=' + renderedInspect.doc.locator.bindingId, 'relPath=docs/spec.md',
     'availability: readable', 'code: null', 'observedAt: ', 'cached: false',
     'contentHash: ' + sha(fs.readFileSync(file)), 'size: ' + fs.statSync(file).size,
-    'previewable: true', 'confirmation: matches_baseline', 'baseline: domain=workspace-bytes', 'git: not_a_repo',
+    'previewable: true', 'confirmation: matches_baseline', 'baseline: domain=workspace-bytes', 'git: null',
   ]) assert.ok(renderedText.includes(expected), 'inspect render includes ' + expected);
 
   const notesFile = path.join(wsDir, 'notes.txt');
@@ -205,7 +205,7 @@ try {
     'observedAt: ', 'cached: false', 'contentHash: ' + sha(fs.readFileSync(notesFile)),
     'size: ' + fs.statSync(notesFile).size, 'previewable: true',
     'preview (truncated: false, totalBytes: 6):', 'plain',
-    'confirmation: unconfirmed', 'baseline: null', 'git: not_a_repo',
+    'confirmation: unconfirmed', 'baseline: null', 'git: null',
   ]) assert.ok(readableNotesText.includes(expected), 'readable inspect render includes ' + expected);
 
   fs.rmSync(notesFile);
@@ -220,7 +220,7 @@ try {
   // Diagnostics stay distinguishable: an absent reason/detail prints null, and a
   // structured read detail survives instead of vanishing from the render.
   assert.ok(renderedText.includes('confirmation: matches_baseline (reason: null)'), 'matches_baseline prints reason: null');
-  assert.ok(renderedText.includes('git: not_a_repo (detail: null)'), 'git without detail prints detail: null');
+  assert.ok(renderedText.includes('git: null'), 'the Git line prints null instead of a fabricated state');
   assert.ok(readableNotesText.includes('observationDetail: null'), 'readable text prints observationDetail: null');
 
   const staleMeta = await docTool.execute({ op: 'update_meta', docId, expectedMetaRev: 1, title: 'Nope' }, exec)

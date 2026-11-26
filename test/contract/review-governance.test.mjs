@@ -9,48 +9,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { ProjectService } from '../../lib/core/service.js';
 import { JsonlStore, MemoryStore, makeCommit } from '../../lib/core/store.js';
 import { replay } from '../../lib/core/store/format.js';
 import { applyEvent, auditIndependenceProblem, emptyState, normalizePlanHeads } from '../../lib/core/model.js';
 import { appendWorker, auditEvidenceSnapshot, auditScopeDigest, auditWorkers } from '../../lib/core/audit.js';
 import { checkState } from '../../lib/core/fsck.js';
 import { validateToolIntake } from '../../lib/core/command-shape.js';
-
-const worker = { kind: 'agent', sessionId: 'worker-session', agentId: 'worker-agent' };
-const auditor = { kind: 'agent', sessionId: 'auditor-session', agentId: 'auditor-agent' };
-const human = { kind: 'human', sessionId: 'human:test', via: 'test' };
-const report = 'I inspected the recorded material and checked acceptance independently.';
-let serial = 0;
-async function fixture(t, { gated = true, file = false, alive = true } = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-audit-v3-'));
-  const ws = path.join(root, 'workspace');
-  fs.mkdirSync(ws);
-  fs.writeFileSync(path.join(ws, 'artifact.txt'), 'original');
-  const svc = await new ProjectService({ rootDir: path.join(root, 'data') }).init();
-  t.after(() => svc.close());
-  const h = await svc.createProject({ workspacePath: ws, actor: auditor });
-  if (alive) await h.attach({ sessionId: worker.sessionId, agentId: worker.agentId });
-  const send = (op, extra = {}, actor = worker) => h.command({ cmdId: 'audit-test-' + ++serial, op, actor, ...extra });
-  const made = await send('task.create', { title: 'Audited work', requiresAudit: gated, acceptance: [{ text: 'artifact accepted' }] }, auditor);
-  const id = made.events.find((e) => e.type === 'task/created').taskId;
-  const task = () => h.state.tasks[id];
-  const act = (op, extra = {}, actor = worker) => send('task.' + op, { taskId: id, expected: { entityRev: task().rev }, ...extra }, actor);
-  const submit = () => act('submit', { fencingToken: h.leases.get(id).token, evidence: [{ kind: file ? 'file' : 'command', ref: file ? 'artifact.txt' : 'nonexistent-command --not-executed', acceptanceId: task().acceptance[0].id, execution: { exitCode: 17, status: 'failed' } }] });
-  const review = async () => { await act('claim'); await act('begin', { summary: 'implement artifact', fencingToken: h.leases.get(id).token }); await submit(); };
-  const snapshot = () => ({ state: structuredClone(h.state), leases: structuredClone([...h.leases]), rev: h.rev, commits: fs.readFileSync(h.store.commitsFile), blobs: fs.readdirSync(h.store.blobsDir) });
-  const denied = async (op, extra, actor, code, reason) => {
-    const before = snapshot();
-    await assert.rejects(act(op, extra, actor), (error) => {
-      assert.equal(error.code, code);
-      if (reason) assert.equal(error.details?.reason, reason);
-      return true;
-    });
-    assert.deepEqual(snapshot(), before, 'failure leaves events, revisions, blobs and leases unchanged');
-  };
-  const ops = (sessionId) => Object.fromEntries(h.query('task', { taskId: id, sessionId }).allowedOps.map((row) => [row.op, row]));
-  return { h, svc, root, ws, id, task, act, send, submit, review, snapshot, denied, ops };
-}
+import { fixture, worker, auditor, human, report } from '../helpers/review-governance-fixture.mjs';
 
 // 责任：新项目 meta/genesis/快照须均为 schema3，审计后冷开完整状态保持一致。
 test('schema3 genesis, metadata, snapshot and deterministic reopen', async (t) => {
@@ -159,9 +124,9 @@ test('ordinary verification accepts either the worker or another agent without a
 test('ordinary verification still refuses unmet acceptance and hard drift without side effects', async (t) => {
   const f = await fixture(t, { gated: false, file: true });
   await f.review();
-  f.task().acceptance[0].met = false;
+  f.seed((state) => { state.tasks[f.id].acceptance[0].met = false; });
   await f.denied('verify', {}, worker, 'acceptance-unmet');
-  f.task().acceptance[0].met = true;
+  f.seed((state) => { state.tasks[f.id].acceptance[0].met = true; });
   fs.writeFileSync(path.join(f.ws, 'artifact.txt'), 'changed');
   await f.denied('verify', {}, worker, 'evidence-drift');
   await f.denied('verify', { acknowledgeDrift: true, reason: 'waive changed evidence' }, worker, 'forbidden-role', 'drift-human-only');
@@ -186,9 +151,11 @@ test('every independence source, including superseded producers, blocks self aud
   task.workers = [{ ...worker }];
   assert.equal(auditIndependenceProblem(task, worker), 'not-independent');
   assert.equal(auditIndependenceProblem({ ...task, createdBy: auditor }, auditor), null);
-  f.task().assignee = null;
-  f.task().workers = [];
-  f.task().evidence[0].producedBy = {};
+  f.seed((state) => {
+    state.tasks[f.id].assignee = null;
+    state.tasks[f.id].workers = [];
+    state.tasks[f.id].evidence[0].producedBy = {};
+  });
   await f.denied('verify', { audit: { report } }, auditor, 'forbidden-role', 'worker-unknown');
 });
 
@@ -269,7 +236,7 @@ test('any agent rejects lease-free review; self-reject valid, byKind/auditId per
 test('legacy review live lease permits owner/human only, token required; dead assignee falls back ready', async (t) => {
   const f = await fixture(t);
   await f.review();
-  const lease = f.h._grantLease(f.task(), worker, new Date().toISOString());
+  const lease = f.legacyLease();
   await f.denied('reject', { reason: 'foreign' }, auditor, 'forbidden-role');
   await f.denied('reject', { reason: 'owner' }, worker, 'fencing-stale');
   await f.act('reject', { reason: 'owner', fencingToken: lease.token }, worker);
@@ -285,8 +252,10 @@ test('legacy review live lease permits owner/human only, token required; dead as
 test('plan inactive reject grant fails atomically; human can unassign without reviving inactive work', async (t) => {
   const f = await fixture(t);
   await f.review();
-  f.task().planRef = { planId: 'pln_archived' };
-  f.h.state.planHeads.pln_archived = { status: 'archived' };
+  f.seed((state) => {
+    state.tasks[f.id].planRef = { planId: 'pln_archived' };
+    state.planHeads.pln_archived = { id: 'pln_archived', title: 'legacy archived', status: 'archived', archivedFrom: 'active', currentVersion: 0, rev: 1 };
+  });
   await f.denied('reject', { reason: 'redo' }, auditor, 'plan-archived');
   await f.act('reject', { reason: 'handoff later', unassign: true }, human);
   assert.equal(f.task().state, 'ready');
@@ -298,9 +267,9 @@ test('review gate cannot change through gate/update/plan revision; nongated canc
   await f.review();
   for (const requiresAudit of [true, false]) await f.denied('gate', { requiresAudit }, auditor, 'forbidden-role', 'review-gate-locked');
   await f.denied('update', { requiresAudit: true }, auditor, 'forbidden-role', 'review-gate-locked');
-  const lease = f.h._grantLease(f.task(), worker, new Date().toISOString());
+  const lease = f.legacyLease();
   await f.denied('update', { requiresAudit: true, fencingToken: lease.token }, worker, 'forbidden-role', 'review-gate-locked');
-  f.h.leases.delete(f.id);
+  f.seed(() => {}, []); // A new fixture model has no legacy runtime grant.
   const made = await f.send('plan.publish', { title: 'Adopting plan', steps: [{ id: 's', tasks: [] }] });
   const planId = made.events.find((e) => e.type === 'plan/published').data.id;
   const before = f.snapshot();
@@ -357,7 +326,7 @@ test('I23 detects missing/failing/stale/self audits only for agent done; policy 
 test('submit and reconcile completed always enter review under persisted auto/manual policy, gated or not', async (t) => {
   for (const gated of [true, false]) for (const verification of ['auto', 'manual']) for (const reconcile of [true, false]) {
     const f = await fixture(t, { gated });
-    f.h.state.project.policy.verification = verification;
+    f.seed((state) => { state.project.policy.verification = verification; });
     await f.act('claim');
     await f.act('begin', { summary: 'attempt', fencingToken: f.h.leases.get(f.id).token });
     if (reconcile) {
@@ -392,11 +361,13 @@ test('schema validation replay never mutates raw commit payloads before framing 
 test('superseded producers remain disqualified; soft warnings are capped and digest excludes superseded rows', async (t) => {
   const f = await fixture(t);
   await f.review();
-  f.task().evidence.push({ id: 'old', kind: 'command', ref: 'retired', supersededAt: 'then', producedBy: auditor });
+  f.seed((state) => { state.tasks[f.id].evidence.push({ id: 'old', kind: 'command', ref: 'retired', supersededAt: 'then', producedBy: auditor }); });
   assert.equal(f.ops(auditor.sessionId).verify.enabled, false);
   await f.denied('verify', { audit: { report } }, auditor, 'forbidden-role', 'not-independent');
-  f.task().evidence.at(-1).producedBy = worker;
-  for (let i = 0; i < 25; i++) f.task().evidence.push({ id: 'warning-' + i, kind: 'file', ref: 'artifact.txt', producedBy: worker });
+  f.seed((state) => {
+    state.tasks[f.id].evidence.at(-1).producedBy = worker;
+    for (let i = 0; i < 25; i++) state.tasks[f.id].evidence.push({ id: 'warning-' + i, kind: 'file', ref: 'artifact.txt', producedBy: worker });
+  });
   const digest = auditEvidenceSnapshot(f.task());
   assert.equal(digest.count, 26);
   assert.deepEqual(auditEvidenceSnapshot({ evidence: [...f.task().evidence].reverse() }), digest, 'stored-set ordering does not change digest');
@@ -538,7 +509,7 @@ test('plan create/publish/revise and persisted draft definitions reject unknown 
     assert.deepEqual(f.snapshot(), before);
   }
   // A raw historical draft cannot bypass validation at publish or inherited revise.
-  f.h.state.planHeads[draftId].draft.steps = [{ id: 's', tasks: [{ key: 'a', title: 'Historical intent', acceptance: [{ text: 'x' }], requiresHumanReview: true }] }];
+  f.seed((state) => { state.planHeads[draftId].draft.steps = [{ id: 's', tasks: [{ key: 'a', title: 'Historical intent', acceptance: [{ text: 'x' }], requiresHumanReview: true }] }]; });
   for (const op of ['plan.publish', 'plan.revise']) {
     const before = f.snapshot();
     await assert.rejects(f.send(op, { planId: draftId, expected: { entityRev: 1 } }), { code: 'invalid-command' });

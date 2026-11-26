@@ -5,7 +5,6 @@
  * 外部前置：过滤器用例需要 Git，缺少时显式跳过；其余仅临时文件。
  */
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -23,15 +22,6 @@ const rejects = (promise, code) => assert.rejects(promise, (e) => { assert.equal
 
 async function service(rootDir) {
   return new ProjectService({ rootDir }).init();
-}
-
-function hasGit() {
-  try {
-    execFileSync('git', ['--version'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 // 责任：另一服务解绑后缓存也须报 missing_binding，新绑定必须立即可用于登记和迁移。
@@ -139,33 +129,37 @@ test('a file that keeps changing during confirm is refused as unstable with zero
   await svc.close();
 });
 
-// 责任：路径匹配 filter/LFS 时不得宣称干净或修改，须报 git_unavailable 且不执行驱动。
-test('a path under a content filter reports git_unavailable and never runs the filter', { skip: !hasGit() && 'git is not installed' }, () => {
-  const ws = tmp('pbx-edge-git');
-  const git = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: ws, stdio: 'pipe' });
-  git('init', '-q');
-  const marker = path.join(ws, 'helper-marker').replaceAll('\\', '/');
-  const helper = path.join(ws, 'helper.sh').replaceAll('\\', '/');
-  fs.writeFileSync(helper, '#!/bin/sh\nprintf invoked >> "' + marker + '"\ncat\n');
-  fs.writeFileSync(path.join(ws, '.gitattributes'), '*.md filter=probe\n*.bin filter=lfs\n');
-  git('config', 'filter.probe.clean', 'sh "' + helper + '"');
-  git('config', 'filter.probe.smudge', 'cat');
+// 责任：P5 起外置观测不再运行 Git，任何路径都不执行 Git 命令、不依赖 Git 可用。
+test('external observation no longer runs Git for workspace state', () => {
+  const ws = tmp('pbx-edge-gitless');
   fs.writeFileSync(path.join(ws, 'a.md'), 'a\n');
-  git('add', '.gitattributes', 'a.md');
-  git('commit', '-q', '-m', 'base');
-  fs.rmSync(marker, { force: true });
-  const unsupported = { state: 'git_unavailable', detail: 'unsupported-content-transform', filtered: true };
-  assert.deepEqual(observeGit(ws, 'a.md'), unsupported, 'committed is not claimed');
-  const past = new Date(Date.now() - 5000);
-  fs.utimesSync(path.join(ws, 'a.md'), past, past);
-  assert.deepEqual(observeGit(ws, 'a.md'), unsupported);
-  fs.appendFileSync(path.join(ws, 'a.md'), 'changed\n');
-  assert.deepEqual(observeGit(ws, 'a.md'), unsupported, 'modified is not claimed');
-  fs.writeFileSync(path.join(ws, 'b.md'), 'b\n');
-  assert.equal(observeGit(ws, 'b.md').state, 'untracked', 'untracked stays reportable');
-  fs.writeFileSync(path.join(ws, 'c.bin'), 'c\n');
-  git('-c', 'filter.lfs.clean=cat', '-c', 'filter.lfs.required=false', 'add', 'c.bin');
-  git('commit', '-q', '-m', 'lfs');
-  assert.deepEqual(observeGit(ws, 'c.bin'), { ...unsupported, lfs: true });
-  assert.equal(fs.existsSync(marker), false, 'the clean filter was never executed');
+  const oldPath = process.env.PATH;
+  const empty = tmp('pbx-edge-empty-path');
+  try {
+    process.env.PATH = empty;
+    assert.equal(observeGit(ws, 'a.md'), null, 'missing Git cannot change the observation');
+    fs.appendFileSync(path.join(ws, 'a.md'), 'changed\n');
+    assert.equal(observeGit(ws, 'a.md'), null);
+  } finally {
+    process.env.PATH = oldPath;
+  }
+});
+
+// 责任：可读外置文档的 git 字段恒为 null，正文观测与确认漂移仍独立可用。
+test('a readable external doc reports git null while body observation still works', async () => {
+  const board = tmp('pbx-edge-gitless-board');
+  const ws = tmp('pbx-edge-gitless-ws');
+  fs.writeFileSync(path.join(ws, 'a.md'), 'body');
+  const svc = await service(board);
+  const h = await svc.createProject({ workspacePath: ws });
+  const reg = await h.command(human('doc.external.register', { title: 'a', relPath: 'a.md' }));
+  const first = inspectExternalDoc(h, reg.docId, { fresh: true });
+  assert.equal(first.availability, 'readable');
+  assert.equal(first.git, null, 'the git field stays null for compatibility');
+  assert.equal(first.confirmation.state, 'unconfirmed');
+  fs.writeFileSync(path.join(ws, 'a.md'), 'changed body');
+  const second = inspectExternalDoc(h, reg.docId, { fresh: true });
+  assert.equal(second.observation.contentHash, sha('changed body'));
+  assert.equal(second.git, null);
+  await svc.close();
 });

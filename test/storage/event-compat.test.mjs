@@ -10,6 +10,9 @@ import { EVENT_CLASSES, EVENT_REGISTRY, eventClass } from '../../lib/shared/even
 import { applyEvent, assertEventSupported, emptyState } from '../../lib/core/model.js';
 import { makeCommit, MemoryStore, JsonlStore } from '../../lib/core/store.js';
 import { replay, validateCommit } from '../../lib/core/store/format.js';
+import { assertRecordBatch, restoreRecords } from '../../lib/core/transaction/records.js';
+import { baseReference, commitMaterials, readRecord } from '../../lib/core/knowledge/records.js';
+import { encodeReference } from '../../lib/core/knowledge/reference.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -102,6 +105,64 @@ test('a log containing an unknown event refuses to open; additive-only logs stil
     (error) => error.code === 'incompatible-event' && error.details.seq === 3,
   );
   assert.throws(() => replay(meta, structuredClone([first, auditOnly, foreign])), { code: 'incompatible-event' });
+});
+
+// 责任：精确关联必须在追加和冷回放时检查来源，快照不能覆盖这项检查。
+test('document relation references and snapshot are checked against committed history', () => {
+  const task = { type: 'task/created', taskId: 'tsk_a', data: { id: 'tsk_a', rev: 1, state: 'ready', requiresAudit: false } };
+  const doc = { type: 'doc/created', docId: 'doc_a', data: { id: 'doc_a', rev: 1, title: 'a', kind: 'note', hash: 'a'.repeat(64), size: 1, links: {} } };
+  const first = makeCommit(1, 'genesis', actor, 'cmd_sources', 0, [task, doc]);
+  const add = {
+    type: 'doc/relation-added', docId: 'doc_a', data: {
+      relationId: 'rel_a', relationKind: 'reference', sourceOwnerId: 'tsk_a',
+      fromVersion: { kind: 'task', id: 'tsk_a', seq: 1, event: 0 },
+      toVersionRef: { kind: 'inline', docId: 'doc_a', rev: 1 }, inlineHash: 'a'.repeat(64),
+    },
+  };
+  const second = (relation = add, writer = actor) => makeCommit(2, first.hash, writer, 'cmd_relation', 1, [relation]);
+  const logs = [first, second()];
+  const { state } = restoreRecords(meta, logs);
+  assert.equal(state.documentRelations.rel_a.fromVersion.id, 'tsk_a');
+  const snapshot = { seq: 2, hash: logs[1].hash, state };
+  assert.deepEqual(restoreRecords(meta, logs, snapshot).state.documentRelations, state.documentRelations);
+  assert.throws(() => restoreRecords(meta, logs, { ...snapshot, state: { ...state, documentRelations: {} } }), { code: 'invalid-document-relation' });
+  const forgedSource = { ...snapshot, state: { ...state, project: { ...state.project, workspacePath: 'D:/intermediate-copy' } } };
+  assert.throws(() => restoreRecords(meta, logs, forgedSource), { code: 'invalid-document-relation' });
+  const forged = structuredClone(add);
+  forged.data.fromVersion.event = 1;
+  const bad = second(forged);
+  assert.throws(() => assertRecordBatch(restoreRecords(meta, [first]).state, bad, [first]), { code: 'invalid-document-relation' });
+  assert.throws(() => restoreRecords(meta, [first, bad], { ...snapshot, hash: bad.hash }), { code: 'invalid-document-relation' });
+  assert.throws(() => restoreRecords(meta, [first, second(add, { kind: 'observer' })]), { code: 'invalid-document-relation' });
+  assert.throws(() => restoreRecords(meta, [first, second({ ...add, actor: { kind: 'human' } })]), { code: 'invalid-document-relation' });
+  const shadow = { ...doc, type: 'doc/updated', data: { ...doc.data, hash: 'b'.repeat(64) } };
+  const laterConflict = makeCommit(3, logs[1].hash, actor, 'cmd_conflict', 2, [shadow]);
+  assert.throws(() => restoreRecords(meta, [...logs, laterConflict]), { code: 'invalid-document-relation' });
+  const priorConflict = makeCommit(1, 'genesis', actor, 'cmd_ambig', 0, [task, doc, shadow]);
+  const afterConflict = makeCommit(2, priorConflict.hash, actor, 'cmd_ambigrel', 1, [add]);
+  assert.doesNotThrow(() => restoreRecords(meta, [priorConflict]), 'unrelated legacy history is not tightened retroactively');
+  assert.throws(() => restoreRecords(meta, [priorConflict, afterConflict]), { code: 'invalid-document-relation' });
+  for (const past of [[{ ...task, taskId: 'tsk_other' }, doc], [task, { ...doc, rev: 9 }]]) {
+    const contradiction = makeCommit(1, 'genesis', actor, 'cmd_shape', 0, past);
+    const useIt = makeCommit(2, contradiction.hash, actor, 'cmd_shaperel', 1, [add]);
+    assert.doesNotThrow(() => restoreRecords(meta, [contradiction]));
+    assert.throws(() => restoreRecords(meta, [contradiction, useIt]), { code: 'invalid-document-relation' });
+  }
+  for (const badInline of [{ ...doc, type: 'doc/updated', docId: 'doc_other' }, { ...doc, type: 'doc/updated', rev: 9 }]) {
+    for (const events of [[badInline, add], [add, badInline]]) {
+      const sameCommit = makeCommit(2, first.hash, actor, 'cmd_same', 1, events);
+      assert.throws(() => assertRecordBatch(restoreRecords(meta, [first]).state, sameCommit, [first]), { code: 'invalid-document-relation' });
+      assert.throws(() => restoreRecords(meta, [first, sameCommit]), { code: 'invalid-document-relation' });
+    }
+  }
+  const knowledge = { projectId: meta.project.id, commits: logs };
+  assert.equal([...commitMaterials(knowledge, logs[1])].length, 0, 'generic extraction cannot expose relation facts');
+  assert.throws(() => readRecord(knowledge, encodeReference(baseReference(knowledge, logs[1], 0))), { code: 'knowledge-reference-invalid' });
+  for (const type of ['doc/relation-added', 'doc/relation-closed']) {
+    assert.equal(eventClass(type), 'applied');
+    const legacyRegistry = Object.fromEntries(Object.entries(EVENT_REGISTRY).filter(([key]) => !key.startsWith('doc/relation-')));
+    assert.throws(() => assertEventSupported(state, { type }, logs[1], legacyRegistry), { code: 'incompatible-event' });
+  }
 });
 
 // 责任：严格前缀校验须接受全部已登记事件，包括可靠性审计记录。

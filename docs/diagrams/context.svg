@@ -30,15 +30,15 @@
 <rect x="300" y="530" width="862" height="200" rx="16" fill="none" stroke="#5F6368" stroke-width="2" stroke-dasharray="8 6"/>
 <text x="316" y="558" font-size="18" font-weight="700">项目工作区 binding 根 · 外部字节不等于领域事实</text>
 <rect x="340" y="581" width="300" height="115" rx="12" fill="#E8F0FE" stroke="#5F6368" stroke-width="2"/>
-<text x="358" y="611" font-size="20" font-weight="700">文件 / 可选 Git</text>
+<text x="358" y="611" font-size="20" font-weight="700">文件与留存正文</text>
 <text x="358" y="639" font-size="17">编辑器维护外置文档与图片</text>
-<text x="358" y="664" font-size="17">Git 只读；不管理分支或工作树</text>
+<text x="358" y="664" font-size="17">不执行 Git 或仓库驱动</text>
 <rect x="770" y="581" width="350" height="115" rx="12" fill="#E6F4EA" stroke="#5F6368" stroke-width="2"/>
 <text x="788" y="611" font-size="20" font-weight="700">安全观测边界</text>
 <text x="788" y="639" font-size="17">路径必须在绑定根内</text>
-<text x="788" y="664" font-size="17">缺 Git 自动降级，不伪造固定版本</text>
+<text x="788" y="664" font-size="17">不能核验的版本不冒充可读</text>
 <path d="M 1120 340 H 1140 V 637 H 1120" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
-<text x="860" y="519" font-size="17">只读读取 / 固定证据</text>
+<text x="860" y="519" font-size="17">只读采样 / 字节校验</text>
 <path d="M 770 637 H 640" fill="none" stroke="#1A73E8" stroke-width="2" marker-end="url(#arrow)"/>
 <text x="934" y="758" font-size="14">依据：CONTRACT / ARCHITECTURE</text>
 </g>

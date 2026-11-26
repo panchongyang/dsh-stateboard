@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * 测试职责：为固定证据相关入口提供独立本地 Git 仓库、字节哈希和自动来源引导 fixture。
- * 典型流程：创建临时仓库并提交初始文档 → 通过正常任务 submit 建来源 → 返回测试使用的证据身份。
+ * 典型流程：创建临时仓库并提交初始文档 → 追加合法的旧日志 fixture → 返回测试使用的证据身份。
  * 覆盖边界：覆盖 仅构造合成 fixture；不覆盖独立断言、不验证生产仓库或运行宿主服务。
  * 外部前置：需要 Git；支持传入 sha1/sha256 对象格式，所有配置仅写临时仓库。
  */
@@ -10,6 +10,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { makeCommit } from '../../lib/core/store.js';
+import { locateRelationOwner } from '../../lib/core/domain/document-relations.js';
 
 // 用途：创建合成临时根；传入 t 时由创建者负责失败清理，异步重试 Windows EPERM/ENOTEMPTY，不吞清理错误。
 /** @param {import('node:test').TestContext} [t] */
@@ -42,22 +44,54 @@ export function repository(format = 'sha1', t = undefined) {
   return { root, oid: git(root, 'rev-parse', 'HEAD') };
 }
 
-/**
- * Record the automatic Git source by submitting one clean external doc through
- * the normal command path. Later `get_fixed` reads need that source.
- */
-// 分段职责：通过正常 create/claim/begin/submit 原子登记来源，避免 fixture 直接伪造审批。
-export async function bootstrapPin(h, docId) {
-  const created = await h.command(command('task.create', { title: '固定来源引导', acceptance: [{ text: '记录来源' }] }));
-  const taskId = created.events[0].data.id;
-  await h.command(command('task.claim', { taskId, expected: { entityRev: h.state.tasks[taskId].rev } }));
-  await h.command(command('task.begin', { taskId, fencingToken: h.leases.get(taskId).token, expected: { entityRev: h.state.tasks[taskId].rev }, summary: '引导自动来源' }));
-  await h.command(command('task.submit', {
-    taskId,
-    fencingToken: h.leases.get(taskId).token,
-    expected: { entityRev: h.state.tasks[taskId].rev },
-    evidence: [{ kind: 'doc', ref: docId, acceptanceId: h.state.tasks[taskId].acceptance[0].id }],
-  }));
-  return h.state.tasks[taskId].evidence[0];
+// 仅 fixture：不让产品补写旧 Git 事件。以明确的旧记录形状冷重放同一合成日志。
+export function appendLegacyFacts(h, events) {
+  const base = fs.realpathSync.native(os.tmpdir());
+  const file = fs.realpathSync.native(h.store.commitsFile);
+  const relative = path.relative(base, file);
+  if (!relative || path.isAbsolute(relative) || relative.split(path.sep)[0] === '..') throw new Error('Legacy fixture must be isolated');
+  const commit = makeCommit(h.rev + 1, h.lastHash, { kind: 'human', sessionId: 'legacy-fixture' },
+    'cmd_' + crypto.randomUUID(), h.rev, events, new Date().toISOString());
+  fs.appendFileSync(file, JSON.stringify(commit) + '\n');
+  if (h.refresh() !== commit.seq) throw new Error('Legacy fixture refresh did not publish the synthetic record');
+  return commit;
 }
 
+// Git 仅用于工程合成数据构造；项目运行时从不调用此 helper。
+export function legacyGitMaterial(h, docId, { synthetic = false } = {}) {
+  const doc = h.state.docs[docId];
+  const root = h.workspacePath;
+  const pathAtCommit = doc.locator.relPath;
+  const objectFormat = synthetic ? 'sha1' : git(root, 'rev-parse', '--show-object-format');
+  const commitOid = synthetic ? 'a'.repeat(40) : git(root, 'rev-parse', 'HEAD');
+  const blobOid = synthetic ? 'b'.repeat(40) : git(root, 'rev-parse', commitOid + ':' + pathAtCommit);
+  const body = synthetic ? Buffer.from('synthetic recorded Git source')
+    : execFileSync('git', ['-c', 'core.hooksPath=', 'cat-file', 'blob', blobOid],
+      { cwd: root, timeout: 5000, maxBuffer: 20 * 1024 * 1024, windowsHide: true });
+  const blobContentHash = sha(body);
+  const fixed = { v: 1, projectId: h.id, objectFormat, commitOid, pathAtCommit, blobOid, blobContentHash };
+  const data = { kind: 'doc', ref: docId, hash: blobContentHash, fixed };
+  const source = h.state.project.gitContentRepository ?? { v: 1, objectFormat, anchorCommitOid: commitOid, bindingIds: [doc.locator.bindingId] };
+  return { data, source };
+}
+
+export async function bootstrapPin(h, docId, options) {
+  const { data, source } = legacyGitMaterial(h, docId, options);
+  appendLegacyFacts(h, [
+    { type: 'project/updated', data: { ...h.state.project, gitContentRepository: source } },
+    { type: 'doc/content-fixed', docId, data },
+  ]);
+  return { ...data, fixedState: 'pinned' };
+}
+
+export function seedLegacyGitRelation(h, { from, to }) {
+  const relationId = 'rel_' + crypto.randomBytes(10).toString('hex');
+  const sourceOwnerId = locateRelationOwner(h.store.commits, from);
+  if (!sourceOwnerId || to.kind !== 'git-fixed') throw new Error('Legacy relation fixture needs an existing exact source');
+  appendLegacyFacts(h, [{ type: 'doc/relation-added', docId: to.docId, data: {
+    relationId, relationKind: 'reference', fromVersion: from, toVersionRef: to, sourceOwnerId,
+  } }]);
+  return { relationId, relationState: 'exact', toVersionRef: to };
+}
+
+export const legacyRelation = (h, from, to) => seedLegacyGitRelation(h, { from, to });

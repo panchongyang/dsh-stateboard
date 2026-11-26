@@ -9,7 +9,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { apply } from '../../lib/index.js';
+import test from 'node:test';
 import { ProjectService } from '../../lib/core/service.js';
+import { registerTools } from '../../lib/host/tools/index.js';
 
 const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-state-'));
 const wsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-ws-'));
@@ -354,10 +356,12 @@ try {
   assert.equal(rejectedAudit.task.task.lastAudit.verdict, 'fail');
   assert.equal(rejectedAudit.task.task.lastAudit.by.sessionId, auditor.agent.id);
 
-  const ordinaryClaimed = rejectedAudit.task.lease ? rejectedAudit
-    : await taskTool.execute({ op: 'claim', taskId, expectedRev: rejectedAudit.task.task.rev }, exec);
-  const fencingToken = ordinaryClaimed.task.lease.token;
-  const ordinaryBegun = await taskTool.execute({ op: 'begin', taskId, expectedRev: ordinaryClaimed.task.task.rev, fencingToken, summary: 'ordinary rework' }, exec);
+  // Lease credentials are per-session: the auditor's view hides the worker's
+  // token, so read as the owning session before continuing its own lease.
+  const ordinaryView = await boardTool.execute({ view: 'task', taskId, fresh: true }, exec);
+  assert.ok(ordinaryView.lease, 'the worker still owns its lease after the audit rejection');
+  const fencingToken = ordinaryView.lease.token;
+  const ordinaryBegun = await taskTool.execute({ op: 'begin', taskId, expectedRev: ordinaryView.task.rev, fencingToken, summary: 'ordinary rework' }, exec);
   const ordinarySubmitted = await taskTool.execute({ op: 'submit', taskId, expectedRev: ordinaryBegun.task.task.rev, fencingToken,
     evidence: [{ kind: 'note', ref: 'reworked evidence', acceptanceId: ordinaryBegun.task.task.acceptance[0].id }] }, exec);
   const verifiedOrdinary = await taskTool.execute({ op: 'verify', taskId, expectedRev: ordinarySubmitted.task.task.rev }, exec);
@@ -372,3 +376,90 @@ try {
   fs.rmSync(wsDir, { recursive: true, force: true });
   fs.rmSync(unregisteredWorkspace, { recursive: true, force: true });
 }
+
+// Exercise the same registry as apply(), with access to its value-only refs.
+async function firstWriteFixture(t) {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-native-first-'));
+  const rootDir = path.join(fixture, 'store');
+  const cwd = path.join(fixture, 'workspace');
+  fs.mkdirSync(cwd);
+  const registered = new Map();
+  const ctx = { tools: { register(tool) { registered.set(tool.name, tool); } }, effect() {} };
+  const service = new ProjectService({ rootDir });
+  const runtime = { ctx, service, rootDir, ready: service.init(), sessionProjects: new Map(), promptFibers: new Map() };
+  await runtime.ready;
+  registerTools(ctx, runtime);
+  t.after(async () => { await runtime.closeAgentTools(); await service.close(); });
+  const sessionId = 'native-first-test';
+  const exec = { agent: { id: sessionId, session: { header: { cwd } } }, callId: 'call-native-first' };
+  const call = (name, args) => registered.get('project_' + name).execute(args, exec);
+  return { call, service, runtime, sessionId, rootDir, cwd };
+}
+
+const firstAcceptance = [{ text: 'do the work' }];
+const firstDefinition = { key: 'one', title: 'One', acceptance: firstAcceptance };
+const firstSteps = (...tasks) => [{ id: 'step_one', title: 'First phase', tasks }];
+const taskCreate = { op: 'create', title: 'First task', acceptance: firstAcceptance };
+const draftCreate = { op: 'create', title: 'First draft' };
+const planPublish = { op: 'publish', title: 'First plan', steps: firstSteps(firstDefinition) };
+
+for (const [label, tool, input, code = 'invalid-command'] of [
+  ['task with missing title', 'task', { op: 'create', acceptance: firstAcceptance }],
+  ['task with blank title', 'task', { ...taskCreate, title: '   ' }],
+  ['task with missing dependency', 'task', { ...taskCreate, deps: ['tsk_missing'] }],
+  ['task with invalid acceptance', 'task', { ...taskCreate, acceptance: [{ text: '   ' }] }],
+  ['task with stale first project rev', 'task', { ...taskCreate, projectRev: 0 }, 'stale-revision'],
+  ['draft with missing title', 'plan', { op: 'create' }],
+  ['draft with blank title', 'plan', { ...draftCreate, title: '   ' }],
+  ['publish with missing title', 'plan', { op: 'publish', steps: planPublish.steps }],
+  ['publish with blank title', 'plan', { ...planPublish, title: '   ' }],
+  ['publish with missing dependency', 'plan', { ...planPublish, steps: firstSteps({ ...firstDefinition, deps: ['missing'] }) }],
+  ['publish with duplicate key', 'plan', { ...planPublish, steps: firstSteps(firstDefinition, firstDefinition) }],
+  ['publish with invalid acceptance', 'plan', { ...planPublish, steps: firstSteps({ ...firstDefinition, acceptance: [{ text: '   ' }] }) }],
+]) {
+  // 责任：无效首写不产生项目目录、持久绑定、标记或宿主会话引用。
+  test('registered first write rejects ' + label + ' without a project or session side effect', async (t) => {
+    const { call, service, runtime, sessionId, rootDir, cwd } = await firstWriteFixture(t);
+    await assert.rejects(call(tool, input), { code });
+    assert.deepEqual(fs.readdirSync(service.projectsDir), [], 'no project directory, even a genesis-only log');
+    assert.deepEqual(fs.readdirSync(rootDir), ['projects'], 'no persistent binding or reservation');
+    assert.deepEqual(fs.readdirSync(cwd), [], 'no marker');
+    assert.equal(service.resolveWorkspace(cwd), null);
+    assert.equal(runtime.sessionProjects.has(sessionId), false);
+    assert.equal(runtime.sessionProjectRefs?.has(sessionId) ?? false, false);
+  });
+}
+
+for (const [tool, input, eventType] of [
+  ['task', { ...taskCreate, projectRev: 1 }, 'task/created'],
+  ['plan', draftCreate, 'plan/created'],
+  ['plan', planPublish, 'plan/published'],
+]) {
+  // 责任：合法原生首写以一条提交记录建项、首绑及所请求的业务结果。
+  test('registered native ' + eventType + ' still creates a project on first use', async (t) => {
+    const { call, service, runtime, sessionId, cwd } = await firstWriteFixture(t);
+    const value = await call(tool, input);
+    assert.equal(value.result.committed, true);
+    assert.equal(service.resolveWorkspace(cwd)?.projectId, value.projectId);
+    assert.equal(runtime.sessionProjects.get(sessionId)?.projectId, value.projectId);
+    assert.equal(runtime.sessionProjectRefs.get(sessionId)?.has(value.projectId), true);
+    assert.deepEqual(fs.readdirSync(cwd), [], 'successful implicit creation does not mark the workspace');
+    const commits = fs.readFileSync(path.join(service.projectsDir, value.projectId, 'commits.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+    assert.equal(commits.length, 1, 'the authoritative history never contains an independent genesis');
+    const events = commits[0].events;
+    assert.equal(events[0].type, 'project/created');
+    assert.ok(events.some((event) => event.type === eventType));
+    assert.ok(events.some((event) => event.type === 'session/bound' && event.data.sessionId === sessionId));
+  });
+}
+
+// 责任：显式初始化仍能创建命名空项目，不偷偷生成计划或占位任务。
+test('registered explicit session init still creates an empty board', async (t) => {
+  const { call, service, sessionId } = await firstWriteFixture(t);
+  const value = await call('session', { op: 'init', name: 'Named blank board' });
+  assert.equal(value.project.name, 'Named blank board');
+  const state = (await service.open(value.projectId)).state;
+  assert.ok(state.bindings[sessionId]);
+  assert.deepEqual(Object.keys(state.tasks), []);
+  assert.deepEqual(Object.keys(state.planHeads), []);
+});

@@ -34,13 +34,13 @@ schema、事件分类、字段语义与传输版本是不同校验域；同为 v
 
 salvage/fsck 是诊断或前缀观测，显式 repair 不是自动迁移；维护授权、停写、备份和数据损失确认见[运维 CLI](<operations/CLI.md#1-开发-cli>)。代码回退不回滚外部副作用。
 
-## 4. 文档外置与 fixed/current-only
+## 4. 文档外置与历史引用
 
-inline 正文以 blob/hash 记录，external 保存 locator 与元数据；metaRev 不代表正文版本。默认 inline 写策略与外置操作分开，不能用 put/link 改写 external；外置文档的管理状态、availability、confirmation、Git 观测互相独立，见[文档](<CONTRACT.md#24-文档>)与 [documents 模块](<modules/documents.md>)。
+文档登记与正文版本分别识别；metaRev 不是正文版本。当前行为见[文档契约](<CONTRACT.md#24-文档>)。
 
-提交外置 doc 证据时服务端自动尝试固定；调用方只传 docId，不提交 fixed 或批准参数。已提交且干净、可安全还原时生成 pinned 身份，不能固定时返回 current-only/fixedReason，主流程继续而不伪装已固定。缺 Git、脏工作区和不支持转换属于可见降级，不要求使用者安装或批准，见[验收项与证据](<CONTRACT.md#验收项与证据>)及 [fixed-auto.js](<../lib/core/documents/fixed-auto.js>)。
+所属工作区的留存正文可按版本回读；集中布局保持当前文件证据。能证明当前 hash 不代表可恢复历史。旧 Git 固定引用只交付已记录来源，不读正文、不重新核验。
 
-新固定证据与匹配的 doc/content-fixed 必须同 commit；该事件为 applied，不能当 additive 略过。固定 Git 字节不写看板 blob；审计固定对象不追当前分支/metaRev。暂时不能观测 Git/绑定/对象给 warning，真实结构、来源身份、hash/OID/type 不符仍是 error，不以降级掩盖冲突。get_fixed 只读取，不创建证据，见[固定证据条款](<CONTRACT.md#验收项与证据>)与 [evidence 模块](<modules/evidence.md>)。
+Git 兼容接口与字段为只读、计划弃用；原始记录继续校验。详见[证据模块](<modules/evidence/contract.md>)。
 
 ## 5. 能力缺失与显示边界
 
@@ -50,7 +50,7 @@ inline 正文以 blob/hash 记录，external 保存 locator 与元数据；metaR
 | MCP 未启用、凭据/配置失败 | 只禁用该监听或写入口，网页和 DSH 工具继续运行 | [MCP](<CONTRACT.md#267-可选本机-mcp>) |
 | FTS5、索引缓存不可用 | 有界扫描并标 coverage，失败不进入任务事务 | [知识读取](<CONTRACT.md#历史知识读取与检索>) |
 | 历史来源不可读、范围超限 | 显式报告不可用/截断/覆盖，不以当前字节代替历史 | [知识读取](<CONTRACT.md#历史知识读取与检索>) |
-| 文档/Git 内容漂移 | 维持内容审计错误边界；人工可显式刷新/豁免并保留记录 | [任务验收](<CONTRACT.md#12-任务状态机>) |
+| 文档内容缺失或漂移 | 维持内容审计错误边界；旧 Git 仅报告未重新核验 | [任务验收](<CONTRACT.md#12-任务状态机>) |
 
 execution 和 auto/policy 等兼容数据仅按记录回放，不开启命令执行或新自动完成；agent 自述、人工验收与内容指纹的显示不能相互冒充，见 [CONTRACT §4](<CONTRACT.md#4-兼容与降级>) 和[信任边界](<TRUST-BOUNDARIES.md>)。
 

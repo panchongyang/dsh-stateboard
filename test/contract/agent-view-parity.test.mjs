@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fixture, text, error } from '../helpers/agent-parity-fixture.mjs';
 import { command } from '../helpers/service-fixture.mjs';
-import { git, repository, put } from '../helpers/fixed-fixture.mjs';
+import { put, temp, bootstrapPin } from '../helpers/fixed-fixture.mjs';
 
 // 责任：同业务身份逐字比较全部视图，仅对独立审计时间显式归一。
 test('all board views share DSH defaults, text and unchanged behavior', async (t) => {
@@ -24,7 +24,11 @@ test('all board views share DSH defaults, text and unchanged behavior', async (t
   text(await f.call('project_board', { view: 'health', context }));
   // Compare the same authorized business actor, rather than erasing identity
   // fields from different actors' views.
-  f.exec.agent.id = Object.keys(f.h.state.bindings)[0];
+  // Reads never attach an actor. Establish the compared actor with an explicit
+  // business write, then use that same actor id for both transports.
+  await f.call('project_task', { op: 'create', title: 'actor anchor', acceptance: [{ text: 'ok' }], context });
+  f.exec.agent.id = Object.keys(f.h.state.bindings).find((id) => id.startsWith('mcp_'));
+  assert.ok(f.exec.agent.id, 'the explicit write attached the compared actor');
   const cases = [
     { view: 'brief' }, { view: 'board' }, { view: 'task', taskId }, { view: 'plans' },
     { view: 'plan' }, { view: 'plan', planId: 'pln_missing' },
@@ -60,27 +64,32 @@ test('all board views share DSH defaults, text and unchanged behavior', async (t
   assert.deepEqual([...covered].sort(), [...f.native.get('project_board').parameters.properties.view.enum].sort());
 });
 
-// 责任：两端固定读取同一 Git 正文，并拒绝绑定外的父仓库路径。
-test('fixed Git reads share successful bytes and the binding safety boundary', async t => {
-  const { root } = repository('sha1', t);
+// 责任：两端只回放同一条已记录的旧 Git 来源身份，不执行 Git：body:null、deprecated/reverified 明确，无记录 404，旧绑定提示不能恢复字节。
+test('legacy Git reads replay the same recorded identity on both transports without Git bytes', async t => {
+  const root = temp(t);
   put(root, 'nested/inside.md', 'inside binding\n');
-  put(root, 'outside.md', 'outside binding\n');
-  git(root, 'add', '.'); git(root, 'commit', '-m', 'synthetic nested binding');
-  const commitOid = git(root, 'rev-parse', 'HEAD');
   const f = await fixture(t, { workspacePath: root });
   const { context } = await f.open();
   const registered = await f.h.command(command('doc.external.register', { title: 'Nested', relPath: 'nested/inside.md' }));
-  const args = { op: 'get_fixed', docId: registered.docId, commitOid, pathAtCommit: 'nested/inside.md' };
+  const pinned = await bootstrapPin(f.h, registered.docId, { synthetic: true });
+  const args = { op: 'get_fixed', docId: registered.docId, commitOid: pinned.fixed.commitOid, pathAtCommit: pinned.fixed.pathAtCommit };
   const value = await f.nativeCall('project_doc', args);
-  assert.equal(value.body, 'inside binding\n');
-  assert.equal(text(await f.call('project_doc', { ...args, context })), f.render('project_doc', args, value)[0].text);
-  const nested = await fixture(t, { workspacePath: path.join(root, 'nested') });
-  const opened = await nested.open();
-  const nestedDoc = await nested.h.command(command('doc.external.register', { title: 'Nested binding', relPath: 'inside.md' }));
-  const denied = { ...args, docId: nestedDoc.docId, pathAtCommit: 'outside.md' };
-  let native;
-  try { await nested.nativeCall('project_doc', denied); } catch (e) { native = e.boardFailure; }
-  assert.deepEqual(error(await nested.call('project_doc', { ...denied, context: opened.context }), 'outside-root'), native);
+  assert.equal(value.body, null, 'historical bytes are never read back');
+  assert.equal(value.availability, 'legacy-git-record-only');
+  assert.equal(value.deprecated, true);
+  assert.equal(value.reverified, false);
+  assert.equal(value.hashDomain, 'git-blob-bytes');
+  assert.deepEqual(value.fixed, pinned.fixed);
+  assert.equal(text(await f.call('project_doc', { ...args, context })), f.render('project_doc', args, value)[0].text, 'both transports replay the identical record');
+
+  const hinted = await f.nativeCall('project_doc', { ...args, bindingId: 'bnd_legacy_missing' });
+  assert.deepEqual(hinted, value, 'a stale binding hint cannot restore external Git bytes');
+
+  const missing = { op: 'get_fixed', docId: registered.docId, commitOid: 'c'.repeat(40), pathAtCommit: pinned.fixed.pathAtCommit };
+  let nativeMissing;
+  try { await f.nativeCall('project_doc', missing); } catch (e) { nativeMissing = e.boardFailure; }
+  assert.equal(nativeMissing.code, 'not-found');
+  assert.equal(error(await f.call('project_doc', { ...missing, context }), 'not-found').code, 'not-found');
 });
 
 // 责任：精读按 UTF-8 分页、版本钉住和显式过滤，禁止隐式扩展。
@@ -192,7 +201,25 @@ for (const channel of ['native', 'mcp']) test(channel + ' executes every plan an
   assert.equal(f.h.state.docs[docId].baseline.contentHash, observed.observation.contentHash);
   assert.equal(f.h.state.docs[docId].baselineInContext, true);
   assert.equal(meta(), 4);
-  await invoke('project_doc', { op: 'get_fixed', docId, commitOid: 'a'.repeat(40), pathAtCommit: 'doc.md' }, 'unsupported-repository');
+  await invoke('project_doc', { op: 'get_fixed', docId, commitOid: 'a'.repeat(40), pathAtCommit: 'doc.md' }, 'not-found');
+  // This fixture uses the legacy layout. Positive cases on the space layout
+  // are exercised through both actual registrars in the P2 host test.
+  for (const op of ['capture', 'history', 'read_version', 'compare']) {
+    const version = op === 'read_version' || op === 'compare' ? { versionId: 'synthetic-retained-version' } : {};
+    await invoke('project_doc', { op, docId, ...version }, 'space-home-unavailable');
+  }
+  // P4 succeeds in the owning-space host fixture only; legacy cannot read or write relations.
+  const from = { kind: 'task', id: taskId, seq: 1, event: 0 };
+  for (const args of [
+    { op: 'relate', from, to: { kind: 'workspace-current', docId }, expectedRev: 1 },
+    { op: 'unrelate', relationId: 'rel_fixture', expectedRev: 1 },
+    { op: 'relations', from },
+  ]) await invoke('project_doc', args, 'space-home-unavailable');
+  // Projection requires an owning space; actual successful read/refresh on both
+  // transports is exercised in the corresponding owning-space parity fixture.
+  for (const op of ['discover', 'read_current', 'refresh_current']) {
+    await invoke('project_doc', op === 'discover' ? {op} : {op,relPath:'relocated.md'}, 'project-forbidden');
+  }
   await invoke('project_doc', { op: 'unregister', docId, expectedMetaRev: meta(), reason: 'End of synthetic workflow' });
   assert.equal(f.h.state.docs[docId].unregistered.reason, 'End of synthetic workflow');
   assert.equal(meta(), 5);

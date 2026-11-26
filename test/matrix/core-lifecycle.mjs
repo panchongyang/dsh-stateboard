@@ -18,13 +18,13 @@ function addArchivedPlan(f, status = 'archived') {
   const task = f.h.state.tasks[TASK];
   const head = { id: 'pln_matrix', title: 'synthetic legacy plan', status, archivedFrom: status === 'archived' ? 'active' : null, currentVersion: 1, rev: 1 };
   const binding = { sessionId: 'owner', agentId: 'owner', epoch: 0, boundAt: new Date(NOW).toISOString(), lastSeenAt: new Date(NOW).toISOString() };
-  // Persist these synthetic legacy facts before exercising public command guards.
-  f.h._appendEvents([
+  // Restore these synthetic legacy facts before exercising public command guards.
+  f.seed([
     { type: status === 'archived' ? 'plan/archived' : 'plan/updated', data: head },
     { type: 'session/bound', data: binding },
     { type: 'task/updated', taskId: TASK, rev: task.rev + 1,
       data: { ...task, rev: task.rev + 1, planRef: { planId: head.id, version: 1, stepId: 's1' }, assignee: { sessionId: 'owner', epoch: 0 } } },
-  ], actor('human'), 'cmd_plan_seed', f.h.rev);
+  ]);
 }
 
 // 责任：归档计划所有进入工作路径须拒绝，unarchive 后 claim 才可合法发租约。
@@ -96,7 +96,7 @@ test('legacy closed/abandoned intents are history, not new settlement requiremen
       f.reset({ state: 'in_progress', lease: 'live', open: true });
       const legacy = { ...f.h.state.intents.int_matrix, status, closedAt: new Date(NOW).toISOString() };
       // Legacy records intentionally omit RFC-3 settlement identity fields.
-      f.h._appendEvents([{ type: status === 'closed' ? 'work/result' : 'work/abandoned', taskId: TASK, data: legacy }], actor(), 'cmd_legacy_seed', f.h.rev);
+      f.seed([{ type: status === 'closed' ? 'work/result' : 'work/abandoned', taskId: TASK, data: legacy }]);
       const expected = {
         begin: { state: 'in_progress', events: ['work/intent', 'task/updated'] },
         release: { state: 'ready', events: ['lease/revoked', 'task/released'] },

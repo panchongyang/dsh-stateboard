@@ -120,7 +120,7 @@ reject 可自动接回仍有效的原 assignee；MCP 工作会话要求显式 cl
 - claim/ready/gate 的领域计算主要是内存检查，提交 I/O 由总线和 store 完成。
 - update 依赖图检查会遍历任务；阶段新增路径检查还跨计划当前版本。
 - submit/verify/reconcile completed 会执行文件或文档内容读取与 hash。
-- fixed Git 观测经证据层，只读并受它自己的读取限额约束。
+- 留存对象校验与当前文件审计读不同的来源；旧 Git 只保留已记录身份。
 - begin 退休历史材料、auditWorkers 和 scopeDigest 随任务材料数量增长。
 - touch/renew 不产生 commit；不能因此把它们忽略为“没有状态变化”。
 

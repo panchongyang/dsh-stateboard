@@ -12,56 +12,16 @@
 
 ## 2. 六条关键阅读链
 
-按“调用者 → 入口 → 规则/数据 → 返回与失败”阅读。下面的源码符号是定位点，不代表整个文件已经满足注释目标。
+按调用者、入口、规则/数据、返回与失败阅读。项目行为以[实现契约](<../CONTRACT.md>)为准。
 
-### A. 领域写入：命令、守卫、intent、租约到提交
-
-1. [共享契约](<../../lib/shared/contract.js>)的 `COMMAND_OPS` → [命令注册表](<../../lib/core/commands/index.js>)的 `COMMAND_HANDLERS`。参数/返回/事件语义查[实现契约](<../CONTRACT.md#22-命令信封>)，不要从工具参数表推导领域授权。
-2. [handle](<../../lib/core/handle.js>)的 `ProjectHandle.command`：先检查命令形状、只读、cmdId 去重、项目 rev 与归档状态，再进入 `_executeOnWorkingCopy`。后者克隆 state/lease，在工作投影上 `normalizeExpiredLeases` 后分发；处理器拒绝时还原原 state/lease。实体 rev 校验还要读[lease](<../../lib/core/lease.js>)的 `assertRev` 对 `_lapsed.baseRevs` 的处理。
-3. [任务工作命令](<../../lib/core/commands/task-work.js>)的 `taskClaim` / `taskBegin` / `taskSubmit` → [租约守卫](<../../lib/core/lease.js>)的 `assertLease` / `grantLease` / `isLeaseReclaimable` → [intent 结算](<../../lib/core/intent.js>)的 `settleOpenIntent`。到期、可续与可回收不是同义词；open intent 的副作用清单是声明，不是宿主核验，`unknown` 不能当作 `stopped` 关闭。
-4. 回到 `_appendEvents` → [store](<../../lib/core/store.js>)的 `JsonlStore.append` → [写适配](<../../lib/core/store/writes.js>)的 `appendCommitLine`。handle 显式接收 append 返回的 state，`assertStateAttached` 防止写入落在脱钩对象上。到期事件与业务事件的顺序、token 和 state 的提交边界要一起核对，不能在注释中承诺多次提交等价。
-
-**失败边界**：工作副本回滚不等于全部磁盘 I/O 回滚。[内嵌写入](<../../lib/core/commands/doc.js>)的 `docPut` 在允许写入时可能先写 blob 再检查 baseRev；[证据归一化](<../../lib/core/evidence.js>)会读取文件/Git。日志 I/O 结果不明走 `log-write-uncertain` 并降只读，不能说“任何失败都零字节写入”；后置 relocate 元数据失败由 `_applyRelocateSafe` 返回 warning。持久化定义与恢复条件以[命令提交契约](<../CONTRACT.md#22-命令信封>)为准。
-
-### B. 项目身份、读取与 host 准入
-
-[service](<../../lib/core/service.js>)的 `resolveWorkspace` → [身份发现](<../../lib/core/identity/discover.js>)的 `resolveWorkspace` / `walkUp`，结合[绑定索引](<../../lib/core/identity/bindings.js>)与[注册表](<../../lib/core/identity/registry.js>)判断目录归属；身份冲突、未绑定 marker 与本机数据缺失不能自动合并或新建替代。细节查[项目身份](<../modules/project/contract.md>)。
-
-区分三种入口：
-
-- `peekProjectState` → [store](<../../lib/core/store.js>)的 `readStateWithoutLock`：无项目锁回放，不做 recovery；不可读返回 null，不是“项目不存在”的证明。
-- `open` / `openByWorkspace` → `_openSync`：可能获取写锁、执行 `_healMeta` 和 `recover`；看似读取的冷打开可能写派生元数据及恢复事件。`refreshFromDisk` 还会确保目录存在，不能把整个 service 标成纯读。
-- [工具共享入口](<../../lib/host/tools/shared.js>)的 `resolveHandle`：校验 owning agent/cwd，等待 ready，打开项目；仅在调用方请求 create 时尝试创建，随后 `touch` 并更新会话映射。[HTTP 分发](<../../lib/host/routes.js>)的 `handleApi` 先调用 `authFailure`，拒绝请求在等待 ready、解析资源和 open 前返回 403；放行后才继续解析和部分写入准入，再 open。`prepareCommandWrite`、`prepareExternalWrite` 及内嵌策略的共享 core 校验只能说明各自覆盖的拒绝窗口，不能推广成所有 HTTP 错误无写入。
-
-[项目列表读取器](<../../lib/core/project-list-reader.js>)的 `ProjectListReader` 与[其 worker](<../../lib/core/project-list-worker.js>)服务展示摘要，不是写准入权威。注释需要区分内存投影、文件指纹缓存、冷回放与写入判断，避免把显示用缓存引入授权路径。
-
-### C. 查询投影、digest 与完整 health 的成本
-
-[handle](<../../lib/core/handle.js>)的 `query` → [views](<../../lib/core/views.js>)的 `boardView` / `taskView` / `briefView`：投影 DTO、关联文档与 allowedOps；allowedOps 来源仍是[model](<../../lib/core/model.js>)，不能在 host/views 复制守卫。
-
-`digest` → `briefView` → [health](<../../lib/core/health.js>)的 `healthSummary` → [digest](<../../lib/core/digest.js>)的 `buildDigest` / `sanitizeField`。简报不重新审文件/blob/绑定/Git，并如实标 `evidence unchecked`；`buildDigest` 对传入 brief 生成有界文本，不代表包括上游时钟/租约取样在内的所有查询都没有时间依赖。
-
-**额外 I/O 例外**：[views](<../../lib/core/views.js>)的 `docView` 读 blob；`healthView` 调同步 `handle.health`，完整审计可能读取证据、文件、绑定与 Git。host 显式完整审计走 `healthAsync` → [隔离审计](<../../lib/core/health-audit.js>)的 `isolatedHealth` → [审计 worker](<../../lib/core/health-audit-worker.js>)；不要把该工作放回 prompt 热路径。队列/时效拒绝是拒绝，不是健康通过，worker 边界也不意味着已经完成宿主或 UI 验收。
-
-### D. 外置文档、固定内容与 Git 降级
-
-[外置命令](<../../lib/core/commands/doc-external.js>)登记 locator/元数据，不代替编辑器写正文。观察走[external-observe](<../../lib/core/documents/external-observe.js>)的 `inspectExternalDoc` → `readLocator` → [reader](<../../lib/core/documents/read.js>)的 `readDocument` → [locator](<../../lib/core/documents/locate.js>)的 `validateRelPath` / `locateDocument`。inspect 的 availability 与命令抛错口径不同；观察缓存不用于 confirm 或正式证据，绑定根不能取会话 cwd 代替。
-
-`taskSubmit` → [evidence](<../../lib/core/evidence.js>)的 `normalizeEvidence` → [fixed-auto](<../../lib/core/documents/fixed-auto.js>)的 `autoExternalEvidence` / `fixedEvents` → [fixed-content](<../../lib/core/documents/fixed-content.js>)、[fixed-worktree](<../../lib/core/documents/fixed-worktree.js>)、[fixed-git](<../../lib/core/documents/fixed-git.js>)。工作区字节哈希和 Git blob 字节哈希是不同校验域。可安全固定时，来源记录/`doc/content-fixed` 与任务证据同 commit；自动固定失败可降 `current-only` + `fixedReason`，不伪称 pinned。
-
-**不是所有失败都降级**：`autoExternalEvidence` 先读当前文件；不可读且没有可用哈希时会抛错，非 UTF-8 有原始哈希则有专门降级分支。固定对象读取/审计还必须区别不可观测 warning 与结构/来源/hash 不符 error，不可用当前正文冒充固定版本。[Git 执行边界](<../modules/evidence/contract.md>)及[git-exec](<../../lib/core/git-exec.js>)的 `resolveGitExecutable` / `assertReadOnlyGitArgs`约束只读子进程，不安装 Git、不运行内容转换器、不管理分支或 worktree；完整定义见[固定内容证据](<../modules/evidence/contract.md>)与[D1 契约](<../WORKSPACE-DOCUMENTS-CONTRACT.md>)。
-
-### E. tools / HTTP 的翻译与错误
-
-[工具注册](<../../lib/host/tools/index.js>) → [task 工具](<../../lib/host/tools/task.js>)的 `execute` → [tools/shared](<../../lib/host/tools/shared.js>)的 `actorOf` / `resolveHandle` / `run` / `fail` → `handle.command`。工具用领域错误生成 next 提示，不执行 command/test 证据里的 ref，不把自述审计变成实际执行证明。
-
-[HTTP 注册与分发](<../../lib/host/routes.js>)的 `registerRoutes` / `handleApi` → [commands route](<../../lib/host/routes/commands.js>)的 `prepareCommandWrite` / `commandsRoute` → `handle.command`。[auth](<../../lib/host/auth.js>)的 `authFailure` 先判断请求来源，再比较 token，返回 `fetch-site-rejected` / `origin-rejected` / `token-mismatch` 或 null；`checkAuth` 保留布尔接口。`handleApi` 将鉴权拒绝直接映射为带具体 code 的 403，来源拒绝不能靠刷新 capability 修复。[host util](<../../lib/host/util.js>)的 `readJson` 控制 body 上限，`sendError` 映射后续 BoardError；未知异常只回通用 internal，细节留本机日志。工具错误封装与 HTTP error envelope 不相同，不能为了注释“统一”而改返回形状。
-
-### F. 宿主生命周期与 prompt
-
-[插件入口](<../../lib/index.js>)的 `apply` 创建 runtime/ready，注册工具、可选 web 路由、agent 事件和 service 清理。[lifecycle](<../../lib/host/lifecycle.js>)的 `attachAgent` / `detachAgent` 对接 handle 的 attach/detach，可能产生会话/恢复/租约事件，不是单纯 Map 操作；项目失败记录 warning，不使会话创建失败。
-
-[prompt](<../../lib/host/prompt.js>)的 `installPrompt` / `disposePrompt` 管理每 agent 的动态 section。每次组装查当前 handle，缺项目/closed 返回空文本；digest 失败记录 warning 并返回空文本。`interpolate:false` 保证看板自由文本按字面数据进入宿主，不能以字符替换替代这条契约。重复挂载防护、dispose 的异步失败和工具 brief 的规则去重一起查[Prompt 契约](<../CONTRACT.md#34-prompt>)，不把 best-effort 写成“所有能力正常”。
+| 阅读路径 | 承重入口 | 注释应说明的边界 |
+|---|---|---|
+| 写入和回执 | [命令准备](<../../lib/core/commands/transaction.js>) → [模型事务](<../../lib/core/transaction/model.js>) → [持久化](<../../lib/core/store.js>) | 私有态不等于公开状态；命令给值、模型派生事件，核对物理回执才发布 |
+| 项目与身份 | [service](<../../lib/core/service.js>) → [目录归属](<../../lib/core/identity/discover.js>) 或 [所属工作区](<../../lib/core/store/space-home.js>) | 目录归属不授任意读写，普通读取与 writer 生命周期分开 |
+| 取数与投影 | [查询执行](<../../lib/core/reader/query.js>) → [纯投影](<../../lib/core/projection/views.js>) | 读取与租约独立；brief 不运行完整内容审计 |
+| 外置文档与取证 | [文档读观察](<../../lib/core/documents/external-observe.js>)、[留存端口](<../../lib/core/adapters/retained-documents.js>)、[证据模块](<../modules/evidence/contract.md>) | 当前观测、留存原件和兼容 Git 来源不可互相替代；不执行 Git |
+| 三端装配 | [工具目录](<../../lib/host/tools/index.js>)、[HTTP 路由](<../../lib/host/routes.js>) → [应用端口](<../../lib/core/application/index.js>) | 信任身份在入口绑定；错误映射不复制领域守卫 |
+| 生命周期与 Prompt | [生命周期](<../../lib/host/lifecycle.js>)、[Prompt](<../../lib/host/prompt.js>) | 显式生命周期可能有写入，提示读取已发布值并按字面投递 |
 
 ## 3. 中文注释口径
 
@@ -89,34 +49,18 @@
 
 ### 示例二：工作投影与提交不变量
 
-拟用于 [handle](<../../lib/core/handle.js>) 的 `_executeOnWorkingCopy` 附近：
+[模型事务](<../../lib/core/transaction/model.js>)的注释说明私有准备为何先于领域操作、单一物理回执为何先于发布，以及未知结果为何必须冷开核实。文件观测和预写对象有自己的 I/O 边界，不能声称所有失败没有物理副作用。
 
-```js
-// 在工作投影上先归一化可回收租约，再计算业务事件，避免旧任务快照覆盖回收结果。
-// 处理器抛错时恢复原 state/leases；成功事件由 command 合并成同一 commit 后交 store。
-// 这里保护的是内存投影，不是通用 I/O 事务：处理器已写的 blob 不能靠换回引用撤销。
-// append 后必须接回 store 的 state 并检查绑定关系，否则后续读取可能静默丢失已写事件。
-```
+### 示例三：输入、输出与降级
 
-### 示例三：输入/输出、副作用与降级窗口
-
-拟用于 [fixed-auto](<../../lib/core/documents/fixed-auto.js>) 的 `autoExternalEvidence`：
-
-```js
-// 输入是已登记文档的 locator，读取它所属绑定根下的当前字节，而非会话 cwd。
-// 先取得当前哈希，再尝试只读 Git 固定；可固定时返回 Git blob 哈希与固定身份，
-// 不能固定时保留当前字节哈希并标 current-only/fixedReason，不阻塞这次证据提交。
-// 当前文件无法读取且没有可用哈希仍会抛错；非 UTF-8 但有原始哈希走专门降级分支。
-// 此函数读取文件/Git，但不写来源事件；返回的 approval 由后续 fixedEvents 暂存到
-// 命令工作投影并产出事件，最终是否持久化仍取决于整个 submit 的审计与 append。
-```
+[留存端口](<../../lib/core/adapters/retained-documents.js>)的注释说明 locator 与所属空间如何限定可读对象；仅在可靠取得当前字节指纹时才可明确降级，不把当前观测声明为已留存正文。
 
 ### 示例四：生命周期失败不伪装成功
 
 拟用于 [prompt](<../../lib/host/prompt.js>) 的 section 配置：
 
 ```js
-// 每次组装读取会话当前 handle；没有项目或摘要失败时不注入内容，失败另记 warning。
+// 每次组装读取会话项目的已发布值；没有项目或摘要失败时不注入内容，失败另记 warning。
 // 看板标题/备注来自其他会话，只能按数据投递：关闭宿主插值，不能让 {{...}} 被解释。
 // 这是动态 section 的契约，不是清洗个别字符的补丁；工具 brief 去重也依赖挂载状态。
 ```
@@ -130,7 +74,7 @@
 | 批次 | 明确文件集合与主要阅读目标 | 主要风险 / 专项复查 | 定向验证组 |
 |---|---|---|---|
 | C1 契约入口 | [shared/contract](<../../lib/shared/contract.js>)、[shared/events](<../../lib/shared/events.js>)、[commands/index](<../../lib/core/commands/index.js>)：枚举与分发/兼容分类 | 误把枚举当守卫；核对冻结表面和事件分类，不增删 op | V1 |
-| C2 命令事务 | [handle](<../../lib/core/handle.js>)：只覆盖 `command`、`_executeOnWorkingCopy`、`_appendEvents`、`_applyRelocateSafe`、`assertStateAttached` | 把投影回滚说成全 I/O 原子；核对 staging/commit/后置 warning | V2 |
+| C2 命令事务 | [命令准备](<../../lib/core/commands/transaction.js>)、[事务模型](<../../lib/core/transaction/model.js>)与[物理存储](<../../lib/core/store.js>)的回执边界 | 把投影回滚说成全 I/O 原子；核对 staging/commit/后置 warning | V2 |
 | C3 租约与意图 | [lease](<../../lib/core/lease.js>)、[intent](<../../lib/core/intent.js>)：到期/可续/回收、rev/token、stopped/unknown | 恢复条件和无进展期限误述；复查时钟、epoch 与失败保留状态 | V3 |
 | C4 工作与审查 | [task-work](<../../lib/core/commands/task-work.js>)、[task-gov](<../../lib/core/commands/task-gov.js>)、[audit](<../../lib/core/audit.js>)：claim/begin/submit/verify/reconcile | 自述变核验、human 兜底缺失；核对事件顺序和独立性边界 | V3 |
 | C5 项目打开 | [service](<../../lib/core/service.js>)：只覆盖 `resolveWorkspace` / `open` / `openByWorkspace` / `_openSync` / `peekProjectState` / `peekProject` / `_healMeta` 与共享 handle 辅助；[project-list-reader](<../../lib/core/project-list-reader.js>)、[project-list-worker](<../../lib/core/project-list-worker.js>) | open 隐含恢复、列表缓存误用作准入；复查锁/共享引用和 worker 收尾 | V4 |
@@ -140,7 +84,7 @@
 | C9 持久化 | [store](<../../lib/core/store.js>)、[store/writes](<../../lib/core/store/writes.js>)、[lock](<../../lib/core/store/lock.js>)、[format](<../../lib/core/store/format.js>)、[files](<../../lib/core/store/files.js>) | 过度承诺原子性/锁能力；复查半尾恢复、uncertain、快照/侧文件 | V2 |
 | C10 文档观察 | [doc-external](<../../lib/core/commands/doc-external.js>)、[external-model](<../../lib/core/documents/external-model.js>)、[external-observe](<../../lib/core/documents/external-observe.js>)、[locate](<../../lib/core/documents/locate.js>)、[read](<../../lib/core/documents/read.js>) | locator/哈希域/缓存混淆；复查路径拒绝、availability 与命令错误 | V6 |
 | C11 固定证据壳 | [evidence](<../../lib/core/evidence.js>)、[fixed-auto](<../../lib/core/documents/fixed-auto.js>)、[fixed-reference](<../../lib/core/documents/fixed-reference.js>)、[shared/fixed-schema](<../../lib/shared/fixed-schema.js>) | 降级吞掉真实错误；核对 current-only/pinned、同 commit 屏障和硬审计 | V6 |
-| C12 Git 字节 | [fixed-content](<../../lib/core/documents/fixed-content.js>)、[fixed-git](<../../lib/core/documents/fixed-git.js>)、[fixed-worktree](<../../lib/core/documents/fixed-worktree.js>)、[external-git](<../../lib/core/documents/external-git.js>)、[git-exec](<../../lib/core/git-exec.js>) | 混淆 Git/工作区字节或安全可执行文件来源；复查只读/无转换器与不可观测 | V6 |
+| C12 历史来源 | [fixed-content](<../../lib/core/documents/fixed-content.js>)、[fixed-reference](<../../lib/core/documents/fixed-reference.js>) | 旧记录只回放，不暗示正文可取、对象重新核验或仓库探测 | V6 |
 | C13 tools 翻译 | [tools/shared](<../../lib/host/tools/shared.js>)、[tools/task](<../../lib/host/tools/task.js>)、[tools/doc](<../../lib/host/tools/doc.js>)、[tools/board](<../../lib/host/tools/board.js>) | create/touch/读写准入与错误 next 误述；不改 schema/参数/领域规则 | V7 |
 | C14 HTTP 翻译 | [routes](<../../lib/host/routes.js>)、[routes/commands](<../../lib/host/routes/commands.js>)、[routes/docs](<../../lib/host/routes/docs.js>)、[auth](<../../lib/host/auth.js>)、[host/util](<../../lib/host/util.js>) | 把局部 pre-open 校验推广到全部错误；复查鉴权、未知异常不泄露路径 | V7 |
 | C15 宿主装配 | [入口](<../../lib/index.js>)、[lifecycle](<../../lib/host/lifecycle.js>)、[prompt](<../../lib/host/prompt.js>) | best-effort 误述、重复挂载/未释放；复查字面文本、ready 与会话事件 | V5、V7 |
@@ -181,8 +125,8 @@ node --test test/lease-renew.test.mjs test/lease-reclaim.test.mjs test/intent-se
 node --test test/identity.test.mjs test/identity-conflicts.test.mjs test/handle-lifecycle.test.mjs test/project-list-performance.test.mjs
 # V5 简报/隔离审计/prompt
 node --test test/digest.test.mjs test/prompt-health-isolation.test.mjs
-# V6 文档/固定内容/Git
-node --test test/doc-read.test.mjs test/doc-external.test.mjs test/doc-fixed-auto.test.mjs test/doc-fixed-head-race.test.mjs test/doc-fixed-evidence.test.mjs test/git-exec.test.mjs
+# V6 文档、留存与历史来源
+node --test test/docs/doc-read.test.mjs test/docs/doc-external.test.mjs test/docs/doc-asset.test.mjs test/docs/doc-fixed-evidence.test.mjs test/docs/p2-retained-flow.test.mjs
 # V7 host 翻译/装配（含前置依赖检查）
 npm run test:host
 # V8 计划/投影
@@ -208,7 +152,7 @@ node --test test/doc-inline-write-policy.test.mjs test/doc-inline-write-boundari
 
 ## 6. 去重、独立事项与交付核对
 
-- **读取/准入/生命周期治理**：现有独立架构治理事项承接职责拆分。本基线只揭示 `open`、recover、touch 与 host pre-open 校验，不实施新 ProjectReader、改准入顺序或移动恢复职责；C5/C13/C14 实施前先核对该事项的最新决定，避免注释马上失真。
+- **职责边界**：普通查询使用已发布值与只读 worker；恢复与会话活性归显式生命周期或业务写事务。代码落点与依赖见[架构地图](<../ARCHITECTURE.md>)。
 - **查询模块 v2**：[权威规格](<../specs/query-module-v2.md>)是浏览器 WHERE 模块，与本文后端 views/digest 阅读路径不同；不复建 query 骨架、不把后端抽象设计捆绑到前端计划。
 - **TS 工具链与同批说明**：[工具链现状](<TYPESCRIPT.md>)是既有能力，不另设第二套配置/依赖或独立类型迁移阶段；后续文件按中文与类型说明同批承接，host 不等待 core/shared 完整类型化。批次登记由负责人对照既有任务/计划去重，明确不重叠的文件/符号，本公共入口不存真实看板 ID，也不自行创建实施卡。
 - **文字与实现差异**：发现差异时，在本机证据/既有事项记录“位置、事实、影响、所属事项”，按实际源码说明当前链，待独立核对，不在注释批次修历史问题或修改命令语义。

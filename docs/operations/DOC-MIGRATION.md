@@ -9,7 +9,7 @@ D6 是显式离线工具，不发现用户 home 或默认真实 store。默认�
 人工必须分别确认：
 
 1. 可读取/导出哪些真实数据；哪些内容公开、私有或归档（D7）。报告和正文默认 private。
-2. 迁移期间所有看板写入已停止，并完成**整个看板根目录**的一致性全量备份（项目日志/快照/blob、身份与绑定注册表、密钥/认证等），在隔离副本上恢复演练。固定 Git 证据另按[对象保留与备份](<../modules/evidence/contract.md>)保留所引用对象；当前文件不能代替历史对象。
+2. 迁移期间所有看板写入已停止，并完成**整个看板根目录**的一致性全量备份（项目日志/快照/blob、身份与绑定注册表、密钥/认证等），在隔离副本上恢复演练。备份项目原有的历史正文对象；旧 Git 证据只保留记录来源，当前文件不能代替历史正文。
 3. 每个 sourceDocId/sourceRev/sourceHash 和目标 locator；目标文件内容与编码/换行/BOM 均正确。
 4. 真实写入的项目/备份绝对路径及授权；不可恢复项的处理；是否开启本项目新增 inline 写封锁。
 
@@ -106,7 +106,7 @@ node scripts/doc-migration.mjs --apply --board "ABSOLUTE_BOARD_ROOT" --project p
 
 [readInlineArchive(handle,docId,sourceRev)](<../../lib/core/documents/migration-archive.js>) 返回 `source:'inline-archive',readOnly:true,gitManaged:false,domain:'inline-utf8'` 与原 hash/body。只读清单同样标明档案来源；旧 inline endpoint 不猜 external 正文。
 
-旧 persisted docId@rev 与无 fixed 的历史 hash 证据仍按原 blob 审计；迁移文档的历史 @rev 新引用也按映射取原 hash，不解释为当前文件。裸 docId 的新证据走 external 自动固定/降级；既有 fixed Git 证据原样保留，不改为 workspace 或 inline 域。历史缺 blob 仍明确报错。
+旧 persisted docId@rev 与无 fixed 的历史 hash 证据仍按原 blob 审计；迁移文档的历史 @rev 新引用也按映射取原 hash，不解释为当前文件。裸 docId 的新证据按外置正文的留存或当前观测规则处理；既有 fixed Git 证据原样保留，不改为 workspace 或 inline 域。历史缺 blob 仍明确报错。
 
 迁移文档的旧 doc.put/doc.link 永远返回 inline-write-disabled，不写 blob。未迁移的内嵌文档也不再是可写格式：项目默认是禁写内嵌，`doc.put`（新建与既有编辑）和 `doc.link` 一律返回 `inline-write-disabled`(409)，拒绝发生在写 blob/追加事件之前，store 字节与事件数不变。新内容的唯一生产写入通道是工作区文件 + 外置登记；内嵌只作为只读档案。
 

@@ -152,11 +152,11 @@ test('rejected HTTP and tool put/link on a cold project do not trigger recovery 
   assert.equal(taskStateFromLog(stateDir, taskId), 'in_progress', 'the un-recovered task is untouched');
   assert.equal(fs.existsSync(h.store.lockFile), false, 'the rejected requests do not acquire a writer lock');
 
-  // A valid write path still opens and recovers the same cold project.
-  const board = tools.get('project_board');
-  const view = await board.execute({ view: 'board' }, execAt(ws));
-  assert.ok(view.ok);
-  assert.notEqual(logBytes(stateDir), before, 'a valid open still runs recovery');
+  // A valid *write* path (not a read) still opens and recovers the cold project.
+  const session = tools.get('project_session');
+  const recovered = await session.execute({ op: 'checkpoint', note: 'cold recovery' }, execAt(ws));
+  assert.ok(recovered.ok);
+  assert.notEqual(logBytes(stateDir), before, 'a valid write still opens recovery');
 });
 
 // 责任：人工启用后，工具 put/link 保持原命令结果和文档投影。

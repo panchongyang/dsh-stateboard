@@ -12,8 +12,9 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { ProjectService } from '../../lib/core/service.js';
-import { JsonlStore, makeCommit } from '../../lib/core/store.js';
+import { JsonlStore } from '../../lib/core/store.js';
 import { readJson, writeJson } from '../../lib/core/util.js';
+import { openLockWriter } from '../helpers/lock-command.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const childScript = path.join(root, 'test/fixtures/lock-child.mjs');
@@ -30,8 +31,9 @@ async function makeProject() {
   const handle = await svc.createProject({ workspacePath: ws, name: 'Lock race' });
   const meta = { ...handle.meta };
   const dir = handle.meta.dir;
+  const projectId = handle.id;
   await svc.close();
-  return { dir, meta };
+  return { dir, meta, stateDir, projectId };
 }
 
 function lockFile(dir) {
@@ -51,12 +53,6 @@ function forgeLock(dir, fields) {
 
 function openStore(dir, meta, opts = {}) {
   return new JsonlStore(dir, meta, { heartbeatMs: 0, ...opts });
-}
-
-function commitFor(store, note) {
-  return makeCommit(store.lastSeq + 1, store.lastHash, { kind: 'agent', sessionId: 's1' }, 'cmd_' + Math.random().toString(36).slice(2), store.lastSeq, [
-    { type: 'session/checkpoint', data: { note } },
-  ]);
 }
 
 function parseCommits(file) {
@@ -156,17 +152,22 @@ test('N processes racing for a dead writer lock: exactly one takes over, chain s
 
 // 责任：被接管旧 writer 的心跳只能写自己 nonce 文件，不能夺回 lock.json。
 test('a heartbeat after takeover writes only its nonce file and cannot reclaim lock.json', async () => {
-  const { dir, meta } = await makeProject();
-  const store = openStore(dir, meta);
-  store.open();
-  const oldNonce = store.lockNonce;
-  forgeLock(dir, { pid: 424242, hostname: os.hostname(), nonce: 'new-owner' });
-  store.touchLock(true);
-  assert.equal(readJson(lockFile(dir), null).nonce, 'new-owner', 'old heartbeat must not overwrite the new lock');
-  assert.ok(fs.existsSync(path.join(dir, 'lock.json.hb.' + oldNonce)), 'old owner writes only its nonce heartbeat file');
-  assert.throws(() => store.append(commitFor(store, 'stale')), (error) => error.code === 'log-forked');
-  assert.equal(store.readOnly, true);
-  store.close();
+  const { stateDir, projectId, dir } = await makeProject();
+  const writer = await openLockWriter({ stateDir, projectId });
+  const store = writer.handle.store;
+  try {
+    const oldNonce = store.lockNonce;
+    forgeLock(dir, { pid: 424242, hostname: os.hostname(), nonce: 'new-owner' });
+    store.touchLock(true);
+    const before = fs.readFileSync(path.join(dir, 'commits.jsonl'));
+    assert.equal(readJson(lockFile(dir), null).nonce, 'new-owner', 'old heartbeat must not overwrite the new lock');
+    assert.ok(fs.existsSync(path.join(dir, 'lock.json.hb.' + oldNonce)), 'old owner writes only its nonce heartbeat file');
+    await assert.rejects(() => writer.checkpoint('stale'), (error) => error.code === 'log-forked');
+    assert.ok(fs.readFileSync(path.join(dir, 'commits.jsonl')).equals(before), 'a refused fork must not change log bytes');
+    assert.equal(store.readOnly, true);
+  } finally {
+    await writer.close();
+  }
   assert.equal(readJson(lockFile(dir), null).nonce, 'new-owner', 'close must not delete the new lock');
 });
 

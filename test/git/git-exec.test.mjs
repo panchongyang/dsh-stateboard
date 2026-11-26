@@ -16,10 +16,7 @@ import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { resetGitExecutableCache, resolveGitExecutable } from '../../lib/core/git-exec.js';
 import { observeGit } from '../../lib/core/documents/external-git.js';
-import { readGitContent, repositoryAt } from '../../lib/core/documents/fixed-git.js';
-import { mainWorktreeOf } from '../../lib/core/identity/discover.js';
 import { poison, temp, repository } from '../helpers/git-poison.mjs';
-import { git, sha } from '../helpers/fixed-fixture.mjs';
 
 const packageRoot = path.resolve(import.meta.dirname, '../..');
 
@@ -42,33 +39,14 @@ test('the workspace-local fake is a working executable (control)', (t) => {
   }
 });
 
-// 责任：固定内容读取、Git 观测和 worktree 发现均须返回正确结果且不执行工作区陷阱。
-test('fixed evidence, Git observation and worktree discovery never run a workspace-local git', (t) => {
-  const { root, oid } = repository(t);
-  const worktree = path.join(temp(t), 'linked');
-  git(root, 'worktree', 'add', '-b', 'fake-git-check', worktree);
-
+// 责任：历史兼容字段不执行 Git；运行时验证与维护者执行器测试边界分开。
+test('external observation compatibility never executes Git', (t) => {
+  const { root } = repository(t);
   const main = poison(root);
   try {
-    const repo = repositoryAt(root);
-    assert.equal(repo.objectFormat, 'sha1');
-    const content = readGitContent(repo, oid, 'docs/spec.md');
-    assert.equal(content.blobContentHash, sha('version one\n'));
-    assert.equal(fs.existsSync(main.marker), false, 'fixed evidence executed the workspace git');
-
-    assert.equal(observeGit(root, 'docs/spec.md').state, 'committed');
+    assert.equal(observeGit(root, 'docs/spec.md'), null);
     assert.equal(fs.existsSync(main.marker), false, 'Git observation executed the workspace git');
-  } finally {
-    main.restore();
-  }
-
-  const linked = poison(worktree);
-  try {
-    assert.equal(mainWorktreeOf(worktree), fs.realpathSync.native(root));
-    assert.equal(fs.existsSync(linked.marker), false, 'worktree discovery executed the workspace git');
-  } finally {
-    linked.restore();
-  }
+  } finally { main.restore(); }
 });
 
 // 责任：首次解析须返回根外绝对路径，之后即使 PATH 空了仍须复用已验证缓存。

@@ -6,7 +6,9 @@ export interface Links { taskIds?: string[]; planRefs?: PlanRef[] }
 export interface Acceptance { text?: string; requiredKinds?: string[] | null }
 export interface Evidence {
   kind?: string; ref?: string; summary?: string; acceptanceId?: string;
-  fixedState?: string; fixedReason?: string; verifiedAt?: string;
+  /** @deprecated Historical Git evidence provenance only. */
+  fixed?: unknown; fixedState?: string; fixedReason?: string;
+  workspaceVersion?: { versionId?: string; contentHash?: string }; verifiedAt?: string;
   execution?: unknown; at?: string; producedBy?: Actor;
 }
 export interface Task {

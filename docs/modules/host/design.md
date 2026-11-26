@@ -14,13 +14,13 @@ apply → tools/index 的 agentTools → 各业务 registrar → core。原生 r
 
 ## 3. context 与生命周期
 
-agent-context 以逻辑 actor/project 管理显式 context，凭据实例与访问级别不能互换。新 MCP open 建独立 actor，携带 context 切项目保留 actor；原生省略 context 仍按受信 cwd，显式 context 不改变默认提示和默认调用目标。首次管理调用 attach 合并并发，后续 touch 不反复重建绑定。
+agent-context 以逻辑 actor/project 管理显式 context，凭据实例与访问级别不能互换。新 MCP open 建独立 actor，携带 context 切项目保留 actor；原生省略 context 仍按受信 cwd，显式 context 不改变默认提示和默认调用目标。普通写所需的首次绑定与该命令同批发布；可信生命周期另行装配，普通查询不执行它。
 
-所有接触过的 handle 单独追踪，以便原生退出或 MCP authority 关闭时逐个 detach。MCP 先封闭准入并等待在途命令，再释放自己的 workers，防止自动恢复到已经无法调用的身份。其他入口资源保留；目录与读取器按所有权关闭，失败不伪装成功。
+所有接触过的项目值引用单独追踪，以便原生退出或 MCP authority 关闭时逐个 detach。MCP 先封闭准入并等待在途命令，再释放自己的 workers，防止自动恢复到已经无法调用的身份。其他入口资源保留；目录与读取器按所有权关闭，失败不伪装成功。
 
 ## 4. 读取与上下文成本
 
-共同管理视图沿用 DSH open/touch 与文本去重；概览与知识读取保留无 writer 路径。MCP 概览权限只开放元数据视图；完整权限使用共同管理工具。知识 reader 独立并发预算不与完整 health 混用，取消释放读取名额，不撤销已提交事务。
+共同管理视图保持文本去重并走 application 只读端口；概览、图片和知识读取不获取 writer。MCP 概览权限只开放元数据视图；完整权限使用共同管理工具。知识 reader 独立并发预算不与完整 health 混用，取消释放读取名额，不撤销已提交事务。
 
 任务摘要有界且声明覆盖；已知目标可直接按最多三个部分精读，多个部分共享一次预算。累计上下文必须计算前文重放与调用参数，不能只比较返回 JSON 大小；长公共前缀下两次读取可能更贵，见[实测](<../../decisions/agent-query-context-cost-2026-11-16.md>)。
 
@@ -34,16 +34,14 @@ agent-context 以逻辑 actor/project 管理显式 context，凭据实例与访�
 请求 body/query/header 的角色字段没有授权作用，不设置 CORS 放宽来源。
 body 上限与 JSON 错误封装在 host util 统一处理。
 
-普通资源读取先 service.open，不能将所有 GET 声称为锁外零写。
-文档图片走专用 lock-free peek，不为读图片触发 writer 恢复。
-外置写参数先校验再 open，避免非法 body 在冷开 recover 后才被拒绝。
+普通资源与图片走统一只读端口，使用已发布状态或锁外验证，不触发 writer 恢复。外置写参数先校验再进入应用命令。
 命令入口先检查 body 对象/op 并构造受信 actor，再进入 service；完整领域校验不都发生在 open 前。
 
 ## 6. 提示与失败隔离
 
 installPrompt 对 owning agent 安装唯一 project:brief，缺项目时返回空；interpolate=false，字段单行化由 digest 完成。RULES 只保留一份权威定义，brief 根据已安装 section 去重；其他共同视图按同参同文短路，fresh 可重印。
 
-没有 Web 服务仍保留原生工具；MCP 配置、凭据或端口失败仅禁该入口。领域错误共同保留完整分类与下一步，未知异常不泄露原文。普通 GET 和管理工具可触发恢复写，不能以“查询”命名声称零副作用。
+没有 Web 服务仍保留原生工具；MCP 配置、凭据或端口失败仅禁该入口。领域错误共同保留完整分类与下一步，未知异常不泄露原文。显式生命周期与命令有各自的写权限，不转授给普通读取。
 
 ## 7. 阅读与验证
 

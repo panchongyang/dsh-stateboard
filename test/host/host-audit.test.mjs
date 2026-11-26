@@ -77,8 +77,26 @@ const audit = { report: 'Independent review of submitted material; command resul
 function fixture() {
   let tool;
   const commands = [];
-  const handle = { id: 'prj_synthetic', touch() {}, command: async cmd => { commands.push(cmd); return { events: [] }; }, query: () => ({ task: { id: 'tsk_synthetic', rev: 3, acceptance: [] } }) };
-  register({ tools: { register(value) { tool = value; } } }, { ready: Promise.resolve(), service: { openByWorkspace: async () => handle }, sessionProjects: new Map() });
+  const handle = { id: 'prj_synthetic', rev: 3, state: { bindings: {} }, touch() {}, attach: async () => ({}), query: () => ({ task: { id: 'tsk_synthetic', rev: 3, acceptance: [] } }) };
+  const service = {
+    openByWorkspace: async () => handle,
+    open: async () => handle,
+    handles: new Map([['prj_synthetic', handle]]),
+    resolveWorkspace: () => ({ projectId: 'prj_synthetic' }),
+    clock: () => new Date(),
+    projectsDir: 'synthetic',
+    bindings: () => ({ activeFor: () => [], mainOf: () => null }),
+    publishedState: () => ({
+      state: {
+        project: { id: 'prj_synthetic', name: 'synthetic', workspacePath: 'synthetic/ws', phase: 'active', rev: 3, focusPlanId: null },
+        tasks: { tsk_synthetic: { id: 'tsk_synthetic', title: 'synthetic', state: 'ready', rev: 3, acceptance: [], evidence: [], labels: [], deps: [], updatedAt: '2026-01-01T00:00:00.000Z' } },
+        planHeads: {}, plans: {}, currentPlans: {}, docs: {}, intents: {}, bindings: {}, lastSeq: 3, lastHash: null,
+      },
+      lastSeq: 3, lastHash: null, leases: [], meta: { projectId: 'prj_synthetic' }, commits: [], timeline: [], blobs: null,
+    }),
+    command: async (_projectId, cmd) => { commands.push(cmd); return { events: [] }; },
+  };
+  register({ tools: { register(value) { tool = value; } } }, { ready: Promise.resolve(), service, sessionProjects: new Map(), sessionProjectRefs: new Map() });
   return { tool, commands, exec: { agent: { id: 'auditor-session', session: { header: { cwd: process.cwd() } } }, callId: 'call_synthetic' } };
 }
 
@@ -262,13 +280,13 @@ test('real host assemble/render keeps project:brief literal while other sections
   const name = 'Board ' + templateText + '\u0007' + 'x'.repeat(120);
   const h = await service.createProject({ workspacePath: workspace, name });
   await h.command(command('task.create', { title: 'Task ' + boardText, acceptance: [{ text: 'record' }] }));
-  await h.command(command('session.checkpoint', { note: 'checkpoint ' + boardText }));
+  await h.command(command('session.checkpoint', { actor: { kind: 'agent', sessionId: 'agent-1', agentId: 'agent-1' }, note: 'checkpoint ' + boardText }));
 
   const ctx = new Context();
   const prompt = new SystemPrompt(ctx, { includeHarnessIdentity: true, includeRuntimeContext: false, personaPrefix: '', personaSuffix: '' });
   prompt.variable('sentinel', () => HOST_SENTINEL);
   prompt.section({ name: 'fixture:other', order: 8999, text: 'HOST SECTION {{sentinel}}' });
-  const runtime = { promptFibers: new Map(), sessionProjects: new Map([['agent-1', h]]), ctx: { logger: { warn() {} } } };
+  const runtime = { promptFibers: new Map(), sessionProjects: new Map([['agent-1', { projectId: h.id, rev: h.rev }]]), service, ready: Promise.resolve(), ctx: { logger: { warn() {} } } };
   installPrompt(runtime, { id: 'agent-1', ctx });
   assert.ok(runtime.promptFibers.has('agent-1'), 'installPrompt registered a prompt fiber');
 

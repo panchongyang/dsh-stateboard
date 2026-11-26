@@ -153,7 +153,9 @@ export function confirmationView(confirmation: Confirmation | null | undefined):
 
 export function gitView(git: GitObservation | null | undefined, availability?: string | null): DisplayLabel & { detail: string } {
   if (!git) {
-    return { label: '未观测 Git', tone: 'muted', detail: availability ? '文件位置不可达时不运行 Git' : '' };
+    // P5: 产品运行时不再运行 Git。可读文件仍显示「未观测」，但不能再把原因说成路径不可达。
+    const detail = availability === 'readable' ? '当前版本不再采集 Git 实时状态；正文与确认信息照常观测' : (availability ? '文件位置不可达时不运行 Git' : '');
+    return { label: '未观测 Git', tone: 'muted', detail };
   }
   const base = GIT_LABELS[git.state!] || { label: String(git.state), tone: 'muted' };
   const parts = [];

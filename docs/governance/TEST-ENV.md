@@ -65,7 +65,7 @@ reset 只在确认停止且持有独占生命周期锁时，把 board/workspace 
 - npm 路线：`npm pack --ignore-scripts` 产出本地 tarball，再 `dsh plugin --profile PROFILE add ABSOLUTE_TARBALL`；不是发布到 registry。
 - 源码路线：导出/解压候选源码到无 `.git`、无 `node_modules` 的独立目录，再 `dsh plugin --profile PROFILE add ABSOLUTE_SOURCE`。两者都加载包内的 `lib/cordis.patch.yml`，只用相同 UI 与七个 agent 工具入口。
 - 目标应为 Web profile。新自定义 profile 按宿主约定选择 Web composition。按 [README 支持矩阵](<../../README.md#支持环境>)选择宿主及 Node 版本，并在相应组合上验证 Web 宿主。
-- 两路分别首次启动、重复安装、重装后停止/重开隔离宿主，以授权 Cookie 重新获取页面与 bundle。核对 `__PROJECT_BOARD__` token、插件 client 资源、HTTP ping、首次创建项目和实际宿主工具注册；另用无 Git PATH 的合成工作区执行 agent adapter/core 流程并核对 `git_unavailable` 降级。
+- 两路分别首次启动、重复安装、重装后停止/重开隔离宿主，以授权 Cookie 重新获取页面与 bundle。核对 `__PROJECT_BOARD__` token、插件 client 资源、HTTP ping、首次创建项目和实际宿主工具注册；另用无 Git PATH 的合成工作区执行 agent adapter/core 流程，核对当前观测、留存与旧 Git 来源保持各自可信度。
 - 可以用仅存在于临时 profile 的观察插件读取真实 tools registry、以合成 agent execution context 调用已注册 handler；必须明确这不是 LLM 推理或完整 agent executor 测试。HTTP/client presence 不等于浏览器交互/渲染验收，不添加 headless UI 探针。
 - 卸载用 `dsh plugin --profile PROFILE remove dsh-stateboard`，核对只移除该依赖与 bundle 选择，保留项目数据和其他配置；停止所有自己启动的临时进程。
 

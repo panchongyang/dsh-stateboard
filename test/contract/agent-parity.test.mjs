@@ -52,12 +52,22 @@ test('MCP uses DSH fresh-command semantics, task summaries and detailed failures
   assert.ok(lease);
   const before = lease.expiresAt;
   f.advance(30000);
+  // Management reads are projections: at the same trusted activity and clock
+  // they must not renew, regardless of the transport.
   text(await f.call('project_board', { view: 'task', taskId: task.id, context, fresh: true }));
-  assert.ok(f.h.leases.get(task.id).expiresAt > before, 'management reads touch like DSH');
+  assert.equal(f.h.leases.get(task.id).expiresAt, before, 'MCP management reads do not renew a lease');
+  assert.equal(f.h.leases.get(task.id).renewCount, 0);
+  await f.nativeCall('project_board', { view: 'task', taskId: task.id, fresh: true });
+  assert.equal(f.h.leases.get(task.id).expiresAt, before, 'native management reads do not renew a lease');
+  assert.equal(f.h.leases.get(task.id).renewCount, 0);
+  // Only the explicit renew command changes runtime liveness.
   const renew = { op: 'renew', taskId: task.id, expectedRev: f.h.state.tasks[task.id].rev, fencingToken: lease.token, context };
   text(await f.call('project_task', renew));
   text(await f.call('project_task', renew));
   assert.equal(f.h.leases.get(task.id).renewCount, 2);
+  assert.ok(f.h.leases.get(task.id).expiresAt >= before);
+  // A token from another generation is rejected, not silently treated as current.
+  error(await f.call('project_task', { op: 'renew', taskId: task.id, expectedRev: f.h.state.tasks[task.id].rev, fencingToken: lease.token + 1, context }), 'fencing-stale');
 });
 
 // 责任：拒绝只读提权、其他入口句柄、撤权和过期上下文。

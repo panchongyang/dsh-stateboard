@@ -136,22 +136,38 @@ test('truncated tail is ignored and repaired on open', async () => {
   await svc2.close();
 });
 
-// 责任：同进程第二个 service 打开同项目须共享 handle，不能分叉写日志。
-test('a second service over the same project shares one handle instead of forking the log', async () => {
+// 责任：两个 service 是不同的权限 facade，但共享同一条物理提交链；提交互见、同 cmdId 幂等、关一个不影响另一个。
+test('two service facades over one project share one commit chain without sharing facade identity', async () => {
   const { h, stateDir, svc } = await setup();
   await publish(h);
   const before = h.rev;
+  const file = path.join(stateDir, 'projects', h.id, 'commits.jsonl');
+  const linesBefore = readLog(stateDir, h.id).length;
   const svc2 = new ProjectService({ rootDir: stateDir, privilegedInlineWrites: true });
   await svc2.init();
   const h2 = await svc2.open(h.id);
-  assert.equal(h2, h, 'one handle per project per process');
-  assert.equal(h2.rev, before);
+  assert.equal(h2.rev, before, 'both facades start at the published revision');
+
   await h2.command(cmd('task.create', { title: 'From svc2', acceptance: [{ text: 'x' }] }));
-  assert.equal(h.rev, before + 1, 'the first service sees the commit');
-  const seqs = fs.readFileSync(path.join(stateDir, 'projects', h.id, 'commits.jsonl'), 'utf8')
-    .trim().split('\n').map((line) => JSON.parse(line).seq);
-  assert.deepEqual(seqs, seqs.map((_, index) => index + 1), 'seq stays contiguous');
+  assert.equal(h.rev, before + 1, 'the first facade sees the second facade commit');
+  assert.equal(h2.rev, before + 1, 'the second facade sees its own commit');
+  assert.equal(readLog(stateDir, h.id).length, linesBefore + 1, 'one command appends exactly one log line');
+
+  const shared = { ...cmd('task.create', { title: 'Same command', acceptance: [{ text: 'y' }] }), cmdId: 'cmd_cross_facade' };
+  const first = await h2.command(shared);
+  const repeat = await h.command(shared);
+  assert.equal(first.committed, true);
+  assert.equal(repeat.committed, true);
+  assert.equal(repeat.deduped, true, 'the same cmdId is idempotent across facades');
+  assert.equal(readLog(stateDir, h.id).length, linesBefore + 2, 'the duplicate appends no second line');
+
   await svc2.close();
+  await h.command(cmd('task.create', { title: 'After svc2 closed', acceptance: [{ text: 'z' }] }));
+  assert.equal(h.rev, before + 3, 'closing one facade does not close the other');
+  assert.equal(readLog(stateDir, h.id).length, linesBefore + 3, 'each successful command appends one line');
+
+  const seqs = readLog(stateDir, h.id).map((commit) => commit.seq);
+  assert.deepEqual(seqs, seqs.map((_, index) => index + 1), 'one contiguous chain, no fork');
   await svc.close();
 });
 

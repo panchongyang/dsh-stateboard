@@ -12,8 +12,9 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { ProjectService } from '../../lib/core/service.js';
-import { JsonlStore, makeCommit } from '../../lib/core/store.js';
+import { JsonlStore } from '../../lib/core/store.js';
 import { readJson, writeJson } from '../../lib/core/util.js';
+import { openLockWriter } from '../helpers/lock-command.mjs';
 
 function tmp(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix + '-'));
@@ -27,8 +28,9 @@ async function makeProject() {
   const handle = await svc.createProject({ workspacePath: ws, name: 'Lock' });
   const meta = { ...handle.meta };
   const dir = handle.meta.dir;
+  const projectId = handle.id;
   await svc.close();
-  return { dir, meta };
+  return { dir, meta, stateDir, projectId };
 }
 
 function lockFile(dir) {
@@ -65,12 +67,6 @@ async function deadPid() {
   const pid = child.pid;
   await once(child, 'exit');
   return pid;
-}
-
-function commitFor(store, note, cmdId = 'cmd_' + Math.random().toString(36).slice(2)) {
-  return makeCommit(store.lastSeq + 1, store.lastHash, { kind: 'agent', sessionId: 's1' }, cmdId, store.lastSeq, [
-    { type: 'session/checkpoint', data: { note } },
-  ]);
 }
 
 // 责任：writer pid 仍活时即使心跳很旧也只能只读跟随，close 不得删除对方锁。
@@ -131,13 +127,18 @@ test('an idle writer keeps its heartbeat fresh', async () => {
   store.close();
 });
 
-// 责任：另一个进程替换锁后旧 writer append 必须拒绝，防止失锁继续写。
-test('append refuses after another process replaces the lock', async () => {
-  const { dir, meta } = await makeProject();
-  const store = openStore(dir, meta);
-  store.open();
-  store.append(commitFor(store, 'first'));
-  forgeLock(dir, { pid: process.pid, nonce: 'thief-same-pid' });
-  assert.throws(() => store.append(commitFor(store, 'second')), (error) => error.code === 'log-forked');
-  assert.equal(store.readOnly, true, 'a stolen writer must degrade to read-only');
+// 责任：另一个进程替换锁后旧 writer 的 checkpoint 必须拒绝，防止失锁继续写。
+test('checkpoint refuses after another process replaces the lock', async () => {
+  const { stateDir, projectId, dir } = await makeProject();
+  const writer = await openLockWriter({ stateDir, projectId });
+  try {
+    await writer.checkpoint('first');
+    const before = fs.readFileSync(commitsFile(dir));
+    forgeLock(dir, { pid: process.pid, nonce: 'thief-same-pid' });
+    await assert.rejects(() => writer.checkpoint('second'), (error) => error.code === 'log-forked');
+    assert.ok(fs.readFileSync(commitsFile(dir)).equals(before), 'a refused fork must not change log bytes');
+    assert.equal(writer.handle.store.readOnly, true, 'a stolen writer must degrade to read-only');
+  } finally {
+    await writer.close();
+  }
 });

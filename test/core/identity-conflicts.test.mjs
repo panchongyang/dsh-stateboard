@@ -484,14 +484,14 @@ test('review: relocate reserves the target under the registry lock, so a bind ra
   const a = await svc.createProject({ workspacePath: tmp('pb-idc-rv-toctou-a') });
   const b = await svc.createProject({ workspacePath: tmp('pb-idc-rv-toctou-b') });
   const second = await service(root);
-  const original = a.store.append.bind(a.store);
+  const original = a.store.commitPhysical.bind(a.store);
   let raced = null;
-  a.store.append = (commit) => {
+  a.store.commitPhysical = (commit) => {
     try { bindWorktree(second, { projectId: b.id, workspacePath: target, actor: system }); raced = 'bound'; } catch (error) { raced = error.code; }
     return original(commit);
   };
   const result = await a.command(human('project.relocate', { workspacePath: target }));
-  a.store.append = original;
+  a.store.commitPhysical = original;
   assert.equal(raced, 'identity-conflict', 'the racing bind is refused');
   assert.equal(result.committed, true);
   assert.equal(result.warnings, undefined, 'no post-commit binding failure');
@@ -502,3 +502,66 @@ test('review: relocate reserves the target under the registry lock, so a bind ra
   assert.equal(fresh.resolveWorkspace(target).projectId, a.id, 'restart agrees');
   await fresh.close();
 });
+
+const firstTask = { op: 'task.create', cmdId: 'cmd_first_task', title: 'First task', acceptance: [{ text: 'done' }],
+  actor: { kind: 'agent', sessionId: 's_first', agentId: 's_first', via: 'tool' } };
+const nativeFirst = { agentSessionSource: 'tool' };
+
+// 责任：可确认的写前失败须返回原错误、释放预留，随后能重新创建。
+test('a known pre-append first write failure reports the physical error and permits retry', async () => {
+  const rootDir = tmp('pb-first-known');
+  const ws = tmp('pb-first-known-ws');
+  const fault = Object.assign(new Error('synthetic pre-append failure'), { code: 'EIO' });
+  const svc = new ProjectService({ rootDir, storeFactory(dir, meta) {
+    const store = new JsonlStore(dir, meta);
+    store.commitPhysical = () => { throw fault; };
+    return store;
+  } });
+  await svc.init();
+  await assert.rejects(svc.commandInWorkspace(ws, firstTask, nativeFirst), error => error === fault);
+  assert.deepEqual(projectDirs(rootDir), []);
+  assert.equal(svc.resolveWorkspace(ws), null);
+  assert.deepEqual(JSON.parse(registryText(rootDir)).bindings.map(b => [b.status, b.reason]), [['retired', 'create-failed']]);
+  const retry = await restart(svc);
+  const { projectId, result } = await retry.commandInWorkspace(ws, firstTask, nativeFirst);
+  assert.ok(result.committed);
+  assert.equal(retry.resolveWorkspace(ws)?.projectId, projectId);
+  await retry.close();
+});
+
+for (const persisted of [false, true]) {
+  // 责任：不明回执保留同一预留，冷开以是否存在完整首条记录决定去重或报错。
+  test('unknown physical first write retains one workspace claim; append=' + persisted, async () => {
+    const rootDir = tmp('pb-first-unknown');
+    const ws = tmp('pb-first-unknown-ws');
+    const svc = new ProjectService({ rootDir, storeFactory(dir, meta) {
+      const store = new JsonlStore(dir, meta);
+      const physical = store.commitPhysical.bind(store);
+      store.commitPhysical = commit => {
+        if (persisted) physical(commit);
+        return { seq: 99, hash: 'wrong-receipt' };
+      };
+      return store;
+    } });
+    await svc.init();
+    await assert.rejects(svc.commandInWorkspace(ws, firstTask, nativeFirst), { code: 'log-write-uncertain' });
+    const [{ projectId, status }] = JSON.parse(registryText(rootDir)).bindings;
+    assert.equal(status, 'active', 'unknown is a retained reservation even when stat sees no bytes');
+    assert.deepEqual(projectDirs(rootDir), [projectId]);
+    assert.equal(svc.lookupLiveWriter(projectId), null, 'no writer published on an unknown receipt');
+    const retry = await restart(svc);
+    if (persisted) {
+      const checked = await retry.commandInWorkspace(ws, firstTask, nativeFirst);
+      assert.equal(checked.projectId, projectId);
+      assert.equal(checked.result.deduped, true);
+      const handle = await retry.open(projectId);
+      assert.equal(handle.rev, 1);
+      assert.equal(Object.keys(handle.state.tasks).length, 1);
+    } else {
+      await assert.rejects(retry.commandInWorkspace(ws, firstTask, nativeFirst), { code: 'board-data-missing' });
+    }
+    assert.deepEqual(projectDirs(rootDir), [projectId]);
+    assert.equal(JSON.parse(registryText(rootDir)).bindings.length, 1);
+    await retry.close();
+  });
+}

@@ -142,8 +142,9 @@ export const DRIFT_WAIVER_LABELS: Record<string, string> = {
 export function evidenceObservation(evidence: Evidence): { label: string; tone: string } | null {
   if (!evidence || typeof evidence !== 'object') return null;
   if (evidence.kind === 'file' || evidence.kind === 'doc') {
-    const reason = evidence.fixedState === 'current-only' ? evidence.fixedReason : null;
-    if (reason === 'no-git' || reason === 'git-unavailable') return { label: 'Git 不可观测', tone: 'muted' };
+    if (evidence.fixed || evidence.fixedState === 'pinned') return { label: '历史 Git 来源 · 未重新核验', tone: 'muted' };
+    if (evidence.workspaceVersion?.versionId) return { label: '证据正文版本已留存', tone: 'neutral' };
+    if (evidence.fixedState === 'current-only') return { label: '仅当前文件 · 未留存版本', tone: 'muted' };
     if (evidence.verifiedAt) return { label: '内容指纹已记录', tone: 'neutral' };
     return null;
   }

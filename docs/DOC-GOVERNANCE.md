@@ -29,7 +29,7 @@
 横向切面（跨模块、不归属任何单层）：
 
 - `GLOSSARY.md`（一期建立）：全仓唯一词汇表，替代 `DESIGN.md` §3.1 的分散定义。
-- `TRUST-BOUNDARIES.md`（一期建立）：鉴权、只读 Git、证据只记录不执行、human-only 操作。
+- `TRUST-BOUNDARIES.md`（一期建立）：鉴权、文件与留存对象读域、证据不执行、human-only 操作。
 - `COMPATIBILITY.md`（一期建立）：schema、事件兼容类别、迁移与回退口径。
 - 测试与验证矩阵：放在 `governance/TEST-ENV.md` 与各模块 `contract.md` 的验证小节，不另立总表。
 - 容量与性能：`decisions/capacity-100k-boundary.md` 是决策背景，现行口径写在 L1 与模块文档。
@@ -80,7 +80,7 @@ docs/
 | `task` | `commands/task*`、`lease.js`、`intent.js`、`audit.js` | 契约 §2.4、§2.6 |
 | `plan` | `commands/plan*`、`plan-stages.js` | [计划 v2](<modules/plan/contract.md>) |
 | `documents` | `commands/doc*`、`documents/external*`、`inline-doc-access.js`、`documents/migration*` | [外置文档](<modules/documents/contract.md>)、[内嵌迁移](<operations/DOC-MIGRATION.md>)、[D1 契约](<WORKSPACE-DOCUMENTS-CONTRACT.md>) |
-| `evidence` | `evidence.js`、`documents/fixed*`、`git-exec.js` | [固定内容证据](<modules/evidence/contract.md>)、[Git 执行边界](<modules/evidence/contract.md>) |
+| `evidence` | `evidence.js`、`documents/fixed*`、`adapters/retained-documents.js` | [固定内容证据](<modules/evidence/contract.md>)、[Git 执行边界](<modules/evidence/contract.md>) |
 | `store` | `store/`、`fsck.js`、`repair.js` | 契约 §2.9、[恢复](<operations/RECOVERY.md>) |
 | `read` | `views.js`、`digest.js`、`health*.js`、`model.js` | 契约 §2.5、§2.10 |
 | `knowledge` | `knowledge/` | [历史知识读取](<modules/knowledge/design.md>) |

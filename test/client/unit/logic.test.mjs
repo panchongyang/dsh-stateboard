@@ -285,12 +285,12 @@ test('label dictionaries fall back to the raw value', () => {
   assert.equal(planCanFocus({ status: 'active', focus: false }), true);
   assert.equal(planCanFocus({ status: 'active', focus: true }), false);
 });
-
 // 责任：文件/doc 哈希须标为内容观测，command 必须标为自报材料。
 test('evidenceObservation: content hashes are observations, commands are reports', () => {
   assert.deepEqual(evidenceObservation({ kind: 'file', verifiedAt: '2026-01-01T00:00:00Z' }), { label: '内容指纹已记录', tone: 'neutral' });
-  assert.deepEqual(evidenceObservation({ kind: 'doc', verifiedAt: '2026-01-01T00:00:00Z', fixedState: 'pinned' }), { label: '内容指纹已记录', tone: 'neutral' });
-  assert.deepEqual(evidenceObservation({ kind: 'doc', fixedState: 'current-only', fixedReason: 'no-git' }), { label: 'Git 不可观测', tone: 'muted' });
+  assert.deepEqual(evidenceObservation({ kind: 'doc', verifiedAt: '2026-01-01T00:00:00Z', fixedState: 'pinned' }), { label: '历史 Git 来源 · 未重新核验', tone: 'muted' });
+  assert.deepEqual(evidenceObservation({ kind: 'doc', fixedState: 'current-only', fixedReason: 'no-git' }), { label: '仅当前文件 · 未留存版本', tone: 'muted' });
+  assert.deepEqual(evidenceObservation({ kind: 'doc', workspaceVersion: { versionId: 'fixture-version' } }), { label: '证据正文版本已留存', tone: 'neutral' });
   assert.deepEqual(evidenceObservation({ kind: 'command' }), { label: '提交者自报', tone: 'neutral' });
   assert.deepEqual(evidenceObservation({ kind: 'test' }), { label: '提交者自报', tone: 'neutral' });
   assert.deepEqual(evidenceObservation({ kind: 'command', execution: { status: 'failed', exitCode: 1 } }), { label: '历史执行记录', tone: 'muted' });

@@ -7,7 +7,7 @@
 ![图 1：系统上下文与信任边界](<diagrams/context.svg>)
 
 - UI、DSH 工具与本机 MCP 汇入同一 core；宿主身份与领域状态分开。
-- 工作区和 Git 是读取来源，不是命令执行入口。
+- 工作区原件和留存对象是有界读取来源；产品不执行子进程，也不访问 Git 对象。
 - 图中部署边界与 import 分层不同；模块入口见 [host](<modules/host.md>)、[project](<modules/project.md>)、[client](<modules/client.md>)。
 
 ## 1. 分层与依赖方向
@@ -25,14 +25,14 @@
 | host | core、shared、DSH 包、node | client | [host](<modules/host.md>) |
 | client | React、client 内部；分层规则允许 shared | node、core、host | [client](<modules/client.md>) |
 
-分层与无环规则由[可维护性审计](<../scripts/maintainability-audit.mjs>)检查；客户端六层方向和唯一 fetch 入口由[客户端分层检查](<../scripts/check-client-layers.mjs>)检查。客户端内部结构归 [client 模块](<modules/client.md>)，不在此复制页面和函数清单。
+分层与无环规则由[可维护性审计](<../scripts/maintainability-audit.mjs>)检查；[后端分层检查](<../scripts/check-backend-layers.mjs>)校验业务决策、命令组装、模型操作和事务、持久化、取数、纯投影六类职责，禁止读端取得 writer。客户端六层方向和唯一 fetch 入口由[客户端分层检查](<../scripts/check-client-layers.mjs>)检查。
 
 ## 2. 模块清单
 
 ![图 3：十二模块职责与主要数据流](<diagrams/module-map.svg>)
 
 - 十二模块是职责分组，不等同于十二个物理目录。
-- 写入主链为 host → service → handle → commands → store；查询从已发布状态投影。
+- 写入主链为 host → application → 项目串行 → 命令组装 → 模型事务 → 持久化回执 → 发布；读取走独立端口。
 - knowledge 的索引是独立派生物；documents 和 evidence 的读取旁路不改变主提交边界。
 
 ### 2.1 机器可校验的清单（arch-map）
@@ -43,11 +43,12 @@
 lib/index.js
 lib/client.js
 lib/shared/contract.js
-lib/shared/events.js
 lib/shared/agent-tools.js
+lib/shared/events.js
 lib/shared/knowledge.js
 lib/shared/fixed-schema.js
 lib/shared/verification.js
+lib/shared/value-facts.js
 lib/shared/verification.d.ts
 lib/core/service.js
 lib/core/project-reader.js
@@ -69,8 +70,11 @@ lib/core/inline-doc-access.js
 lib/core/intent.js
 lib/core/model.js
 lib/core/store.js
+lib/core/store/space-home.js
+lib/core/store/workspace-objects.js
 lib/core/store/lock.js
 lib/core/store/format.js
+lib/core/store/envelope.js
 lib/core/store/files.js
 lib/core/store/writes.js
 lib/core/commands/index.js
@@ -84,7 +88,20 @@ lib/core/commands/plan-members.js
 lib/core/commands/project.js
 lib/core/commands/doc.js
 lib/core/commands/doc-external.js
+lib/core/commands/doc-relations.js
 lib/core/commands/session.js
+lib/core/commands/doc-migration.js
+lib/core/commands/transaction.js
+lib/core/application/*.js
+lib/core/business/*.js
+lib/core/domain/*.js
+lib/core/domain/operations/*.js
+lib/core/transaction/*.js
+lib/core/runtime/*.js
+lib/core/adapters/*.js
+lib/core/projection/*.js
+lib/core/reader/*.js
+lib/core/reader/discovery/*.js
 lib/core/views.js
 lib/core/digest.js
 lib/core/fsck.js
@@ -93,6 +110,7 @@ lib/core/errors.js
 lib/core/util.js
 lib/core/git-exec.js
 lib/core/documents/locate.js
+lib/core/documents/workspace-source.js
 lib/core/documents/read.js
 lib/core/documents/assets.js
 lib/core/documents/external-model.js
@@ -108,17 +126,21 @@ lib/core/identity/bindings.js
 lib/core/identity/discover.js
 lib/core/identity/ops.js
 lib/host/routes.js
+lib/host/application.js
+lib/host/reader.js
 lib/host/routes/*.js
 lib/host/tools.js
 lib/host/tools/*.js
 lib/host/lifecycle.js
 lib/host/prompt.js
 lib/host/auth.js
-lib/host/agent-context.js
 lib/host/mcp.js
 lib/host/mcp-http.js
 lib/host/mcp-tools.js
 lib/host/mcp-write.js
+lib/host/mcp-space-grant.js
+lib/host/space-runtime.js
+lib/host/agent-context.js
 lib/host/mcp-knowledge.js
 lib/host/util.js
 src/client/index.ts
@@ -154,13 +176,14 @@ src/client/api/read-lifecycle.ts
 | DSH 宿主主线程 | [lib/index.js](<../lib/index.js>) → [host](<modules/host.md>) | 创建 ProjectService，注册原生工具、可选 Web/MCP 与生命周期清理 |
 | 浏览器 | [index.ts](<../src/client/index.ts>) → [client](<modules/client.md>) | 注册 slot，页面经 HTTP transport 与宿主通信 |
 | 项目列表/项目冷读 worker | [project](<modules/project.md>) → [read](<modules/read.md>) | 与已有 writer 的发布态读取共存，不为查询创建 writer |
-| 完整 health worker | [read](<modules/read.md>) | 重文件/Git 审计独立于 prompt 热路径 |
-| 知识 worker | [knowledge](<modules/knowledge.md>) | 与普通视图 worker 分离，持有可重建缓存，不参加命令事务 |
+| 完整 health worker | [read](<modules/read.md>) | 内容审计独立于 prompt 热路径 |
+| 知识 worker | [knowledge](<modules/knowledge.md>) | 与普通视图和工作区扫描 worker 分离，持有可重建索引，不参加命令事务 |
+| 工作区扫描 worker | [documents](<modules/documents.md>) | 有界遍历和缓存观测；不进入项目命令串行队列 |
 
 ![图 4：写命令时序与失败边界](<diagrams/command-write.svg>)
 
-- 入口先建立身份，service 选取项目句柄，handle 串行调度领域处理器。
-- 事件批次只在 store 追加成功后发布；handle 显式采用返回 state。
+- 入口验证身份，application 传递统一请求，runtime 取得该根的写入串行能力。命令负责业务准入和只读采样，生成具名值操作。
+- 模型独占私有工作态，执行整批操作并从结果派生记录，一张持久化回执之后才发布。读端不看准备中的状态。
 - 元数据与快照的后置工作不作为新的命令提交点；具体语义链接 [L1 命令信封](<CONTRACT.md#21-命令信封错误码与-http-映射>)，实现阅读顺序见 [command](<modules/command.md>)、[store](<modules/store.md>)。
 
 ### 3.1 读路径与审计隔离
@@ -169,13 +192,13 @@ src/client/api/read-lifecycle.ts
 
 - brief 取内存健康摘要，显式完整 health 才调度内容审计。
 - 项目读取器使用同进程已发布状态或 worker 的验证前缀，运行时 lease 与日志状态分开。
-- 专用只读入口与管理工具的 open/touch 链不是同一路径；阅读 [read](<modules/read.md>)、[project](<modules/project.md>)、[knowledge](<modules/knowledge.md>)，授权边界见[信任边界](<TRUST-BOUNDARIES.md#2-只读与冷读>)。
+- 普通 HTTP、管理工具、知识和图片读取均不打开 writer、不恢复任务或续租。生命周期 attach/activity 与业务写入分别授权，见[信任边界](<TRUST-BOUNDARIES.md#2-只读与冷读>)。
 
 ### 3.2 存储与恢复边界
 
 ![图 6：存储文件、验证顺序与显式修复](<diagrams/store-recovery.svg>)
 
-- 日志是事实源；快照与 blob 各有独立身份校验，缓存不是权威状态。
+- 日志是事实源；内嵌 blob、留存对象和快照各有身份校验。显式所属工作区布局使用物理根保存日志与对象，索引是独立派生数据。
 - writer 冷开持锁验证完整日志与快照，再回放、检查 schema，最后规范化尾部。
 - 锁外读取不修尾，诊断与修复分开；实现入口见 [store](<modules/store.md>)，维护操作见[恢复 Runbook](<operations/RECOVERY.md>)。
 
@@ -186,10 +209,10 @@ src/client/api/read-lifecycle.ts
 | 结构约束 | 代码落点 | 模块 |
 |---|---|---|
 | 一个日志由共享句柄与合作式锁约束 writer | [service.js](<../lib/core/service.js>)、[lock.js](<../lib/core/store/lock.js>) | [project](<modules/project.md>)、[store](<modules/store.md>) |
-| 工作副本与发布状态有明确交接断言 | [handle.js](<../lib/core/handle.js>) 的 assertStateAttached | [command](<modules/command.md>) |
-| 领取资格由命令与视图共用，不在 UI 重新定义 | [lease.js](<../lib/core/lease.js>) | [task](<modules/task.md>)、[read](<modules/read.md>) |
+| 工作副本与发布状态有明确交接 | [transaction/model.js](<../lib/core/transaction/model.js>) 的物理回执核对 | [command](<modules/command.md>) |
+| 领取资格由命令与读提示共用，不在 UI 重新定义 | [task-operations.js](<../lib/core/business/task-operations.js>) | [task](<modules/task.md>)、[read](<modules/read.md>) |
 | 命令名、事件类别、端点和工具 schema 由共享定义约束 | [contract.js](<../lib/shared/contract.js>)、[events.js](<../lib/shared/events.js>) | [shared](<modules/shared.md>)、[host](<modules/host.md>) |
-| 文档与 Git 字节读取不扩大到任意文件/程序执行 | [locate.js](<../lib/core/documents/locate.js>)、[git-exec.js](<../lib/core/git-exec.js>) | [documents](<modules/documents.md>)、[evidence](<modules/evidence.md>) |
+| 外置文档读取不扩大到任意文件；产品运行时不执行 Git | [locate.js](<../lib/core/documents/locate.js>)、[发布纯度](<../scripts/check-release-purity.mjs>) | [documents](<modules/documents.md>)、[evidence](<modules/evidence.md>) |
 | 客户端 fetch 集中，页面选择与请求票据分工 | [transport.ts](<../src/client/api/transport.ts>)、[request-gate.ts](<../src/client/api/request-gate.ts>) | [client](<modules/client.md>) |
 
 ## 5. 构建与产物

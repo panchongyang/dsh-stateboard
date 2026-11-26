@@ -19,7 +19,7 @@
  *   pm2 start dsh-web
  *
  * Options: --root <dir> (default %DSH_HOME%/project-board), --only <id,id>,
- *          --apply (write), --force (ignore a stale lock file).
+ *          --apply (write; the offline command verifies the lock and watermark).
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -44,6 +44,9 @@ const home = process.env.DSH_HOME && process.env.DSH_HOME.trim() !== ''
 const root = path.resolve(flag('root', path.join(home, 'project-board')));
 const project = flag('project', '');
 if (project === '') fail('--project <prj_...> is required');
+// The id is also a directory component under the synthetic root: reject
+// separators, dot segments and uppercase/unexpected ids before any fs access.
+if (!/^prj_[a-z0-9]{1,124}$/.test(project)) fail('invalid --project id (expected prj_<lowercase alphanumeric>, no path component)');
 const dir = path.join(root, 'projects', project);
 const commitsFile = path.join(dir, 'commits.jsonl');
 if (!fs.existsSync(commitsFile)) fail('no commits.jsonl at ' + commitsFile);
@@ -95,43 +98,32 @@ if (!apply) {
 
 // ------------------------------------------------------------------- repair
 
-const lockFile = path.join(dir, 'lock.json');
-if (!has('force') && fs.existsSync(lockFile)) {
-  let lock = null;
-  try { lock = JSON.parse(fs.readFileSync(lockFile, 'utf8')); } catch { /* unreadable */ }
-  if (lock && Number.isInteger(lock.pid)) {
-    let alive = false;
-    try { process.kill(lock.pid, 0); alive = true; } catch (error) { alive = Boolean(error && error.code === 'EPERM'); }
-    if (alive) fail('another process holds the lock (pid ' + lock.pid + '); stop dsh-web first, or pass --force if you are sure');
-  }
+// Offline-maintenance command, not a general append. The script passes only
+// the task ids and the inventory watermark; the writer verifies the current
+// log prefix, task history and idempotency under the project lock itself.
+if (typeof ProjectService.prototype.restoreHistoricalAcceptance !== 'function') {
+  fail('this build has no service.restoreHistoricalAcceptance offline command');
 }
-
-const service = new ProjectService({ rootDir: root });
+const last = commits[commits.length - 1];
+const expectedRev = last.seq;
+const expectedHash = last.hash;
+const service = new ProjectService({ rootDir: root, offlineMaintenance: true });
 await service.init();
-const handle = await service.open(project);
-if (handle.readOnly) fail('the project opened read-only; stop the running dsh-web first');
-
-const at = new Date().toISOString();
-const events = [];
-for (const target of targets) {
-  const task = handle.state.tasks[target.taskId];
-  if (!task) { process.stderr.write('skip (task vanished): ' + target.taskId + '\n'); continue; }
-  if ((task.acceptance || []).length > 0) { process.stderr.write('skip (already restored): ' + target.taskId + '\n'); continue; }
-  const next = structuredClone(task);
-  next.acceptance = target.acceptance;
-  next.rev = (task.rev || 0) + 1;
-  next.updatedAt = at;
-  events.push({ type: 'task/updated', taskId: task.id, rev: next.rev, data: next });
-}
-
-if (events.length === 0) {
-  process.stdout.write('nothing written\n');
+try {
+  const result = await service.restoreHistoricalAcceptance(project, {
+    expectedRev,
+    expectedHash,
+    taskIds: targets.map((target) => target.taskId),
+  });
+  process.stdout.write(JSON.stringify({
+    ok: true,
+    project,
+    expectedRev,
+    expectedHash,
+    taskIds: targets.map((target) => target.taskId),
+    result,
+  }, null, 2) + '\n');
+} finally {
   await service.close().catch(() => {});
-  process.exit(0);
 }
-
-const commit = handle._appendEvents(events, { kind: 'system', via: 'repair' }, 'cmd_repair_acceptance_' + Date.now(), handle.rev);
-handle.store.saveSnapshot();
-await service.close().catch(() => {});
-process.stdout.write('\nappended seq ' + commit.seq + ' rev ' + commit.hash.slice(0, 18) + '… with ' + events.length + ' task/updated event(s)\n');
 process.stdout.write('start dsh-web again, then check the board\n');

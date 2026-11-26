@@ -13,6 +13,7 @@
 ```text
 npm run check:strict
 npm run check:architecture
+npm run check:docs
 npm run check:release
 npm run check:release:readiness
 ```
@@ -23,7 +24,7 @@ npm run check:release:readiness
 
 现有 `scripts/check-release-purity.mjs` 是唯一 CLI，`scripts/release-readiness.mjs` 是其纯求值辅助模块，不另建检查器。
 
-- `npm run check:release` 实际 npm pack 后检查精确文件白名单、普通文件、元数据/BSD许可、敏感内容、旧门名、产品 Git 只读调用面和 README 包内相对链接。当前包仅交付 lib/src、README、docs/CONTRACT.md、LICENSE、package.json；不把其余 docs、scripts、test、内部档案或自用CLI装进 npm。
+- `npm run check:release` 实际 npm pack 后检查精确文件白名单、普通文件、元数据/BSD许可、敏感内容、旧门名、产品运行时无 Git 调用、子进程和开发 Git 适配器依赖和 README 包内相对链接。当前包仅交付 lib/src、README、docs/CONTRACT.md、LICENSE、package.json；不把其余 docs、scripts、test、内部档案或自用CLI装进 npm。
 - `npm run check:release:readiness` 用同一入口额外检查公开元数据、main/exports/client 与 README 语法/链接，输出 JSON 的 blockers/manualGates/readmeLinks/capability。`private:true` 是独立人工闸，ready:false/exit1 是预期；其余 technical blockers 必须逐项报告，不能被 private 掩盖。
 - 两种模式均可用 `-- --tarball <tgz>` 检查冻结包。纯度检查验证元数据和分发内容。readiness 另将 `private:true` 列为人工闸，发布授权仍按下文单独记录。
 - 链接解析复用声明的 Markdown 子集；未支持语法阻断，不校验 fragment 是否存在或外链可达性。不检查 Git 全历史、registry 线上可用性、法律合规或任意宿主版本兼容。

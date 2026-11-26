@@ -9,14 +9,14 @@ DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、
 ## 0.4.0 更新
 
 - DSH 与 MCP 共用七个 agent 工具。MCP 客户端升级后需要刷新工具目录、重新打开项目，并按随包实现契约 §2.6.7 的映射更新旧工具调用。
-- Agent 可搜索项目留存的历史知识、按来源回读，并按章节读取任务详情。外置文档预览可显示符合条件的相对路径图片。
-- 项目存储继续使用 schema v3，无需迁移。升级前请备份，回退按本页「备份回退与迁移」操作。
+- Agent 可搜索项目材料、按来源回读，并按章节读取任务详情。知识工具默认使用带引用与覆盖标记的模型文本。外置文档预览可显示符合条件的相对路径图片。
+- 项目存储仍是 schema v3，集中布局仍为默认。旧构建可能无法回放新增记录，升级前请按「备份回退与迁移」保留匹配构建和一致性备份。
 
 ## 产品边界
 
 项目板记录谁提交了什么、引用来自哪里、内容是否变化；**不替材料背书**。命令/测试由人或 agent 在外部执行，成功和失败都可作为材料记录；项目板不执行、不重跑、不验签这些结果。未漂移不等于结论正确，未观测不等于未漂移。`submit` 只进入 review，`verify` 是验收裁决而非系统正确性证明。
 
-两种安装来源装配相同的 `dsh-stateboard` bundle，包含 UI、七个 DSH agent 工具及可选本机 MCP，不附赠 CLI、worktree 编排或运维工具。DSH 是硬依赖，Git 是可选的只读增强；**没有 Git 也能完整使用核心流程**。
+两种安装来源装配相同的 `dsh-stateboard` bundle，包含 UI、七个 DSH agent 工具及可选本机 MCP，不附赠 CLI、worktree 编排或运维工具。DSH 是运行前置条件；**ProjectBoard 产品运行时不调用 Git**。旧 Git 来源仍可查看，不回读历史正文或重新核验。
 
 ## 支持环境
 
@@ -27,7 +27,7 @@ DSH 的跨会话项目板，通过 **UI + agent 工具**管理项目、计划、
 | DSH 支持带 | `0.2.1-rc.2` 至 `0.2.2-rc.3`。支持范围以此表为准 |
 | Web 宿主 Node | DSH `0.2.2-rc.1` 至 `0.2.2-rc.3` 要求 **Node >=24.9**。其它支持带内版本按各自的宿主要求选择 Node |
 | 插件 engines | `Node >=22` 只是 core/client 基线，**不是 Node 22 Web 宿主支持承诺** |
-| 验证范围 | Windows 11 x64 与 Node 24.22.2 上，DSH `0.2.2-rc.2`、`0.2.2-rc.3` 均通过源码和本地 tgz 的隔离安装，覆盖七个原生工具、HTTP、客户端包、首次建项目、无 Git 降级、重装重启和卸载 |
+| 验证范围 | Windows 11 x64 与 Node 24.22.2 上，DSH `0.2.2-rc.2`、`0.2.2-rc.3` 均通过源码和本地 tgz 的隔离安装，覆盖七个原生工具、HTTP、客户端包、首次建项目、无 Git 环境、重装重启和卸载 |
 | 未验证 | 浏览器真实交互、LLM 推理及支持带内的其它未覆盖版本与 Node 组合。Node 22 core 留有一次锁竞争失败记录 |
 
 先安装兼容的 DSH Web 宿主，使 `dsh` 在 PATH。无需 pm2、固定端口、作者目录或固定 profile。profile 必须包含宿主 Web composition；仅有 agent composition 的环境没有看板 UI。
@@ -171,11 +171,11 @@ bearer_token_env_var = "PROJECT_BOARD_MCP_WRITE_TOKEN"
 {"op":"submit","taskId":"TASK_ID","expectedRev":3,"fencingToken":1,"evidence":[{"kind":"doc","ref":"DOC_ID","summary":"示例说明当前内容","acceptanceId":"ACCEPTANCE_ID"},{"kind":"file","ref":"notes/result.txt","summary":"外部产生的普通结果记录，非系统重跑","acceptanceId":"ACCEPTANCE_ID"}]}
 ```
 
-`3` 与 `1` 都必须换成实际最新 rev/token。无 Git 时 doc 材料会显式 current-only，附 fixedReason；核心流程照常进入 review。
+`3` 与 `1` 都必须换成实际最新 rev/token。默认集中布局将外置 doc 材料记录为 `current-only` 并附原因；这不是不可变的正文版本。
 
 5. **2:35 人工完成判定。** 人打开任务抽屉，阅读材料和验收项，选择 verify 或 reject。普通任务也可由提交 agent 显式 verify；审计门任务要求独立 agent 带报告。若证据提交后变化，先调查；可刷新的 file 漂移可由 human refresh，其它情形 human 可填理由 acknowledge，留痕不等于材料正确。
 
-**可选 Git 镜头**：若示例文件恰在主绑定仓库中、已经干净提交且对象本地可得，沿用上一步带 `acceptanceId` 的 doc 材料提交，就会自动记录只读 Git 版本引用。不需额外 approval；UI/材料可显示 fixedState。项目板不替你 commit，不切分支，不 fetch，不进入其它 worktree 复验。首次 pin 失败降为 current-only；已有历史 fixed 引用缺对象时保持原引用并报告不可观测，绝不用当前正文冒充历史。
+**使用所属工作区布局时**，可经 Agent 工具发现当前文本、留存登记文档的精确正文，并从证据的 `workspaceVersion.versionId` 用 `project_doc op=read_version` 读取该版本。缺对象、权限撤回或只能读取当前文件时如实报告。该布局显式启用（`storageLayout: space`），不自动迁移集中库，不挂载仅按历史项目 ID 路由的看板 Web 入口。配置及 MCP 授权见随包实现契约 §2.5、§2.6.7。
 
 ## 真实限制
 
@@ -183,8 +183,8 @@ bearer_token_env_var = "PROJECT_BOARD_MCP_WRITE_TOKEN"
 - `file` 材料按项目主 `workspacePath` 解析，不按会话分支/worktree；外置文档按其登记的 binding 根 + relPath 读取，不跨根寻找同名文件。越界、不可读、缺文件必须分别表达。
 - 外置文件由编辑器维护，登记只保存定位与元数据；**文件内容与看板管理状态不自动同步**。inspect 最长缓存30秒，需要现状时 fresh；confirm 重新读取并记字节基线，不发布/采纳文档。
 - 内嵌文档是只读档案。UI 没有新建/编辑正文入口；`doc.put/doc.link` 默认拒绝 `inline-write-disabled`。human 可按项目显式暂开旧写语义用于维护并留事件；这不是普通编辑流程。
-- Git 只读且可降级，不管理分支/worktree，不承诺它们的隔离、集成或复验。多仓/非主绑定文档可登记，但不保证自动 pin。内容转换、缺 Git、超时或安全拒绝均可能导致 current-only。
-- 历史固定内容依赖本地 Git 对象；浅 clone、仓库丢失、对象被清理时不可观测/不可得，不自动联网恢复。内嵌历史依赖 blobs。元数据后缀 `@rev` 不是外置正文版本。
+- 工作区归属由宿主确认的空间或显式目录绑定决定，不从关联 Git worktree 推断共享项目。留存历史只覆盖实际记录的版本，不包含每次外部编辑。
+- 旧 Git 固定引用仅保留来源记录，相关接口和字段计划弃用；不从当前文件补齐历史。留存正文使用 ProjectBoard 对象库，内嵌历史依赖 blobs。元数据后缀 `@rev` 不是外置正文版本。
 - 状态 `backlog → ready → in_progress → review → done` 受 rev、租约、fencing 与意图守卫约束。崩溃后有未闭合意图须 reconcile；日志健康、哈希相同或人工验收均不能担保外部副作用正确。
 
 ## 备份回退与迁移
@@ -193,21 +193,21 @@ bearer_token_env_var = "PROJECT_BOARD_MCP_WRITE_TOKEN"
 
 1. 操作者确认 DSH home、profile、projectId、主工作区/其它绑定绝对路径及唯一写者，按自己的运维方式停止宿主。不要用可写 cold open 当零写诊断，它可能补尾行或提交恢复事件。
 2. 把整个 `DSH_HOME/project-board` 复制到**源目录外一个全新备份目录**；未设 DSH_HOME 时使用用户目录下 `.dsh/project-board`。完整保存日志、meta、snapshot、blobs、身份/绑定注册数据与锁诊断，不能只复制仓库 marker 或 snapshot。
-3. 分别复制工作区外置文件、被引用的本地 Git 对象（包括未推送对象）、目标 profile 配置（`package.json`、`pnpm-lock.yaml`、`cordis.patch.yml`、`pnpm-workspace.yaml`，仅复制实际存在项），并保留匹配的安装包/源码版本。
+3. 分别备份工作区外置文件和目标 profile 配置（`package.json`、`pnpm-lock.yaml`、`cordis.patch.yml`、`pnpm-workspace.yaml`，仅实际存在项），并保留匹配构建。使用所属工作区布局时，以完整 `.projectboard/`（含 `state/` 与留存对象）作为该空间的看板备份；集中数据根不能代替它。
 4. 记录备份时点、包版本、projectId、路径清单与日志 SHA-256；备份含私密材料，勿公开。故障后另存 damaged 副本，不能覆盖一致备份。没有备份即没有承诺的数据回退。
 
 ### 回退或恢复
 
 1. 停止所有写者，先保存当前故障数据与诊断。
 2. 将一致备份复制到新的恢复目录核对完整性；保留原故障目录，不硬删、不混拼日志。由操作者恢复整套数据、匹配构建和本插件 profile 配置；profile 中后续其它插件变化应合并而非整份覆盖。
-3. schema/event 已升级时不能只退代码：必须用迁移前完整数据 + 匹配旧构建。恢复会失去备份后新写入，**RPO 是备份时点**，需先确认可接受损失；不能撤销文件修改、测试、部署或人工决定等外部副作用。
+3. 低版本不理解新事件或当前字段时不可只退代码；使用能读现有数据的构建，或以原有构建恢复切换前完整备份。恢复会失去备份后的写入，**RPO 是备份时点**，需先确认可接受损失；外部副作用不会随看板撤销。
 4. 操作者启动后刷新页面，确认同一项目、计划/任务、外置定位、历史正文和健康页。在获准恢复副本上确认新业务可提交、再次冷开仍保留；不要把 health 绿当作业务恢复证明。真实业务恢复须另行授权。
 
 中段损坏、缺 meta、锁归属不明时停止写入；npm 包不含修复/迁移脚本，取得匹配源码和维护者支持后按其恢复指南在授权副本操作，不猜 PID、不删锁、不跳过坏行。
 
 ### 工作区搬迁、换机与升级
 
-- 先完成上述备份，再复制 board 数据、工作区文件、必要 Git 对象和匹配包；新环境满足[支持环境](#支持环境)。只复制代码或 marker 不会搬走看板。旧环境停写，新环境不与旧环境同时写同一 store。
+- 先完成上述备份，再复制 board 数据、工作区文件、适用的完整 `.projectboard/` 和匹配包；新环境满足[支持环境](#支持环境)。只复制代码或 marker 不会搬走看板。旧环境停写，新环境不与旧环境同时写同一 store。
 - 本机绝对 binding 路径不会自动改成新机器路径。先在副本核对身份，再用匹配源码维护工具显式 relocate/import；项目 ID 必须保持一致，不要在缺数据时 init 创建替代项目。
 - 单主根搬迁可在匹配源码根目录执行以下维护步骤（`BOARD_ROOT` 是已核对的绝对 board 数据根；先对副本演练）：
 
@@ -216,10 +216,10 @@ node scripts/relocate-project.mjs --root "BOARD_ROOT" --project PROJECT_ID --to 
 node scripts/relocate-project.mjs --root "BOARD_ROOT" --project PROJECT_ID --to "NEW_WORKSPACE"
 ```
 
-该脚本**不移动文件**。dry-run 使用服务 open，可能写恢复/索引元数据，不是严格零写诊断。目标需已存在、没有另一个项目；写者未释放则停止。它不提供跨机身份注册表合并/多 binding 自动迁移保证。
+该脚本**不移动文件**，dry-run 不打开 writer、不运行恢复。目标需已存在、没有另一个项目；写者未释放则停止。该命令用于集中布局，不提供跨机绑定合并或多 binding 自动迁移。
 
 - relocate 后外置记录仍可能指向旧 binding；在新环境核对 binding 后逐个 `project_doc op=relocate docId=... expectedMetaRev=... bindingId=... relPath=...`，再 inspect/confirm。批量 rebind 仅 human/system 维护入口。不要手改日志或只改 meta。
-- `file` 相对引用随主根变化，绝对引用不会被重写。缺 Git 对象的历史不能靠重新 confirm 修复；要从备份补回同一对象，不能伪造 pin。
+- `file` 相对引用随主根变化，绝对引用不会被重写。重新确认是新观测，不能补造历史正文；缺失的留存对象只能从匹配内容地址的一致备份恢复。
 - 运行时只开 schema v3；遇 `schema-migration-required` 必须由维护者在停写副本先 dry-run、备份再 apply。内嵌档案转外置也有专门授权/备份步骤，不能用 register 冒充迁移。
 
 ## 贡献与架构入口

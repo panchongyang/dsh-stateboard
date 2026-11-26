@@ -1,400 +1,406 @@
 /**
- * 测试职责：保证提交文档证据自动固定可信 Git 内容，能力不足时带明确原因降级。
- * 典型流程：临时 Git 仓库与任务 → submit/reconcile → 检查固定身份、审批/屏障事件及冷重放。
- * 覆盖边界：覆盖 自动固定、原子事件、各类 current-only 降级；不覆盖远程 Git 获取或真实发布。
- * 外部前置：需要 Git；fixture 创建本地仓库，不使用真实 profile。
+ * 测试职责：验证文档确认、证据留存和旧 Git 来源回放不调用 Git。
+ * 典型流程：创建合成工作区与文档 → 真实写入或追加旧记录 → 回读、审计与校验日志。
+ * 覆盖边界：覆盖 留存原子关系、复制/冷回放和拒绝分支；不覆盖 真实数据。
+ * 外部前置：无 Git 运行时依赖；所有磁盘对象都位于隔离的合成工作区。
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
-import { withProject, command } from '../helpers/service-fixture.mjs';
-import { auditEvidence } from '../../lib/core/evidence.js';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
+import { ProjectService } from '../../lib/core/service.js';
+import { auditEvidence, evidenceVerified } from '../../lib/core/evidence.js';
 import { assertEventSupported } from '../../lib/core/model.js';
 import { EVENT_REGISTRY } from '../../lib/shared/events.js';
+import { assertWorkspaceAttachmentCommit, assertWorkspaceAttachmentLog } from '../../lib/core/domain/workspace-attachments.js';
 import { bindWorktree } from '../../lib/core/identity/ops.js';
-import { git, put, repository, sha, temp } from '../helpers/fixed-fixture.mjs';
+import { readWorkspaceObject } from '../../lib/core/store/workspace-objects.js';
+import { appendLegacyFacts, command, legacyGitMaterial, put, sha, temp } from '../helpers/fixed-fixture.mjs';
 
-async function setup(t, { relPath = 'docs/spec.md' } = {}) {
-  const { root, oid } = repository('sha1', t);
-  const { svc, h, board } = await withProject(t, { workspacePath: root, privilegedInlineWrites: true, name: '自动壳测试' });
-  await h.attach({ sessionId: 'auto-test', agentId: 'auto-test', source: 'test', role: 'worker' });
-  const out = await h.command(command('doc.external.register', { title: '自动文档', relPath }));
-  const created = await h.command(command('task.create', { title: '交付文档', acceptance: [{ text: '自动固定或降级' }] }));
-  return { root, oid, board, svc, h, docId: out.docId, taskId: created.events[0].data.id, bindingId: h.service.bindings().mainOf(h.id).bindingId };
-}
-
-async function newDoc(s, relPath, bindingId) {
-  const out = await s.h.command(command('doc.external.register', { title: '补充文档', relPath, ...(bindingId ? { bindingId } : {}) }));
-  return out.docId;
-}
-
-async function newTask(s, title = '第二个任务') {
-  const created = await s.h.command(command('task.create', { title, acceptance: [{ text: '自动固定或降级' }] }));
-  return created.events[0].data.id;
-}
-
-async function startWork(s, taskId) {
-  const { h } = s;
-  await h.command(command('task.claim', { taskId, expected: { entityRev: h.state.tasks[taskId].rev } }));
-  await h.command(command('task.begin', { taskId, fencingToken: h.leases.get(taskId).token, expected: { entityRev: h.state.tasks[taskId].rev }, summary: '自动固定文档' }));
-}
-
-async function submitEvidence(s, taskId, evidence) {
-  await startWork(s, taskId);
-  return s.h.command(command('task.submit', {
-    taskId,
-    fencingToken: s.h.leases.get(taskId).token,
-    expected: { entityRev: s.h.state.tasks[taskId].rev },
-    evidence,
-  }));
-}
-
-async function submitDoc(s, taskId, docId) {
-  const acceptanceId = s.h.state.tasks[taskId].acceptance[0].id;
-  return submitEvidence(s, taskId, [{ kind: 'doc', ref: docId, acceptanceId }]);
-}
-
-function row(s, taskId) {
-  return structuredClone(s.h.state.tasks[taskId].evidence.at(-1));
-}
-
-function approvalCount(s) {
-  return s.h.store.commits.filter((commit) => commit.events.some((event) => event.type === 'project/updated' && event.data?.gitContentRepository)).length;
-}
-
-// 责任：从 PATH 隐藏 Git 后 submit 仍须成功，证据为 current-only/no-git 且无审批或屏障。
-test('a missing git executable degrades to current-only with reason no-git', async (t) => {
-  const s = await setup(t);
-  const previousPath = process.env.PATH;
-  let result;
-  try {
-    process.env.PATH = temp(t);
-    result = await submitDoc(s, s.taskId, s.docId);
-  } finally {
-    process.env.PATH = previousPath;
+const retainedType = 'doc/workspace-retained';
+const noGitEvents = events => assert.deepEqual(events.filter(event => event.type === 'doc/content-fixed' || event.data?.gitContentRepository), []);
+function forbidChildren(t) {
+  const attempts = [];
+  for (const name of ['execFileSync', 'execFile', 'spawnSync', 'spawn', 'exec', 'execSync']) {
+    t.mock.method(childProcess, name, (...args) => { attempts.push([name, args[0]]); throw new Error('unexpected runtime child process'); });
   }
-  assert.equal(result.committed, true);
-  const evidence = row(s, s.taskId);
-  assert.equal(evidence.fixedState, 'current-only');
-  assert.equal(evidence.fixedReason, 'no-git');
-  assert.equal(Object.hasOwn(evidence, 'fixed'), false);
-  assert.equal(evidence.hash, sha('version one\n'));
-  assert.deepEqual(result.events.map((event) => event.type).filter((type) => type === 'project/updated' || type === 'doc/content-fixed'), []);
-  assert.equal(s.h.state.project.gitContentRepository, undefined);
-  assert.deepEqual(auditEvidence(s.h, s.h.state.tasks[s.taskId]), []);
-  await s.svc.close();
-});
-
-// 责任：提交干净已提交文档须产生 pinned 身份，审批、内容屏障和证据在同次提交按序落盘。
-test('a clean committed document is auto-pinned in the same commit as its content barrier', async (t) => {
-  const s = await setup(t);
-  const result = await submitDoc(s, s.taskId, s.docId);
-  const evidence = row(s, s.taskId);
-  const approval = result.events.find((event) => event.type === 'project/updated');
-  const barrier = result.events.find((event) => event.type === 'doc/content-fixed');
-  const types = result.events.map((event) => event.type);
-
-  assert.equal(evidence.fixedState, 'pinned');
-  assert.equal(evidence.fixedReason, undefined);
-  assert.equal(evidence.hash, sha('version one\n'));
-  assert.equal(evidence.hash, evidence.fixed.blobContentHash);
-  assert.equal(evidence.fixed.commitOid, s.oid);
-  assert.equal(evidence.fixed.pathAtCommit, 'docs/spec.md');
-  assert.deepEqual(evidence.fixed, {
-    v: 1, projectId: s.h.id, commitOid: s.oid, pathAtCommit: 'docs/spec.md',
-    blobOid: evidence.fixed.blobOid, objectFormat: 'sha1', blobContentHash: evidence.hash,
+  syncBuiltinESMExports();
+  t.after(() => {
+    t.mock.restoreAll(); syncBuiltinESMExports();
+    assert.deepEqual(attempts, [], 'even swallowed subprocess attempts violate the runtime boundary');
   });
+}
 
-  assert.ok(approval, 'the automatic repository approval rides in the same commit');
-  assert.deepEqual(approval.data.gitContentRepository, { v: 1, objectFormat: 'sha1', anchorCommitOid: s.oid, bindingIds: [s.bindingId] });
-  assert.deepEqual(approval.actor, { kind: 'system', reason: 'auto-approve-git-content-repository' });
-  assert.ok(types.indexOf('project/updated') < types.indexOf('doc/content-fixed'), 'approval precedes the content barrier');
-  assert.ok(types.indexOf('doc/content-fixed') < types.indexOf('task/submitted'), 'barrier precedes the task evidence row');
-  assert.deepEqual(barrier.data, { kind: 'doc', ref: s.docId, hash: evidence.hash, fixed: evidence.fixed });
-  assert.deepEqual(s.h.state.fixedContents[Object.keys(s.h.state.fixedContents)[0]].hash, evidence.hash);
+async function setup(t, { owning = true, docPath = 'docs/spec.md', text = 'version one\n' } = {}) {
+  const root = temp(t);
+  const board = owning ? null : temp(t);
+  put(root, docPath, text);
+  const options = owning ? { spaceRoot: root } : { rootDir: board };
+  const serviceOptions = { ...options, privilegedInlineWrites: true };
+  const svc = new ProjectService(serviceOptions);
+  t.after(() => svc.close());
+  await svc.init();
+  const h = await svc.createProject({ workspacePath: root, name: 'Workspace evidence fixture' });
+  const s = { h, svc, root, serviceOptions };
+  s.docId = await newDoc(s, docPath);
+  s.taskId = await newTask(s);
+  return s;
+}
 
-  // The commit still belongs to the caller; only the event is system-generated.
-  assert.equal(s.h.store.commits.at(-1).actor.kind, 'human');
-  const projected = s.h.query('events').events.filter((event) => event.type === 'project/updated').at(-1);
-  assert.deepEqual(projected.actor, { kind: 'system', reason: 'auto-approve-git-content-repository' });
-  assert.deepEqual(auditEvidence(s.h, s.h.state.tasks[s.taskId]), []);
-  await s.svc.close();
-});
+async function newDoc({ h }, relPath, bindingId) {
+  return (await h.command(command('doc.external.register', { title: 'Fixture document', relPath, ...(bindingId ? { bindingId } : {}) }))).docId;
+}
 
-// 责任：未提交文件和脏工作区均须降级，证据不能带 fixed 引用。
-test('uncommitted content and a dirty worktree both degrade without a fixed reference', async (t) => {
-  const s = await setup(t);
-  put(s.root, 'docs/draft.md', 'not committed yet\n');
-  const draft = await newDoc(s, 'docs/draft.md');
-  const draftResult = await submitDoc(s, s.taskId, draft);
-  const draftRow = row(s, s.taskId);
-  assert.equal(draftRow.fixedState, 'current-only');
-  assert.equal(draftRow.fixedReason, 'uncommitted');
-  assert.equal(Object.hasOwn(draftRow, 'fixed'), false);
-  assert.deepEqual(draftResult.events.map((event) => event.type).filter((type) => type === 'doc/content-fixed'), []);
+async function newTask({ h }, title = 'Fixture task') {
+  return (await h.command(command('task.create', { title, acceptance: [{ text: 'Review recorded evidence', requiredKinds: ['doc'] }] }))).events[0].data.id;
+}
 
-  const second = await newTask(s);
-  put(s.root, 'docs/spec.md', 'edited but uncommitted\n');
-  const dirtyResult = await submitDoc(s, second, s.docId);
-  const dirtyRow = row(s, second);
-  assert.equal(dirtyRow.fixedState, 'current-only');
-  assert.equal(dirtyRow.fixedReason, 'dirty-worktree');
-  assert.equal(Object.hasOwn(dirtyRow, 'fixed'), false);
-  assert.equal(dirtyRow.hash, sha('edited but uncommitted\n'));
-  assert.deepEqual(dirtyResult.events.map((event) => event.type).filter((type) => type === 'doc/content-fixed'), []);
-  assert.equal(s.h.state.project.gitContentRepository, undefined);
-  await s.svc.close();
-});
+async function startWork({ h }, taskId) {
+  await h.command(command('task.claim', { taskId, expected: { entityRev: h.state.tasks[taskId].rev } }));
+  await h.command(command('task.begin', { taskId, fencingToken: h.leases.get(taskId).token, expected: { entityRev: h.state.tasks[taskId].rev }, summary: 'Document evidence' }));
+}
 
-// 责任：路径命中 filter 时须降级 content-transform，禁止执行配置的驱动。
-test('a path that hits a filter attribute degrades as content-transform and never runs the driver', async (t) => {
-  const s = await setup(t);
-  const marker = path.join(s.root, 'MARK');
-  // Commit the attribute first: `git add` itself would run a configured driver,
-  // which must be proven absent only for the board's own read path.
-  put(s.root, '.gitattributes', '*.md filter=danger\n');
-  git(s.root, 'add', '.gitattributes');
-  git(s.root, 'commit', '-m', '测试 filter 属性');
-  git(s.root, 'config', 'filter.danger.clean', 'echo unsafe > MARK');
-  git(s.root, 'config', 'filter.danger.smudge', 'echo unsafe > MARK');
-  git(s.root, 'config', 'filter.danger.process', 'echo unsafe > MARK');
-  assert.equal(fs.existsSync(marker), false);
+const linked = (h, taskId, ref, fields = {}) => ({ kind: 'doc', ref, acceptanceId: h.state.tasks[taskId].acceptance[0].id, ...fields });
+const submit = (h, taskId, evidence) => h.command(command('task.submit', { taskId, fencingToken: h.leases.get(taskId).token, expected: { entityRev: h.state.tasks[taskId].rev }, evidence }));
+async function submitDoc(s, taskId = s.taskId, docId = s.docId) {
+  await startWork(s, taskId);
+  return submit(s.h, taskId, [linked(s.h, taskId, docId)]);
+}
+const row = ({ h }, taskId) => structuredClone(h.state.tasks[taskId].evidence.at(-1));
+const refs = result => result.events.filter(event => event.type === retainedType).map(event => event.data.version.versionRef);
+const ledger = h => fs.readFileSync(h.store.commitsFile);
 
-  const result = await submitDoc(s, s.taskId, s.docId);
-  const evidence = row(s, s.taskId);
-  assert.equal(evidence.fixedState, 'current-only');
-  assert.equal(evidence.fixedReason, 'content-transform');
-  assert.equal(Object.hasOwn(evidence, 'fixed'), false);
-  assert.equal(fs.existsSync(marker), false, 'no clean/smudge/process driver may execute');
-  assert.deepEqual(result.events.map((event) => event.type).filter((type) => type === 'project/updated' || type === 'doc/content-fixed'), []);
-  await s.svc.close();
-});
-
-// 责任：即使文件存在，LFS 指针也不得当成真实文档内容固定。
-test('an LFS pointer is never pinned as document content', async (t) => {
-  const s = await setup(t);
-  const pointer = 'version https://git-lfs.github.com/spec/v1\noid sha256:' + 'a'.repeat(64) + '\nsize 123\n';
-  put(s.root, 'docs/spec.md', pointer);
-  git(s.root, 'add', 'docs/spec.md');
-  git(s.root, 'commit', '-m', '测试 LFS 指针');
-  const result = await submitDoc(s, s.taskId, s.docId);
-  const evidence = row(s, s.taskId);
-  assert.equal(evidence.fixedState, 'current-only');
-  assert.equal(evidence.fixedReason, 'lfs-pointer');
-  assert.equal(Object.hasOwn(evidence, 'fixed'), false);
-  assert.equal(evidence.hash, sha(pointer), 'the evidence hashes workspace bytes, not a fabricated blob');
-  assert.equal(Object.keys(s.h.state.fixedContents || {}).length, 0);
-  assert.deepEqual(result.events.map((event) => event.type).filter((type) => type === 'doc/content-fixed'), []);
-  await s.svc.close();
-});
-
-// 责任：文档来自非主绑定时须降级 multiple-repositories，不得选错内容仓库。
-test('a document outside the main binding degrades as multiple-repositories', async (t) => {
-  const s = await setup(t);
-  const clone = temp(t);
-  fs.cpSync(s.root, clone, { recursive: true });
-  const binding = bindWorktree(s.svc, { projectId: s.h.id, workspacePath: clone, actor: { kind: 'human' } });
-  const second = await newDoc(s, 'docs/spec.md', binding.bindingId);
-  const result = await submitDoc(s, s.taskId, second);
-  const evidence = row(s, s.taskId);
-  assert.equal(evidence.fixedState, 'current-only');
-  assert.equal(evidence.fixedReason, 'multiple-repositories');
-  assert.equal(Object.hasOwn(evidence, 'fixed'), false);
-  assert.deepEqual(result.events.map((event) => event.type).filter((type) => type === 'project/updated'), []);
-  await s.svc.close();
-});
-
-// 责任：后续固定同仓库文档须复用已记来源，不能重复写自动审批事件。
-test('automatic approval is idempotent and later pins reuse the recorded source', async (t) => {
-  const s = await setup(t);
-  await submitDoc(s, s.taskId, s.docId);
-  assert.equal(approvalCount(s), 1);
-  const first = row(s, s.taskId);
-  const second = await newTask(s);
-  const result = await submitDoc(s, second, s.docId);
-  const evidence = row(s, second);
-  assert.deepEqual(result.events.map((event) => event.type).filter((type) => type === 'project/updated'), []);
-  assert.equal(approvalCount(s), 1, 'a second trigger must not write another approval event');
-  assert.equal(evidence.fixedState, 'pinned');
-  assert.deepEqual(evidence.fixed, first.fixed);
-  assert.equal(s.h.state.project.gitContentRepository.anchorCommitOid, s.oid);
-  await s.svc.close();
-});
-
-// 责任：自动固定日志须支持冷重放和快照，旧注册表必须拒绝新内容事件。
-test('an auto-pinned log replays cold, survives a snapshot and is refused by the old registry', async (t) => {
-  const s = await setup(t);
-  const result = await submitDoc(s, s.taskId, s.docId);
-  const evidence = row(s, s.taskId);
-  const fixedContents = structuredClone(s.h.state.fixedContents);
-  const projectId = s.h.id;
-  const barrier = result.events.find((event) => event.type === 'doc/content-fixed');
-
-  const oldRegistry = { ...EVENT_REGISTRY };
-  delete oldRegistry['doc/content-fixed'];
-  assert.throws(() => assertEventSupported(s.h.state, barrier, s.h.store.commits.at(-1), oldRegistry), { code: 'incompatible-event', status: 409 });
-
-  s.h.store.saveSnapshot();
-  const dir = s.h.meta.dir;
-  assert.equal(fs.existsSync(path.join(dir, 'snapshot.json')), true);
-  await s.svc.close();
-
-  const { svc, h } = await withProject(t, { rootDir: s.board, workspacePath: s.root, projectId, privilegedInlineWrites: true });
-  assert.deepEqual(h.state.tasks[s.taskId].evidence.at(-1), evidence);
-  assert.deepEqual(h.state.fixedContents, fixedContents);
-  assert.deepEqual(h.state.project.gitContentRepository, { v: 1, objectFormat: 'sha1', anchorCommitOid: s.oid, bindingIds: [s.bindingId] });
-  assert.deepEqual(auditEvidence(h, h.state.tasks[s.taskId]), []);
-  // The snapshot does not carry the timeline; the log line keeps event-level
-  // provenance even though the commit actor stays the command caller.
-  const lastCommit = JSON.parse(fs.readFileSync(path.join(dir, 'commits.jsonl'), 'utf8').trim().split('\n').at(-1));
-  assert.deepEqual(lastCommit.events.find((event) => event.type === 'project/updated').actor, { kind: 'system', reason: 'auto-approve-git-content-repository' });
-  assert.equal(lastCommit.actor.kind, 'human');
-  await svc.close();
-});
-
-// 责任：非 UTF-8 markdown 须降级而非让整次 submit 失败。
-test('a non-UTF-8 markdown document degrades instead of failing the submit', async (t) => {
-  const s = await setup(t);
-  const bytes = Buffer.from([0xb0, 0xa1, 0xba, 0xc3]); // GBK bytes, invalid UTF-8
-  const file = path.join(s.root, 'docs/gbk.md');
-  fs.writeFileSync(file, bytes);
-  git(s.root, 'add', 'docs/gbk.md');
-  git(s.root, 'commit', '-m', '非 UTF-8 文档');
-  const doc = await newDoc(s, 'docs/gbk.md');
-  const result = await submitDoc(s, s.taskId, doc);
-  const evidence = row(s, s.taskId);
-  assert.equal(result.committed, true);
-  assert.equal(evidence.fixedState, 'current-only');
-  assert.equal(evidence.fixedReason, 'unsupported-format');
-  assert.equal(evidence.hash, sha(bytes), 'raw bytes hash, same rule as file evidence');
-  assert.equal(Object.hasOwn(evidence, 'fixed'), false);
-  assert.deepEqual(result.events.map((event) => event.type).filter((type) => type === 'project/updated' || type === 'doc/content-fixed'), []);
-  assert.deepEqual(auditEvidence(s.h, s.h.state.tasks[s.taskId]), [], 'undecodable current-only evidence stays auditable');
-  await s.svc.close();
-});
-
-// 责任：外置 docId@rev 须忽略元数据版本并走自动固定壳，不取历史元数据当正文。
-test('an external docId@rev ignores the metadata revision and uses the auto shell', async (t) => {
-  const s = await setup(t);
-  const acceptanceId = s.h.state.tasks[s.taskId].acceptance[0].id;
-  const pinned = await submitEvidence(s, s.taskId, [{ kind: 'doc', ref: s.docId + '@99', acceptanceId }]);
-  const pinnedRow = row(s, s.taskId);
-  assert.equal(pinned.committed, true);
-  assert.equal(pinnedRow.ref, s.docId, 'the stored ref is the bare docId');
-  assert.equal(pinnedRow.fixedState, 'pinned');
-  assert.ok(pinned.events.some((event) => event.type === 'doc/content-fixed'));
-
-  const second = await newTask(s);
-  put(s.root, 'docs/spec.md', 'metadata rev must not change the rule\n');
-  const degraded = await submitEvidence(s, second, [{ kind: 'doc', ref: s.docId + '@1', acceptanceId: s.h.state.tasks[second].acceptance[0].id }]);
-  const degradedRow = row(s, second);
-  assert.equal(degraded.committed, true);
-  assert.equal(degradedRow.ref, s.docId);
-  assert.equal(degradedRow.fixedState, 'current-only');
-  assert.equal(degradedRow.fixedReason, 'dirty-worktree');
-  await s.svc.close();
-});
-
-// 责任：内嵌 docId@rev 仍须读取对应历史 body 字节，不跟随当前 head。
-test('inline docId@rev keeps its historical pinned bytes', async (t) => {
-  const s = await setup(t);
-  const put = await s.h.command(command('doc.put', { title: '内嵌历史', body: 'inline v1' }));
-  const inlineId = put.events[0].data.id;
-  const inlineHash = s.h.state.docs[inlineId].hash;
-  const acceptanceId = s.h.state.tasks[s.taskId].acceptance[0].id;
-  const result = await submitEvidence(s, s.taskId, [{ kind: 'doc', ref: inlineId + '@1', acceptanceId }]);
-  const evidence = row(s, s.taskId);
-  assert.equal(result.committed, true);
-  assert.equal(evidence.ref, inlineId + '@1');
-  assert.equal(evidence.hash, inlineHash);
+function assertRetained(s, evidence, bytes, docId = s.docId) {
+  const ref = evidence.workspaceVersion;
+  assert.deepEqual(ref, { v: 1, kind: 'workspace-body', docId, projectId: s.h.id, versionId: ref.versionId, contentHash: sha(bytes) });
+  assert.equal(evidence.hash, ref.contentHash);
   assert.equal(Object.hasOwn(evidence, 'fixed'), false);
   assert.equal(Object.hasOwn(evidence, 'fixedState'), false);
+  assert.deepEqual(readWorkspaceObject(s.svc.spaceHome, ref.contentHash), Buffer.from(bytes));
+  return ref;
+}
 
+function assertCurrent(evidence, bytes, reason) {
+  assert.equal(evidence.hash, sha(bytes));
+  assert.equal(evidence.fixedState, 'current-only');
+  assert.equal(evidence.fixedReason, reason);
+  for (const key of ['fixed', 'workspaceVersion']) assert.equal(Object.hasOwn(evidence, key), false);
+}
+
+// 责任：禁止子进程时，提交仍原子保存实际字节及其版本引用。
+test('Git absent and child execution forbidden: submit retains exact bytes atomically', async t => {
+  forbidChildren(t);
+  const text = '\uFEFFworkspace 文档\r\n';
+  const s = await setup(t, { text });
+  const before = s.h.rev;
+  const result = await submitDoc(s);
+  const evidence = row(s, s.taskId);
+  const ref = assertRetained(s, evidence, text);
+  assert.deepEqual(refs(result), [ref]);
+  const types = result.events.map(event => event.type);
+  assert.ok(types.indexOf(retainedType) < types.indexOf('task/submitted'));
+  assert.equal(result.projectRev, before + 3); // claim, begin, one submit batch
+  assert.equal(s.h.store.commits.at(-1).actor.kind, 'human');
+  assert.deepEqual(s.h.store.commits.at(-1).events, result.events);
+  assert.equal(s.h.state.project.gitContentRepository, undefined);
+  noGitEvents(result.events);
+  assert.equal(evidenceVerified(s.h, null, evidence), true);
+  assert.deepEqual(auditEvidence(s.h, s.h.state.tasks[s.taskId]), []);
+});
+
+// 责任：确认与证据可共用同版；后来编辑不改变已经留存的历史。
+test('confirmation and later evidence share an unchanged version; later current edits do not drift history', async t => {
+  forbidChildren(t);
+  const s = await setup(t);
+  const { h, docId } = s;
+  const expectedContentHash = sha('version one\n');
+  const confirmed = await h.command(command('doc.external.confirm', { docId, expectedMetaRev: 1, expectedContentHash }));
+  assert.deepEqual(confirmed.events.map(event => event.type), [retainedType, 'doc/external-confirmed']);
+  assert.deepEqual(h.state.docs[docId].baseline.workspaceVersion, refs(confirmed)[0]);
+  assert.equal(Object.hasOwn(h.state.docs[docId].baseline, 'gitHeadOid'), false);
+  const submitted = await submitDoc(s);
+  assert.deepEqual(refs(submitted), []);
+  assert.deepEqual(assertRetained(s, row(s, s.taskId), 'version one\n'), refs(confirmed)[0]);
+  put(s.root, 'docs/spec.md', 'edited without Git\n');
+  const second = await newTask(s);
+  const changed = await submitDoc(s, second);
+  assert.deepEqual(refs(changed), [assertRetained(s, row(s, second), 'edited without Git\n')]);
+  assert.notEqual(row(s, second).workspaceVersion.versionId, row(s, s.taskId).workspaceVersion.versionId);
+  assert.deepEqual(auditEvidence(h, h.state.tasks[s.taskId]), []);
+  const verify = await h.command(command('task.verify', { taskId: s.taskId, expected: { entityRev: h.state.tasks[s.taskId].rev } }));
+  assert.equal(verify.committed, true);
+  assert.equal(h.state.tasks[s.taskId].state, 'done');
+});
+
+// 责任：普通文件不要求 Git 跟踪或属性转换，按实际字节留存。
+test('untracked current bytes and an inert filter declaration do not need Git provenance', async t => {
+  forbidChildren(t);
+  const s = await setup(t);
+  put(s.root, '.gitattributes', '*.md filter=danger\n');
+  put(s.root, '.git/config', '[filter "danger"]\nclean = echo unsafe > MARK\nsmudge = echo unsafe > MARK\nprocess = echo unsafe > MARK\n');
+  put(s.root, 'docs/untracked.md', 'untracked\n');
+  const doc = await newDoc(s, 'docs/untracked.md');
+  const result = await submitDoc(s, s.taskId, doc);
+  assertRetained(s, row(s, s.taskId), 'untracked\n', doc);
+  assert.equal(fs.existsSync(path.join(s.root, 'MARK')), false);
+  noGitEvents(result.events);
+});
+
+// 责任：按字面留存指针文本，不读取或拉取其远端内容。
+test('LFS pointer text records literal workspace bytes and does not resolve a remote object', async t => {
+  forbidChildren(t);
+  const text = 'version https://git-lfs.github.com/spec/v1\noid sha256:' + 'a'.repeat(64) + '\nsize 123\n';
+  const s = await setup(t, { text });
+  const result = await submitDoc(s);
+  assertRetained(s, row(s, s.taskId), text);
+  assert.equal(Object.keys(s.h.state.fixedContents ?? {}).length, 0);
+  noGitEvents(result.events);
+});
+
+// 责任：旧布局没有对象库时限于当前证据，不改从其他位置寻找。
+test('legacy non-owning project and non-main locator use current-only, never an alternate source', async t => {
+  forbidChildren(t);
+  const s = await setup(t, { owning: false });
+  const other = temp(t);
+  put(other, 'docs/spec.md', 'alternate binding bytes\n');
+  const binding = bindWorktree(s.svc, { projectId: s.h.id, workspacePath: other, actor: { kind: 'human' } });
+  const second = await newDoc(s, 'docs/spec.md', binding.bindingId);
+  const result = await submitDoc(s, s.taskId, second);
+  assertCurrent(row(s, s.taskId), 'alternate binding bytes\n', 'no-owning-space');
+  assert.deepEqual(refs(result), []);
+  noGitEvents(result.events);
+  assert.deepEqual(auditEvidence(s.h, s.h.state.tasks[s.taskId]), []);
+});
+
+// 责任：无 Git 的冷回放保留证据；不能识别版本事件的旧读端明确拒绝。
+test('no-Git cold replay and snapshot preserve retained evidence; old event registry refuses the ledger event', async t => {
+  forbidChildren(t);
+  const s = await setup(t);
+  const result = await submitDoc(s);
+  const evidence = row(s, s.taskId);
+  const oldRegistry = { ...EVENT_REGISTRY };
+  delete oldRegistry[retainedType];
+  const retention = result.events.find(event => event.type === retainedType);
+  assert.throws(() => assertEventSupported(s.h.state, retention, s.h.store.commits.at(-1), oldRegistry), { code: 'incompatible-event', status: 409 });
+  s.h.store.saveSnapshot();
+  const bytes = ledger(s.h);
+  await s.svc.close();
+  const reopened = await new ProjectService(s.serviceOptions).init();
+  t.after(() => reopened.close());
+  const h = await reopened.open(s.h.id);
+  assert.deepEqual(row({ h }, s.taskId), evidence);
+  assert.deepEqual(h.state.workspaceVersions[evidence.workspaceVersion.versionId].versionRef, evidence.workspaceVersion);
+  assert.deepEqual(auditEvidence(h, h.state.tasks[s.taskId]), []);
+  assert.deepEqual(ledger(h), bytes);
+});
+
+// 责任：不可解码字节生效为当前哈希，不冒充已留存的正文版本。
+test('undecodable text remains auditable current-only without fake retained bytes', async t => {
+  forbidChildren(t);
+  const text = Buffer.from([0xb0, 0xa1, 0xba, 0xc3]);
+  const s = await setup(t, { text });
+  const result = await submitDoc(s);
+  assertCurrent(row(s, s.taskId), text, 'unsupported-format');
+  assert.deepEqual(refs(result), []);
+  assert.deepEqual(auditEvidence(s.h, s.h.state.tasks[s.taskId]), []);
+});
+
+// 责任：区分外置元数据修订和内嵌正文历史修订。
+test('external @rev is metadata; inline docId@rev still checks the archive revision', async t => {
+  const s = await setup(t, { owning: false });
+  const { h, taskId } = s;
+  const ref = s.docId + '@99';
+  await startWork(s, taskId);
+  const out = await submit(h, taskId, [linked(h, taskId, ref)]);
+  assert.equal(out.committed, true);
+  assert.equal(row(s, taskId).ref, s.docId);
+  assertCurrent(row(s, taskId), 'version one\n', 'no-owning-space');
+  const made = await h.command(command('doc.put', { title: 'Archive', body: 'inline v1' }));
+  const docId = made.events[0].data.id;
   const second = await newTask(s);
   await startWork(s, second);
-  await assert.rejects(s.h.command(command('task.submit', {
-    taskId: second,
-    fencingToken: s.h.leases.get(second).token,
-    expected: { entityRev: s.h.state.tasks[second].rev },
-    evidence: [{ kind: 'doc', ref: inlineId + '@99', acceptanceId: s.h.state.tasks[second].acceptance[0].id }],
-  })), { code: 'missing-evidence' });
-  await s.svc.close();
+  await assert.rejects(submit(h, second, [linked(h, second, docId + '@99')]), { code: 'missing-evidence' });
+  await submit(h, second, [linked(h, second, docId + '@1')]);
+  assert.equal(row(s, second).ref, docId + '@1');
+  assert.equal(row(s, second).hash, sha('inline v1'));
+  assert.equal(Object.hasOwn(row(s, second), 'workspaceVersion'), false);
+  await h.command(command('doc.put', { docId, baseRev: 1, title: 'Archive moved', body: 'inline v2' }));
+  assert.deepEqual(auditEvidence(h, h.state.tasks[second]), []);
 });
 
-// 责任：审计前置条件拒绝 submit 时，不得残留自动审批或部分提交。
-test('a rejected pre-review audit leaves no automatic approval or partial commit', async (t) => {
+// 责任：预审失败不得发布版本、证据或新的任务状态。
+test('failed pre-review validation leaves no version, evidence, event, or state advancement', async t => {
   const s = await setup(t);
-  const acceptanceId = s.h.state.tasks[s.taskId].acceptance[0].id;
-  await startWork(s, s.taskId);
-  const beforeRev = s.h.rev;
-  const beforeCommits = s.h.store.commits.length;
-  await assert.rejects(s.h.command(command('task.submit', {
-    taskId: s.taskId,
-    fencingToken: s.h.leases.get(s.taskId).token,
-    expected: { entityRev: s.h.state.tasks[s.taskId].rev },
-    evidence: [
-      { kind: 'doc', ref: s.docId, acceptanceId },
-      { kind: 'file', ref: '../outside-the-workspace.txt' },
-    ],
-  })), { code: 'invalid-command' });
-
-  assert.equal(s.h.rev, beforeRev);
-  assert.equal(s.h.store.commits.length, beforeCommits);
-  assert.equal(s.h.state.project.gitContentRepository, undefined, 'rejected audit must not persist the source');
-  assert.equal(s.h.state.tasks[s.taskId].evidence.length, 0);
-  assert.equal(s.h.state.tasks[s.taskId].state, 'in_progress');
-  await s.svc.close();
+  const { h, taskId, docId } = s;
+  await startWork(s, taskId);
+  const bytes = ledger(h);
+  const rev = h.rev;
+  const lease = h.leases.get(taskId).token;
+  await assert.rejects(submit(h, taskId, [linked(h, taskId, docId), { kind: 'file', ref: '../escape.txt' }]), { code: 'invalid-command' });
+  await assert.rejects(submit(h, taskId, [linked(h, taskId, docId, { workspaceVersion: {} })]), { code: 'invalid-command' });
+  assert.deepEqual(ledger(h), bytes);
+  assert.equal(h.rev, rev);
+  assert.equal(h.leases.get(taskId).token, lease);
+  assert.equal(h.state.tasks[taskId].state, 'in_progress');
+  assert.deepEqual(h.state.tasks[taskId].evidence, []);
+  assert.deepEqual(h.state.workspaceVersions, {});
 });
 
-// 责任：reconcile(completed) 固定文档时，自动审批和内容屏障必须同次原子提交。
-test('reconcile(completed) keeps the auto approval and content barrier in one commit', async (t) => {
+// 责任：完成对账的版本、恢复结果与证据必须同批。
+test('reconcile(completed) logs retention, recovered work, and task evidence in the same batch', async t => {
+  forbidChildren(t);
   const s = await setup(t);
   const { h, taskId } = s;
   await startWork(s, taskId);
-  await h.command(command('task.interrupt', {
-    taskId,
-    expected: { entityRev: h.state.tasks[taskId].rev },
-    fencingToken: h.leases.get(taskId).token,
-    note: 'crash before completion',
-    sideEffects: [{ kind: 'command', ref: 'npm test' }],
-  }));
-  const acceptanceId = h.state.tasks[taskId].acceptance[0].id;
-  const result = await h.command(command('task.reconcile', {
-    taskId,
-    expected: { entityRev: h.state.tasks[taskId].rev },
-    choice: 'completed',
-    note: 'recovered and completed',
-    evidence: [{ kind: 'doc', ref: s.docId, acceptanceId }],
-  }));
-  const types = result.events.map((event) => event.type);
-  assert.ok(types.includes('project/updated'));
-  assert.ok(types.includes('doc/content-fixed'));
-  assert.ok(types.indexOf('project/updated') < types.indexOf('doc/content-fixed'));
-  assert.ok(types.indexOf('doc/content-fixed') < types.indexOf('task/reconciled'));
-  assert.equal(approvalCount(s), 1);
-  assert.equal(row(s, taskId).fixedState, 'pinned');
-  assert.ok(s.h.state.tasks[taskId].evidence.some((item) => Object.hasOwn(item, 'fixed')));
-  await s.svc.close();
+  await h.command(command('task.interrupt', { taskId, expected: { entityRev: h.state.tasks[taskId].rev }, fencingToken: h.leases.get(taskId).token,
+    note: 'Interruption after work', sideEffects: [{ kind: 'command', ref: 'node --test' }] }));
+  const out = await h.command(command('task.reconcile', { taskId, expected: { entityRev: h.state.tasks[taskId].rev }, choice: 'completed',
+    note: 'Recovered', evidence: [linked(h, taskId, s.docId + '@999')] }));
+  assert.deepEqual(out.events.map(event => event.type), [retainedType, 'work/result', 'task/reconciled']);
+  assert.deepEqual(refs(out), [assertRetained(s, row(s, taskId), 'version one\n')]);
+  assert.equal(h.state.tasks[taskId].state, 'review');
+  assert.deepEqual(h.store.commits.at(-1).events, out.events);
+  noGitEvents(out.events);
 });
 
-// 责任：一次提交两份干净文档须各自固定，但仓库自动审批只记录一次。
-test('one submit with two clean documents records a single approval', async (t) => {
+// 责任：同批分别留存各文档，而同一文档的重复证据复用一次观测。
+test('one submission retains two documents independently and reuses each capture on duplicate rows', async t => {
   const s = await setup(t);
+  const { h, taskId } = s;
   put(s.root, 'docs/two.md', 'second document\n');
-  git(s.root, 'add', 'docs/two.md');
-  git(s.root, 'commit', '-m', '第二份文档');
-  const secondDoc = await newDoc(s, 'docs/two.md');
-  const acceptanceId = s.h.state.tasks[s.taskId].acceptance[0].id;
-  const result = await submitEvidence(s, s.taskId, [
-    { kind: 'doc', ref: s.docId, acceptanceId },
-    { kind: 'doc', ref: secondDoc, acceptanceId },
+  const doc = await newDoc(s, 'docs/two.md');
+  await startWork(s, taskId);
+  const before = structuredClone(h.state);
+  const result = await submit(h, taskId, [linked(h, taskId, s.docId), linked(h, taskId, doc), linked(h, taskId, s.docId + '@9')]);
+  const [first, second, again] = h.state.tasks[taskId].evidence;
+  assert.deepEqual(refs(result), [assertRetained(s, first, 'version one\n'), assertRetained(s, second, 'second document\n', doc)]);
+  assert.deepEqual(again.workspaceVersion, first.workspaceVersion);
+  const commit = h.store.commits.at(-1);
+  assert.throws(() => assertWorkspaceAttachmentCommit(before, { ...commit, events: commit.events.filter(event => event.type !== retainedType) }), { code: 'invalid-workspace-version' });
+  noGitEvents(result.events);
+});
+
+// 责任：对象损坏不能变成已确认版本，安全核得的当前字节可以显式降级。
+test('object corruption cannot create a reference or fake a confirmation; task can use safe current observation', async t => {
+  const s = await setup(t);
+  const { h, docId } = s;
+  const hash = sha('version one\n');
+  const object = path.join(s.svc.spaceHome.namespace, 'objects', 'workspace-bytes', hash.slice(0, 2), hash);
+  fs.mkdirSync(path.dirname(object), { recursive: true });
+  fs.writeFileSync(object, 'wrong object bytes');
+  const before = ledger(h);
+  await assert.rejects(h.command(command('doc.external.confirm', { docId, expectedMetaRev: 1, expectedContentHash: hash })), { code: 'content-object-corrupt' });
+  assert.deepEqual(ledger(h), before);
+  assert.equal(h.state.docs[docId].baseline, null);
+  const out = await submitDoc(s);
+  assert.deepEqual(refs(out), []);
+  assertCurrent(row(s, s.taskId), 'version one\n', 'workspace-retention-unavailable');
+  assert.equal(fs.readFileSync(object, 'utf8'), 'wrong object bytes');
+});
+
+// 责任：旧来源和哈希基线可回放，人审可查看未重新核验警告。
+test('old Git evidence and hash-only confirmations replay unchanged; human verification receives an explicit warning', async t => {
+  forbidChildren(t);
+  const s = await setup(t, { owning: false });
+  const { h, docId, taskId } = s;
+  await submitDoc(s);
+  const before = structuredClone(h.state.tasks[taskId]);
+  const doc = h.state.docs[docId];
+  const { data, source } = legacyGitMaterial(h, docId, { synthetic: true });
+  const at = '2025-01-01T00:00:00.000Z';
+  const fixed = { ...before.evidence[0], ...data, id: 'ev_synthetic_legacy_git', fixedState: 'pinned' };
+  delete fixed.fixedReason;
+  const baseline = { domain: 'workspace-bytes', contentHash: sha('version one\n'), ...doc.locator,
+    gitHeadOid: data.fixed.commitOid, confirmedAt: at, confirmedBy: { kind: 'human' }, readerVersion: 'workspace-reader/1' };
+  appendLegacyFacts(h, [
+    { type: 'project/updated', data: { ...h.state.project, gitContentRepository: source } },
+    { type: 'doc/content-fixed', docId, data },
+    { type: 'doc/external-confirmed', docId, rev: 2, data: { ...doc, rev: 2, baseline, baselineInContext: true } },
+    { type: 'task/submitted', taskId, rev: before.rev + 1, data: { ...before, rev: before.rev + 1,
+      acceptance: before.acceptance.map(item => ({ ...item, evidenceIds: [fixed.id] })), evidence: [fixed] } },
   ]);
-  assert.equal(approvalCount(s), 1);
-  assert.equal(result.events.filter((event) => event.type === 'project/updated').length, 1);
-  assert.equal(result.events.filter((event) => event.type === 'doc/content-fixed').length, 2);
-  const evidence = s.h.state.tasks[s.taskId].evidence;
-  assert.deepEqual(evidence.map((item) => item.fixedState), ['pinned', 'pinned']);
-  assert.equal(Object.keys(s.h.state.fixedContents).length, 2);
+  const oldBytes = ledger(h);
   await s.svc.close();
+  const reopened = await new ProjectService(s.serviceOptions).init();
+  t.after(() => reopened.close());
+  const reopenedHandle = await reopened.open(h.id);
+  assert.deepEqual(ledger(reopenedHandle), oldBytes);
+  assert.deepEqual(reopenedHandle.state.docs[docId].baseline, baseline);
+  assert.equal(Object.hasOwn(reopenedHandle.state.docs[docId].baseline, 'workspaceVersion'), false);
+  assert.deepEqual(row({ h: reopenedHandle }, taskId), fixed);
+  assert.equal(evidenceVerified(reopenedHandle, null, fixed), false);
+  const verified = await reopenedHandle.command(command('task.verify', { taskId, expected: { entityRev: reopenedHandle.state.tasks[taskId].rev } }));
+  assert.equal(verified.committed, true);
+  assert.equal(reopenedHandle.state.tasks[taskId].state, 'done');
+  const [warning] = verified.warnings;
+  assert.deepEqual([warning.code, warning.severity, warning.provenance, warning.deprecated, warning.reverified],
+    ['legacy-git-not-reverified', 'warning', 'legacy-git', true, false]);
+  assert.deepEqual(row({ h: reopenedHandle }, taskId), fixed);
+  assert.deepEqual(ledger(reopenedHandle).subarray(0, oldBytes.length), oldBytes);
+});
+
+// 责任：预检与失锁都不安装对象或追加权威日志。
+test('preflight and missing writer lock cannot create workspace objects or append log bytes', async t => {
+  const s = await setup(t);
+  const { h, taskId, docId } = s;
+  await startWork(s, taskId);
+  const bytes = ledger(h);
+  const objects = path.join(s.svc.spaceHome.namespace, 'objects', 'workspace-bytes');
+  const tree = () => fs.existsSync(objects) ? fs.readdirSync(objects, { recursive: true }).sort() : [];
+  const before = tree();
+  const cmd = command('task.submit', { taskId, fencingToken: h.leases.get(taskId).token,
+    expected: { entityRev: h.state.tasks[taskId].rev }, evidence: [linked(h, taskId, docId)] });
+  await h._preflight(cmd);
+  assert.deepEqual(tree(), before);
+  assert.deepEqual(ledger(h), bytes);
+  const lock = t.mock.method(h.store, 'ownsLockFile', () => false);
+  await assert.rejects(h.command(cmd), { code: 'read-only' });
+  lock.mock.restore();
+  assert.deepEqual(tree(), before);
+  assert.deepEqual(ledger(h), bytes);
+  assert.deepEqual(h.state.workspaceVersions, {});
+});
+
+// 责任：附带版本的证据必须和日志身份、最新版本以及快照逐行一致。
+test('attachment replay rejects altered snapshots, duplicate IDs and an older same-hash A version', async t => {
+  const s = await setup(t);
+  const { h, taskId, docId } = s;
+  const old = refs(await h.command(command('doc.workspace_capture', { docId })))[0];
+  put(s.root, 'docs/spec.md', 'B');
+  await h.command(command('doc.workspace_capture', { docId }));
+  put(s.root, 'docs/spec.md', 'version one\n');
+  await startWork(s, taskId);
+  const previous = structuredClone(h.state);
+  const events = (await submit(h, taskId, [linked(h, taskId, docId), linked(h, taskId, docId)])).events;
+  const row = events.find(event => event.type === 'task/submitted').data.evidence[0];
+  assert.equal(old.contentHash, row.workspaceVersion.contentHash);
+  assert.notEqual(old.versionId, row.workspaceVersion.versionId);
+  for (const mutate of [rows => { rows[0].workspaceVersion = old; }, rows => { rows[1].id = rows[0].id; }, rows => { rows[0].id = ''; }]) {
+    const altered = structuredClone(h.store.commits.at(-1));
+    mutate(altered.events.find(event => event.type === 'task/submitted').data.evidence);
+    assert.throws(() => assertWorkspaceAttachmentCommit(previous, altered), { code: 'invalid-workspace-version' });
+  }
+  for (const mutate of [rows => { rows[0].kind = 'note'; }, rows => { rows[0].hash = 'a'.repeat(64); }, rows => { rows[0].ref = 'doc_other'; },
+    rows => { rows[0].supersededAt = 'invented'; }, rows => { rows.reverse(); }]) {
+    const state = structuredClone(h.state);
+    mutate(state.tasks[taskId].evidence);
+    assert.throws(() => assertWorkspaceAttachmentLog(h.store.commits, h.id, { seq: h.rev, state }), { code: 'invalid-workspace-version' });
+  }
+  assert.throws(() => assertWorkspaceAttachmentLog([], h.id, { seq: 0, state: h.state }), { code: 'invalid-workspace-version' });
+});
+
+// 责任：后续记录缺失文档引用时，追加、冷重放和审计均拒绝已有留存身份。
+test('existing retained evidence cannot lose its document reference', async t => {
+  const s = await setup(t);
+  const { h, taskId, docId } = s;
+  await startWork(s, taskId);
+  await submit(h, taskId, [linked(h, taskId, docId)]);
+  const task = structuredClone(h.state.tasks[taskId]);
+  delete task.evidence[0].ref;
+  const added = { seq: h.rev + 1, events: [{ type: 'task/updated', taskId, data: task }] };
+  assert.throws(() => assertWorkspaceAttachmentCommit(h.state, added), { code: 'invalid-workspace-version' });
+  assert.throws(() => assertWorkspaceAttachmentLog([...h.store.commits, added], h.id), { code: 'invalid-workspace-version' });
+  assert.deepEqual(auditEvidence(h, task).map(({code, severity}) => ({ code, severity })), [{ code: 'invalid-workspace-version', severity: 'error' }]);
 });

@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 import { migrationFixture } from '../../lib/core/documents/migration-fixture.js';
 import { inventoryInlineDocuments, exportInlineContent } from '../../lib/core/documents/migration-inventory.js';
-import { JsonlStore } from '../../lib/core/store.js';
+import { JsonlStore, makeCommit } from '../../lib/core/store.js';
 import { sha256 } from '../../lib/core/util.js';
 
 const inventory = (store, extra = {}) => inventoryInlineDocuments({ state: store.state, commits: store.commits, readBlob: (hash) => store.readBlob(hash), ...extra });
@@ -25,14 +25,39 @@ function tree(root, result = {}, base = root) {
   return result;
 }
 
-function diskFixture(t) {
-  const store = migrationFixture();
+/** Synthetic history is materialized as JSONL and replayed by the real store. */
+function diskFixture(t, { extraCommits } = {}) {
+  const base = migrationFixture();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-doc-migrate-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   fs.mkdirSync(path.join(dir, 'blobs'));
-  fs.writeFileSync(path.join(dir, 'commits.jsonl'), store.commits.map((c) => JSON.stringify(c)).join('\n')); // unterminated intentionally
-  for (const [hash, body] of store.blobs) fs.writeFileSync(path.join(dir, 'blobs', hash), body);
-  return { store, dir };
+  const ext = typeof extraCommits === 'function' ? extraCommits(base) : extraCommits || [];
+  const commits = [...base.commits, ...ext];
+  fs.writeFileSync(path.join(dir, 'commits.jsonl'), commits.map((c) => JSON.stringify(c)).join('\n') + '\n');
+  for (const [hash, body] of base.blobs) fs.writeFileSync(path.join(dir, 'blobs', hash), body);
+  const store = new JsonlStore(dir, { project: base.state.project }, { lock: false });
+  store.open();
+  return { store, dir, base };
+}
+
+function externalCommit(base) {
+  const record = {
+    id: 'doc_external', source: 'external', rev: 1, title: 'Registered', kind: 'note', status: 'draft',
+    locator: { bindingId: 'one', relPath: 'a.md' }, links: { taskIds: [], planRefs: [] },
+    baseline: null, baselineInContext: false, unregistered: null,
+    createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z',
+  };
+  return makeCommit(base.commits.length + 1, base.commits.at(-1).hash, { kind: 'human' }, 'fixture_external', base.state.lastSeq,
+    [{ type: 'doc/external-registered', docId: record.id, rev: 1, data: record }]);
+}
+
+function orphanEvidenceCommit(base) {
+  const task = structuredClone(base.state.tasks.tsk_fixture);
+  task.evidence = [...(task.evidence || []), { kind: 'doc', ref: 'doc_lost@7', hash: sha256('lost') }];
+  task.rev += 1;
+  task.updatedAt = '2025-01-01T00:00:00.000Z';
+  return makeCommit(base.commits.length + 1, base.commits.at(-1).hash, { kind: 'human' }, 'fixture_orphan', base.state.lastSeq,
+    [{ type: 'task/updated', taskId: task.id, data: task }]);
 }
 
 // 责任：盘点须列出所有正文/仅链接版本及历史关联，缺 blob 要显式报告而非漏行。
@@ -51,28 +76,25 @@ test('inventory enumerates every revision, link-only rev, historical relation an
 });
 
 // 责任：导出须验证原始哈希，历史 blob 缺失或损坏时不能以最新正文顶替。
-test('export validates original hashes and never substitutes head for missing or corrupt history', () => {
-  const store = migrationFixture();
+test('export validates original hashes and never substitutes head for missing or corrupt history', (t) => {
+  const { store, dir } = diskFixture(t);
   const old = inventory(store).revisions[0];
   assert.equal(exportInlineContent((hash) => store.readBlob(hash), old.hash).body, 'old\r\n');
-  store.blobs.set(old.hash, 'new\n');
+  fs.writeFileSync(path.join(dir, 'blobs', old.hash), 'new\n');
   assert.equal(inventory(store).revisions[0].blob.status, 'hash-mismatch');
   assert.equal(exportInlineContent(() => null, old.hash).status, 'missing-blob');
   assert.equal(exportInlineContent(() => 'x', '../bad').status, 'invalid-hash');
 });
 
 // 责任：目标路径大小写别名、共享根别名或已登记外置目标冲突均须报告。
-test('inventory reports collisions including case aliases and existing external destinations', () => {
-  const store = migrationFixture();
+test('inventory reports collisions including case aliases and existing external destinations', (t) => {
+  const { store } = diskFixture(t, { extraCommits: base => [externalCommit(base)] });
   const destinations = ['doc_fixture', 'doc_missing'].map((docId, i) => ({ docId, locator: { bindingId: 'b', relPath: i ? 'DOCS/a.md' : 'docs/a.md' } }));
   assert.equal(inventory(store, { destinations }).conflicts[0].code, 'destination-conflict');
   destinations[1].locator.relPath = '../escape';
   assert.equal(inventory(store, { destinations }).conflicts[0].code, 'invalid-destination');
   const shared = ['one', 'two'].map((bindingId, i) => ({ docId: i ? 'doc_missing' : 'doc_fixture', locator: { bindingId, relPath: 'a.md' } }));
   assert.equal(inventory(store, { destinations: shared, bindingRoots: { one: os.tmpdir(), two: os.tmpdir() } }).conflicts[0].code, 'destination-conflict');
-  store.state.docs.doc_external = { id: 'doc_external', source: 'external', rev: 1, title: 'Registered', kind: 'note',
-    status: 'draft', locator: { bindingId: 'one', relPath: 'a.md' }, links: { taskIds: [], planRefs: [] },
-    baseline: null, baselineInContext: false, unregistered: null };
   assert.equal(inventory(store, { destinations: [shared[0]] }).conflicts[0].first.docId, 'doc_external');
 });
 
@@ -121,9 +143,8 @@ test('standalone historical fixed content rows are listed without reading them a
 });
 
 // 责任：孤立历史证据须保留原 ref/hash，并显式标注找不到版本和 blob。
-test('orphan historical evidence keeps its original hash and blob availability visible', () => {
-  const store = migrationFixture();
-  store.state.tasks.tsk_fixture.evidence.push({ kind: 'doc', ref: 'doc_lost@7', hash: sha256('lost') });
+test('orphan historical evidence keeps its original hash and blob availability visible', (t) => {
+  const { store } = diskFixture(t, { extraCommits: base => [orphanEvidenceCommit(base)] });
   const report = inventory(store);
   const missing = report.missing.find((row) => row.code === 'missing-revision');
   assert.equal(missing.evidence.ref, 'doc_lost@7');

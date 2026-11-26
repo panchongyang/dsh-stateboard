@@ -57,8 +57,9 @@ test('native context selection preserves the owning workspace prompt and default
   await f.nativeCall('project_task', { op: 'create', title: 'default own', acceptance: [{ text: 'ok' }] });
   assert.equal(Object.values(f.h.state.tasks)[0].title, 'default own');
   assert.equal(Object.values(other.state.tasks)[0].title, 'explicit other');
-  assert.equal(f.runtime.sessionProjects.get(f.exec.agent.id), f.h);
-  assert.equal(f.runtime.sessionHandles.get(f.exec.agent.id).size, 2);
+  assert.equal(f.runtime.sessionProjects.get(f.exec.agent.id).projectId, f.h.id);
+  assert.equal(f.runtime.sessionProjects.get(f.exec.agent.id).rev, f.h.rev);
+  assert.equal(f.runtime.sessionProjectRefs.get(f.exec.agent.id).size, 2, 'both touched projects are tracked as values');
 });
 
 // 责任：MCP 项目选择保持逻辑身份与原上下文归属并重查授权。

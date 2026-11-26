@@ -13,7 +13,7 @@
 | 入口 | 结构职责 |
 |---|---|
 | [service.js](<../../lib/core/service.js>) | ProjectService、共享句柄与项目生命周期 |
-| [discover.js](<../../lib/core/identity/discover.js>) | 绑定、标记与关联 worktree 发现 |
+| [discover.js](<../../lib/core/identity/discover.js>) | 绑定、标记与目录归属 |
 | [bindings.js](<../../lib/core/identity/bindings.js>) | 本机绑定索引 |
 | [registry.js](<../../lib/core/identity/registry.js>) | 绑定注册表 |
 | [ops.js](<../../lib/core/identity/ops.js>) | 身份写操作 |
@@ -29,7 +29,7 @@
 
 ## 依赖方向
 
-service 装配 [command](<command.md>) 与 [store](<store.md>)；身份发现调用只读 Git；专用 reader 使用 [read](<read.md>) 投影和 [knowledge](<knowledge.md>) 读取器，不反向依赖 host。
+service 装配 [command](<command.md>) 与 [store](<store.md>)；所属空间按获准物理根选库；专用 reader 使用 [read](<read.md>) 投影和 [knowledge](<knowledge.md>) 读取器，不反向依赖 host。
 
 ## 关键不变量与读图指针
 

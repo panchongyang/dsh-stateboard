@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ProjectHandle } from '../../lib/core/handle.js';
+import { ProjectHandle, ProjectService } from '../../lib/core/service.js';
 import { JsonlStore, commitHash, makeCommit } from '../../lib/core/store.js';
-import { replay } from '../../lib/core/store/format.js';
+import { TransactionModel } from '../../lib/core/transaction/model.js';
+import { assertRecord, restoreRecords } from '../../lib/core/transaction/records.js';
+import { validateCommits } from '../../lib/core/store/format.js';
 
 export const NOW = Date.parse('2026-01-02T03:04:05.000Z');
 export const TASK = 'tsk_matrix';
@@ -58,17 +60,32 @@ export function fixture() {
   assertIsolation();
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-matrix-fixture-'));
   const workspace = path.join(root, 'workspace');
-  const data = path.join(root, 'data');
+  const options = { rootDir: root, clock: () => new Date(NOW), privilegedInlineWrites: false };
+  const service = new ProjectService(options);
   fs.mkdirSync(workspace);
   fs.writeFileSync(path.join(workspace, 'artifact.txt'), 'synthetic matrix artifact\n');
   const at = new Date(NOW).toISOString();
   const project = { schemaVersion: 3, id: 'prj_matrix', name: 'synthetic', workspacePath: workspace, phase: 'active', createdAt: at, updatedAt: at,
     policy: { verification: 'manual', requireIntentFor: 'all', leaseTtlSec: 60, leaseGraceSec: 30, maxInProgress: 10, maxPerSession: 10 } };
+  const data = path.join(service.projectsDir, project.id);
   const meta = { schemaVersion: 3, projectId: project.id, project, dir: data };
   const store = new JsonlStore(data, meta);
+  fs.mkdirSync(data, { recursive: true });
+  const genesis = makeCommit(1, 'genesis', actor('human'), 'cmd_seed', 0, [{ type: 'project/created', data: project }]);
+  fs.writeFileSync(store.commitsFile, JSON.stringify(genesis) + '\n');
+  fs.writeFileSync(path.join(data, 'meta.json'), JSON.stringify({ schemaVersion: 3, projectId: project.id, project }));
+  service.refreshFromDisk();
   const opened = store.open();
-  const handle = new ProjectHandle({ clock: () => new Date(NOW) }, meta, store, opened);
-  handle._appendEvents([{ type: 'project/created', data: project }], actor('human'), 'cmd_seed', 0);
+  let handle = new ProjectHandle(service, meta, store, opened);
+  handle.recover(); // The genesis contains no tasks. Start the matrix on an already running writer.
+
+  function restoreRunningHandle(data, leases) {
+    // reset/seed replace only synthetic facts, not the physical lock or this writer generation.
+    // In particular, an intentionally missing runtime lease is not evidence of a restart.
+    const next = constructSyntheticHandle(service, meta, store, data, leases);
+    next.recovered = handle.recovered;
+    return next;
+  }
   let serial = 0;
 
   function reset(spec = {}) {
@@ -79,7 +96,7 @@ export function fixture() {
     state.tasks = { [TASK]: {
       id: TASK, title: 'matrix task', state: spec.state || 'in_progress', rev: 7,
       acceptance: [{ id: 'acc_matrix', text: 'artifact', met: false, evidenceIds: [] }], evidence: [], deps: [], labels: [],
-      requiresAudit: false, planRef: null, owner: null, assignee: null, work: null,
+      requiresAudit: Boolean(spec.gated), planRef: null, owner: null, assignee: null, work: null,
       blocker: { resumeTo: spec.resumeTo || 'in_progress' }, createdAt: at, updatedAt: at,
     } };
     state.intents = {};
@@ -90,12 +107,12 @@ export function fixture() {
       state.intents.int_matrix = { id: 'int_matrix', taskId: TASK, status: 'open', token: TOKEN, attempt: 1, summary: 'synthetic', startedAt: at };
       task.work = { intentId: 'int_matrix', attempt: 1, startedAt: at };
     }
-    handle.leases = new Map();
+    const runtimeLeases = new Map();
     if (spec.lease && spec.lease !== 'none') {
       const offset = spec.lease === 'expired' ? -30_000 : spec.lease === 'grace' ? -1 : 60_000;
       const lease = { taskId: TASK, sessionId: 'owner', agentId: 'owner', epoch: 0, token: TOKEN,
         acquiredAt: at, grantedAt: at, expiresAt: new Date(NOW + offset).toISOString(), progressAt: at, renewCount: 0 };
-      handle.leases.set(TASK, lease);
+      runtimeLeases.set(TASK, lease);
       if (task.state === 'in_progress') task.owner = { sessionId: 'owner', epoch: 0, fencingToken: TOKEN };
     }
     const historicalLease = { taskId: TASK, sessionId: 'owner', agentId: 'owner', epoch: 0, token: TOKEN, acquiredAt: at, expiresAt: at };
@@ -107,20 +124,17 @@ export function fixture() {
     ];
     const seed = makeCommit(1, 'genesis', actor('human'), 'cmd_seed', 0, events);
     const baseline = Buffer.from(JSON.stringify(seed) + '\n');
+    // This fixture alone retains its synthetic physical lock between rows. Restore
+    // a new model from a validated historical prefix; never mutate a published
+    // business snapshot or add a reset/setter to production. Each checked command
+    // still goes through the real model transaction + JSONL fsync + byte oracle.
     fs.writeFileSync(store.commitsFile, baseline);
-    const rebuilt = replay(meta, [structuredClone(seed)]);
+    const restored = restoreSyntheticRecords(meta, [seed]);
     store.commits = [seed];
-    store.timeline = rebuilt.timeline;
-    store.cmdIds = new Set(['cmd_seed']);
-    store.lastSeq = 1;
-    store.lastHash = seed.hash;
-    store._fileSize = baseline.length;
-    store.state = rebuilt.state;
-    handle.state = rebuilt.state;
-    handle.timeline = store.timeline;
-    handle.cmdIds = store.cmdIds;
-    handle.rev = 1;
-    handle.lastHash = seed.hash;
+    store.lastSeq = restored.state.lastSeq;
+    store.lastHash = restored.state.lastHash;
+    store._fileSize = Buffer.byteLength(baseline);
+    handle = restoreRunningHandle({ ...restored, cmdIds: new Set([seed.cmdId]), readOnly: false }, runtimeLeases);
     return handle.state.tasks[TASK];
   }
 
@@ -158,5 +172,62 @@ export function fixture() {
     assert.equal(committed.hash, commitHash(committed));
     return result;
   }
-  return { h: handle, root, workspace, reset, command, snapshot, check, close() { handle.close(); fs.rmSync(root, { recursive: true, force: true }); } };
+  function seed(events) {
+    const runtimeLeases = handle.leases;
+    const record = makeCommit(handle.rev + 1, handle.lastHash, actor('human'), 'cmd_history_' + ++serial, handle.rev, events);
+    const records = [...store.commits, record];
+    const restored = restoreSyntheticRecords(meta, records);
+    const baseline = records.map((row) => JSON.stringify(row) + '\n').join('');
+    // This known synthetic prefix is fixture setup, never a production transaction.
+    fs.writeFileSync(store.commitsFile, baseline);
+    store.commits = records;
+    store.lastSeq = restored.state.lastSeq;
+    store.lastHash = restored.state.lastHash;
+    store._fileSize = Buffer.byteLength(baseline);
+    handle = restoreRunningHandle({ ...restored, cmdIds: new Set(records.map((row) => row.cmdId)), readOnly: false }, runtimeLeases);
+  }
+  return { get h() { return handle; }, root, workspace, reset, seed, command, snapshot, check, close() { handle.close(); fs.rmSync(root, { recursive: true, force: true }); } };
+}
+
+/** Seed only a synthetic fixture log while its writer is CLOSED, then cold-open it.
+ * Used for historical combinations that today's public commands must reject.
+ * Volatile lease rows are copied separately; replay deliberately never revives them. */
+export function reopenSyntheticHistory(handle, events, runtimeLeases = structuredClone([...handle.leases])) {
+  const { service, meta } = handle;
+  if (events.length) appendSyntheticHistory(handle, events);
+  else handle.close(); // Runtime-only reconstruction retains the exact source log.
+  const store = new JsonlStore(meta.dir, meta);
+  const data = store.open();
+  const reopened = constructSyntheticHandle(service, meta, store, data, runtimeLeases);
+  reopened.clock = handle.clock;
+  return reopened;
+}
+
+/** Verify envelope continuity, supported records and replay before installing a fixture. */
+function restoreSyntheticRecords(meta, records) {
+  validateCommits(records);
+  for (const record of records) assertRecord(meta, record);
+  return restoreRecords(meta, records);
+}
+
+/**
+ * Only new isolated models receive seed runtime rows; no live-model mutation.
+ * @param {Iterable<[string, any]>} [runtimeLeases]
+ */
+export function constructSyntheticHandle(service, meta, store, data, runtimeLeases = new Map()) {
+  const seeded = { ...data, leases: new Map(structuredClone([...runtimeLeases])) };
+  store.model = new TransactionModel(seeded);
+  return new ProjectHandle(service, meta, store, seeded);
+}
+
+/** Append known historical facts only after closing this synthetic fixture's writer. */
+export function appendSyntheticHistory(handle, events) {
+  const commitsFile = handle.store.commitsFile;
+  const commit = makeCommit(handle.rev + 1, handle.lastHash, { kind: 'human', via: 'synthetic-history-fixture' },
+    'cmd_synthetic_history_' + (handle.rev + 1), handle.rev, events);
+  // Validate the complete candidate before changing its offline source log.
+  restoreSyntheticRecords(handle.meta, [...handle.store.commits, commit]);
+  handle.close();
+  fs.appendFileSync(commitsFile, JSON.stringify(commit) + '\n');
+  return commit;
 }

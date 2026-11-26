@@ -12,6 +12,8 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { fixture, text } from '../helpers/agent-parity-fixture.mjs';
 import { sdkValidationCases } from '../fixtures/sdk-validation-cases.mjs';
+import { KNOWLEDGE_JSON } from '../helpers/mcp-fixture.mjs';
+import { KNOWLEDGE_TOOLS } from '../../lib/shared/knowledge.js';
 const sdkRequire = createRequire(new URL('../../tools/dsh-sdk/package.json', import.meta.url));
 const { assertSupportedJsonSchema, validateJsonSchemaValue } = await import(pathToFileURL(sdkRequire.resolve('@deepseek-ai/dsh-tools')).href);
 const { renderToolsSdk, renderToolsSdkPy } = await import(pathToFileURL(sdkRequire.resolve('@deepseek-ai/dsh-tool-executor-ptc')).href);
@@ -51,7 +53,14 @@ test('MCP and native raw outputs pass actual SDK validation before rendering', a
   for (const via of ['native', 'mcp']) {
     const call = async (name, args) => {
       checked.add(name);
-      return via === 'native' ? f.nativeCall(name, args) : text(await f.call(name, { ...args, context }));
+      if (via === 'native') return f.nativeCall(name, args);
+      const mcpArgs = { ...args, context };
+      const shown = text(await f.call(name, mcpArgs));
+      if (!Object.values(KNOWLEDGE_TOOLS).includes(name)) return shown;
+      assert.match(shown, /\[knowledge-text-v1\]/u);
+      const raw = JSON.parse(text(await f.post('tools/call', { name, arguments: mcpArgs, _meta: KNOWLEDGE_JSON })));
+      assert.deepEqual(validateJsonSchemaValue(f.native.get(name).output.schema, raw), [], name);
+      return raw;
     };
     await call('project_task', { op: 'create', title: via, acceptance: [{ text: 'ok' }] });
     const task = Object.values(f.h.state.tasks).find(({ title }) => title === via);

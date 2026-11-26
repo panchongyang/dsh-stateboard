@@ -9,7 +9,7 @@
 
 | 入口 | 内部调用约定 |
 |---|---|
-| [DOC_EXTERNAL_HANDLERS](<../../../lib/core/commands/doc-external.js>) | 处理器返回 events/entityRev/result，由总线提交，不自行 append |
+| [DOC_EXTERNAL_HANDLERS](<../../../lib/core/commands/doc-external.js>) | 将校验后的请求组装为具名值操作，不派生或追加正式事件 |
 | [assertExternalRecord / applyExternalDocEvent](<../../../lib/core/documents/external-model.js>) | 写入与回放验证同一记录域；非法 external 不回退 inline |
 | [assertDocEventsInLog / assertExternalDocsInState](<../../../lib/core/documents/external-model.js>) | 全日志文档扫描及快照自身 seq/hash 锚点检查 |
 | [readLocator](<../../../lib/core/documents/external-observe.js>) | 返回 context/read，新鲜读取指定活动绑定，不走观测缓存 |
@@ -17,10 +17,10 @@
 | [confirmationOf / clearObservationCache](<../../../lib/core/documents/external-observe.js>) | 派生基线比较 / 丢弃可重建缓存，不修改权威状态 |
 | [validateRelPath / locateDocument](<../../../lib/core/documents/locate.js>) | 词法判断 / 根内物理解析，返回分类结果 |
 | [readDocument / interpretDocumentBytes / previewOf](<../../../lib/core/documents/read.js>) | 句柄有界读取 / 已有字节解释 / 字符边界预览 |
-| [peekReadOnlyState / readImageAsset](<../../../lib/core/documents/assets.js>) | service 锁外投影 / 被正文引用的图片字节，不提供命令句柄 |
-| [observeGit / gitHeadOid](<../../../lib/core/documents/external-git.js>) | 路径状态观测 / 可空 HEAD；不是正式固定证据校验 |
+| [readImageAsset](<../../../lib/core/documents/assets.js>) | 使用已授权只读观察端口获取正文所引用的原始图片字节 |
+| [workspace-source](<../../../lib/core/documents/workspace-source.js>) / [retained-documents](<../../../lib/core/adapters/retained-documents.js>) | 所属空间来源安全域 / 命令采样与对象发布 |
 
-host 的 prepareExternalWrite 在 service.open 前检查 body、schemaVersion、URL/docId 一致性。
+host 的 prepareExternalWrite 在调用命令入口前检查 body、schemaVersion、URL/docId 一致性。
 具体工具与 HTTP 字段只在[L1 对外面](<../../CONTRACT.md#263-工具>)定义，不从本表推导新参数。
 
 ## 2. 输入校验域
@@ -63,7 +63,7 @@ host 的 prepareExternalWrite 在 service.open 前检查 body、schemaVersion、
 - 管理状态只由显式事件改变，不被 readable、确认匹配或 Git committed 替代。
 - availability 是观测；失败保留身份、关系、状态和基线，不把 missing 解释成已删除登记。
 - confirmationOf 先看基线与上下文，再比完整 hash；不可比较不得伪报一致/漂移。
-- Git 状态是另一条观测，不可用与不在仓库分开；不能代替工作区 hash 或固定对象证明。
+- 兼容 Git 字段不表达新观测；运行时没有 Git 状态探测。
 - relocate/rebind 保留旧基线但置 baselineInContext=false；不得仅因新路径字节相同自动恢复匹配。
 - unregistered 墓碑不物理删文件或历史身份；列表默认不含墓碑，显式参数才能列出。
 
@@ -72,19 +72,27 @@ readDocument 的 hash 与预览来自同次读取；失败不是空正文。
 
 ## 4. 副作用、提交与只读
 
-external 处理器不写正文 blob、不触碰用户文件，只构造经校验的完整记录事件。
+external 处理器不触碰用户文件；确认和显式采集可通过端口发布留存对象，模型在同一日志批次记录应生效的版本与元数据。
 总线串行计算，store 提交成功后才推进权威投影；metaRev 不取代 store writer 锁。
 inline 兼容写入的预写 blob 和失败窗口见[L1 inline 边界](<../../CONTRACT.md#内嵌外置与图片只读资源>)。
 默认 inline 禁写、迁移档案永远只读；不能通过旧 put/link 改 external。
 
 inspect 的观测缓存可写内存，但不写事件、基线或元数据 rev。
-确认与取证绕过缓存；普通读函数无写行为不代表其外层 service.open 无恢复副作用。
-图片必须走 peekReadOnlyState，不调用 open、不获取 writer、不恢复任务、不修尾或写快照。
-readImageAsset 直连 readLocator，不写 inspect 缓存；成功响应原始字节与 no-store。
+确认与取证绕过缓存；普通文档、图片与关系查询不打开 writer。
+图片通过统一读端口获取已发布状态或验证后的锁外冷读，不调用 open、不获取 writer、不恢复任务、不修尾或写快照。
+readImageAsset 直连 readLocator，不写 inspect 缓存；读取和交付前在可信集中注册表中复核实际 locator 的绑定。绑定退役或无法确认时返回 missing-binding，不交付图片字节。
 鉴权在 host 分派前完成，不能因资源只读而省掉 token/来源校验。
 
-新增 pinned task 证据必须携带同 commit 的 doc/content-fixed，不能由单独文档读取代替。
-该屏障不推进 doc rev/baseline，也不把 Git 正文写入 blob；详见[evidence 提交边界](<../evidence/contract.md#4-副作用与同-commit-固定屏障>)。
+新外置证据的留存引用和历史 Git 兼容屏障见[证据提交边界](<../evidence/contract.md#4-命令与提交边界>)。
+
+
+## 发现与留存
+
+[发现读取](<../../../lib/core/reader/discovery/scanner.js>) 只在获准的物理空间根下枚举，排除保留目录、越界或链接、嵌套工作区和非支持后缀。逐级读同根的 `.gitignore` 作排除规则；不调用 Git，不加载外部仓库或全局规则。不可验证的规则产生覆盖缺口，不视作无规则。续页与权限、规则和扫描代绑定；缓存只减少重复观测，定点读取重新核验。
+
+扫描页支持 512 个目录项、32 MiB 正文读取、16 MiB 单文件、32 层深度、1 MiB 返回量与 2 秒处理预算；硬预算与忽略规则的额外上限取 [PROJECTION_LIMITS](<../../../lib/core/reader/discovery/scanner.js>)。以返回 coverage、partial 和 cursor 判断实际范围，不以预算推断完整。
+
+[留存读取](<../../../lib/core/reader/workspace-retained.js>) 复核原定位与获准空间，其输出只对应日志版本。compare 比较当前 hash 与已留存版本身份，不修补缺对象。精确关联经 [document-relations](<../../../lib/core/reader/document-relations.js>) 在同一获准空间读取；缓存与当前链接都不能替代关系的历史来源。
 
 ## 5. 并发与隐含调用约定
 
@@ -112,7 +120,7 @@ code/status 全表见[L1 错误码](<../../CONTRACT.md#错误码>)、[D1 §6.2](
 ## 7. 兼容类别与验证入口
 
 [D1 v1](<../../WORKSPACE-DOCUMENTS-CONTRACT.md>)冻结身份、读取、四维与内容域，不因模块拆文改写。
-fixed schema v1 属[evidence](<../evidence/contract.md#8-兼容类别>)；现行自动跟随按[L1 冻结索引](<../../CONTRACT.md#3-冻结子契约索引1c>)指定补充口径，不恢复显式批准/确认流程。
+fixed schema v1 属[证据兼容域](<../evidence/contract.md#5-兼容与验证>)；D1 中与现行 Gitless 行为的对应见[L1 冻结索引](<../../CONTRACT.md#3-冻结子契约索引1c>)。
 external schemaVersion=1 与[运行时 schema](<../../../lib/core/schema.js>)是不同域。
 外置事件均为 applied；未知事件拒读，含快照覆盖段，分类只取[注册表](<../../../lib/shared/events.js>)。
 合法旧 inline 历史与迁移映射保留原字节域，不重解释为当前 external 正文。

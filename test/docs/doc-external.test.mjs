@@ -175,11 +175,11 @@ test('confirm verifies a fresh full read, records the contract baseline and reje
   const current = sha(fs.readFileSync(file));
   await h.command(agent('doc.external.confirm', { docId, expectedMetaRev: 1, expectedContentHash: current }));
   const baseline = h.state.docs[docId].baseline;
-  assert.deepEqual(Object.keys(baseline).sort(), ['bindingId', 'confirmedAt', 'confirmedBy', 'contentHash', 'domain', 'gitHeadOid', 'readerVersion', 'relPath']);
+  assert.deepEqual(Object.keys(baseline).sort(), ['bindingId', 'confirmedAt', 'confirmedBy', 'contentHash', 'domain', 'readerVersion', 'relPath']);
   assert.equal(baseline.domain, 'workspace-bytes');
   assert.equal(baseline.contentHash, current);
   assert.equal(baseline.relPath, 'docs/spec.md');
-  assert.equal(baseline.gitHeadOid, null, 'not a repository');
+  assert.equal(Object.hasOwn(baseline, 'gitHeadOid'), false, 'confirmation does not record Git state');
   assert.equal(inspectExternalDoc(h, docId, { fresh: true }).confirmation.state, 'matches_baseline');
 
   fs.appendFileSync(file, 'later\n');
@@ -337,11 +337,11 @@ test('legacy doc operations refuse to read or change an external record', async 
   await rejects(h.command(agent('doc.link', { docId, links: { taskIds: [taskId] } })), 'external-doc-operation-required');
   assert.throws(() => h.query('doc', { docId }), { code: 'external-doc-operation-required' });
   // External @rev is metadata, not content: the auto shell ignores it and
-  // degrades to current-only here (the temp workspace is not a Git repository).
+  // degrades to current-only here (this legacy project has no owning object store).
   const externalRow = normalizeEvidence(h, h.state.tasks[taskId], { kind: 'doc', ref: docId + '@1' }, new Date().toISOString(), {});
   assert.equal(externalRow.ref, docId);
   assert.equal(externalRow.fixedState, 'current-only');
-  assert.equal(externalRow.fixedReason, 'not-a-repo');
+  assert.equal(externalRow.fixedReason, 'no-owning-space');
   assert.equal(h.rev, rev);
   const inline = await h.command(agent('doc.put', { title: 'inline', body: 'still works' }));
   assert.equal(inline.committed, true);
