@@ -80,7 +80,7 @@ inline 兼容写入的预写 blob 和失败窗口见[L1 inline 边界](<../../CO
 inspect 的观测缓存可写内存，但不写事件、基线或元数据 rev。
 确认与取证绕过缓存；普通文档、图片与关系查询不打开 writer。
 图片通过统一读端口获取已发布状态或验证后的锁外冷读，不调用 open、不获取 writer、不恢复任务、不修尾或写快照。
-readImageAsset 直连 readLocator，不写 inspect 缓存；成功响应原始字节与 no-store。
+readImageAsset 直连 readLocator，不写 inspect 缓存；读取和交付前在可信集中注册表中复核实际 locator 的绑定。绑定退役或无法确认时返回 missing-binding，不交付图片字节。
 鉴权在 host 分派前完成，不能因资源只读而省掉 token/来源校验。
 
 新外置证据的留存引用和历史 Git 兼容屏障见[证据提交边界](<../evidence/contract.md#4-命令与提交边界>)。

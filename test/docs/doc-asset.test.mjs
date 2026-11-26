@@ -11,26 +11,34 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { ProjectService } from '../../lib/core/service.js';
+import { createApplication } from '../../lib/core/application/index.js';
+import { bindWorktree, unbind } from '../../lib/core/identity/ops.js';
+import { updateRegistry } from '../../lib/core/identity/registry.js';
+import { queryProject } from '../../lib/core/reader/query.js';
+import { createWorkerRunner } from '../../lib/core/reader/worker-run.js';
 import { registerRoutes } from '../../lib/host/routes.js';
 import { IMAGE_MAX_BYTES, readImageAsset } from '../../lib/core/documents/assets.js';
 
-async function fixture(t) {
+async function fixture(t, { secondary = false, race } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doc-assets-'));
   fs.mkdirSync(path.join(root, 'docs'));
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doc-assets-store-'));
   const seed = new ProjectService({ rootDir, privilegedInlineWrites: true });
   await seed.init();
   const actor = { kind: 'human', via: 'test' };
-  const project = await seed.createProject({ workspacePath: root, name: 'Image fixtures' });
+  const mainRoot = secondary ? fs.mkdtempSync(path.join(os.tmpdir(), 'doc-assets-main-')) : root;
+  const project = await seed.createProject({ workspacePath: mainRoot, name: 'Image fixtures' });
   const projectId = project.projectId || project.id;
   const log = path.join(rootDir, 'projects', projectId, 'commits.jsonl');
+  const binding = secondary ? bindWorktree(seed, { projectId, workspacePath: root, actor }) : seed.bindings().mainOf(projectId);
+  const unrelated = race === 'unrelated' ? bindWorktree(seed, { projectId, actor,
+    workspacePath: fs.mkdtempSync(path.join(os.tmpdir(), 'doc-assets-unrelated-')) }) : null;
   fs.writeFileSync(path.join(root, 'docs', 'guide.md'), '# Guide');
-  const registered = await project.command({ cmdId: 'register', op: 'doc.external.register', actor, title: 'Guide', relPath: 'docs/guide.md' });
+  const registered = await project.command({ cmdId: 'register', op: 'doc.external.register', actor, title: 'Guide', relPath: 'docs/guide.md', bindingId: binding.bindingId });
   const inline = await project.command({ cmdId: 'inline', op: 'doc.put', actor, title: 'Inline', body: 'Inline body' });
   const docId = registered.docId || registered.events.find(event => event.docId).docId;
   const inlineId = inline.events.find(event => event.docId).docId;
   const state = project.state;
-  const binding = seed.bindings().mainOf(projectId);
   await seed.close();
   const service = new ProjectService({ rootDir });
   await service.init();
@@ -42,7 +50,40 @@ async function fixture(t) {
   const openWriter = () => service.open(projectId);
   let route;
   const runtime = { token: 'secret', ready: Promise.resolve(), service };
-  t.after(() => runtime.reader?.close());
+  if (race) {
+    const worker = createWorkerRunner();
+    const runner = {
+      async run(url, data, options) {
+        assert.equal(data.view, 'doc_asset');
+        assert.equal(data.assetRegistryRoot, rootDir);
+        assert.equal(data.bindings.active.some(row => row.bindingId === binding.bindingId), true);
+        if (race === 'before-read') await retireBinding(binding.bindingId);
+        if (unrelated) await retireBinding(unrelated.bindingId);
+        const outcome = await worker.run(url, data, options).catch(error => {
+          assert.equal(race, 'before-read');
+          assert.equal(error.code, 'missing-binding', 'worker must reject before reading the retired source');
+          throw error;
+        });
+        assert.notEqual(race, 'before-read', 'worker returned bytes from a retired binding');
+        assert.ok(outcome.value.bytes.length > 0, 'worker obtained authorized bytes before retirement');
+        if (race === 'before-delivery') await retireBinding(binding.bindingId);
+        return outcome;
+      },
+    };
+    t.after(() => worker.close());
+    runtime.application = createApplication({ service, reader: {
+      query: (...args) => queryProject({ service, runner, isClosed: () => false }, ...args),
+    } });
+  } else {
+    t.after(() => runtime.reader?.close());
+  }
+  async function retireBinding(bindingId) {
+    const independent = new ProjectService({ rootDir });
+    try {
+      await independent.init();
+      unbind(independent, { bindingId, actor });
+    } finally { await independent.close(); }
+  }
   registerRoutes({ webServer: { register(value) { route = value; return () => {}; } }, on() { return () => {}; } },
     runtime);
   function request(relPath, requestedId = docId, token = 'secret', extra = '') {
@@ -66,7 +107,7 @@ async function fixture(t) {
     // 带 info 的围栏行在围栏内只是代码内容，不能提前关闭围栏。
     '\u0060\u0060\u0060js', '\u0060\u0060\u0060text', '![nested](nested.png)', '\u0060\u0060\u0060', '',
   ].join('\n'));
-  return { root, state, binding, handle, request, docId, inlineId, log, openWriter, openedCount() { return opened; }, put(relPath, bytes) { fs.writeFileSync(path.join(root, relPath), bytes); } };
+  return { root, rootDir, state, binding, handle, request, docId, inlineId, log, openWriter, openedCount() { return opened; }, put(relPath, bytes) { fs.writeFileSync(path.join(root, relPath), bytes); } };
 }
 
 // 责任：PNG/SVG 与正文引用返回原始字节、MIME、长度和 no-store，重复读取不能命中观测缓存。
@@ -149,6 +190,40 @@ test('image asset refusals use the documented status and error envelope', async 
   assert.equal((await f.request('pic.png', f.docId, '', '&token=secret')).status, 403, 'query token must not authorize');
   f.handle.service.bindings = () => ({ activeFor: () => [], mainOf: () => null });
   assert.equal((await f.request('pic.png')).status, 409);
-  f.handle.service.bindings = () => ({ activeFor: () => [{ ...f.binding, root: path.join(f.root, 'absent') }], mainOf: () => null });
+  const lookup = Object.getPrototypeOf(f.handle.service).bindings;
+  f.handle.service.bindings = lookup;
+  // Only this synthetic registry points to the unavailable root. The observed
+  // binding remains active, so this is a path failure, not a revocation.
+  updateRegistry(f.rootDir, registry => {
+    registry.bindings.find(row => row.bindingId === f.binding.bindingId).root = path.join(f.root, 'absent');
+  });
   assert.equal((await f.request('pic.png')).status, 503);
+});
+
+// The log stays byte-for-byte identical because unbind writes only the registry.
+for (const race of ['before-read', 'before-delivery']) {
+  test('image route refuses a binding retired ' + race, async (t) => {
+    const f = await fixture(t, { secondary: true, race });
+    const png = Buffer.from([137, 80, 78, 71, 0, 255]);
+    f.put('docs/pic.png', png);
+    const log = fs.readFileSync(f.log);
+    const response = await f.request('pic.png');
+    assert.equal(response.status, 409, response.bytes.toString());
+    assert.ok(response.headers['content-type'].startsWith('application/json'));
+    assert.equal(JSON.parse(response.bytes).error.code, 'missing-binding');
+    assert.equal(response.bytes.includes(png), false);
+    assert.equal(f.openedCount(), 0);
+    assert.deepEqual(fs.readFileSync(f.log), log);
+    assert.deepEqual(fs.readFileSync(path.join(f.root, 'docs', 'pic.png')), png);
+  });
+}
+
+test('retiring an unrelated binding does not revoke the observed image source', async (t) => {
+  const f = await fixture(t, { race: 'unrelated' });
+  const png = Buffer.from([137, 80, 78, 71, 0, 255]);
+  f.put('docs/pic.png', png);
+  const response = await f.request('pic.png');
+  assert.equal(response.status, 200, response.bytes.toString());
+  assert.deepEqual(response.bytes, png);
+  assert.equal(f.openedCount(), 0);
 });
