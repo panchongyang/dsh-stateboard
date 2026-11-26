@@ -202,6 +202,7 @@ test('image asset refusals use the documented status and error envelope', async 
 
 // The log stays byte-for-byte identical because unbind writes only the registry.
 for (const race of ['before-read', 'before-delivery']) {
+  // 责任：已捕获的绑定在读前或交付前退役，不得返回图片字节。
   test('image route refuses a binding retired ' + race, async (t) => {
     const f = await fixture(t, { secondary: true, race });
     const png = Buffer.from([137, 80, 78, 71, 0, 255]);
@@ -218,6 +219,7 @@ for (const race of ['before-read', 'before-delivery']) {
   });
 }
 
+// 责任：无关绑定退役不影响本次图片实际使用的活动绑定。
 test('retiring an unrelated binding does not revoke the observed image source', async (t) => {
   const f = await fixture(t, { race: 'unrelated' });
   const png = Buffer.from([137, 80, 78, 71, 0, 255]);
