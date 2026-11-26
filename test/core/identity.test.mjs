@@ -15,7 +15,7 @@ import { ProjectService } from '../../lib/core/service.js';
 import { makeCommit } from '../../lib/core/store.js';
 import { canonicalKey, readJson, sha256 } from '../../lib/core/util.js';
 import { normalizeEvidence } from '../../lib/core/evidence.js';
-import { MARKER_FILE, mainWorktreeOf, writeMarker } from '../../lib/core/identity/discover.js';
+import { MARKER_FILE, writeMarker } from '../../lib/core/identity/discover.js';
 import { bindWorktree, migrate, planMigration } from '../../lib/core/identity/ops.js';
 import { REGISTRY_FILE, legacyBindingId } from '../../lib/core/identity/registry.js';
 
@@ -163,32 +163,58 @@ function repoWithWorktree() {
   return { main, wt: fs.realpathSync.native(wt) };
 }
 
-// 责任：linked worktree 须映射同看板，主工作区和文件证据根不得迁到会话 cwd。
-test('a linked worktree reaches the same board without moving the main workspace or evidence root', async () => {
+// 责任：P5 起产品运行时不跑 Git，linked worktree 不得被隐式归属；显式绑定仍是唯一途径。
+test('a linked worktree is not implicitly attributed; explicit binding keeps the shared main workspace', async () => {
   const root = tmp('pb-id-wt');
   const { main, wt } = repoWithWorktree();
   let svc = await service(root);
   const h = await svc.createProject({ workspacePath: main });
+  assert.equal(svc.resolveWorkspace(path.join(wt, 'docs', 'deep')), null, 'no Git command, no implicit worktree identity');
+  assert.equal(await svc.openByWorkspace(wt), null, 'an unbound worktree is not the main project');
+  assert.equal(projectDirs(root).length, 1);
+  const bound = bindWorktree(svc, { projectId: h.id, workspacePath: wt, actor: { kind: 'human' } });
   const found = svc.resolveWorkspace(path.join(wt, 'docs', 'deep'));
   assert.equal(found.projectId, h.id);
   assert.equal(found.role, 'worktree');
-  assert.equal(found.via, 'git-common-dir');
-  assert.equal(canonicalKey(found.root), canonicalKey(wt));
-  assert.equal(canonicalKey(found.mainRoot), canonicalKey(main));
+  assert.equal(found.via, 'binding');
+  assert.equal(found.bindingId, bound.bindingId);
   const viaWt = await svc.openByWorkspace(wt);
   assert.equal(viaWt, h, 'one shared handle');
   assert.equal(canonicalKey(viaWt.workspacePath), canonicalKey(main), 'main workspace unchanged');
-  assert.equal((await svc.createProject({ workspacePath: wt })).id, h.id, 'create in a worktree joins, never duplicates');
+  assert.equal((await svc.createProject({ workspacePath: wt })).id, h.id, 'create in a bound worktree joins, never duplicates');
   assert.throws(() => normalizeEvidence(viaWt, {}, { kind: 'file', ref: 'only-worktree.md' }, new Date().toISOString(), {}), (e) => e.code === 'missing-evidence', 'file evidence resolves against the main root');
   assert.throws(() => normalizeEvidence(viaWt, {}, { kind: 'file', ref: path.join(wt, 'only-worktree.md') }, new Date().toISOString(), {}), (e) => e.code === 'invalid-command', 'a worktree path escapes the evidence root');
   assert.equal(normalizeEvidence(viaWt, {}, { kind: 'file', ref: 'docs/only-main.md' }, new Date().toISOString(), {}).hash, fileSha(path.join(main, 'docs', 'only-main.md')));
-  const bound = bindWorktree(svc, { projectId: h.id, workspacePath: wt, actor: { kind: 'human' } });
-  assert.equal(svc.resolveWorkspace(wt).bindingId, bound.bindingId);
   assert.throws(() => bindWorktree(svc, { projectId: h.id, workspacePath: wt, actor: { kind: 'agent' } }), (e) => e.code === 'forbidden-role');
   svc = await restart(svc);
   const after = await svc.openByWorkspace(path.join(wt, 'docs'));
   assert.equal(after.id, h.id);
   assert.equal(canonicalKey(after.workspacePath), canonicalKey(main));
+  assert.equal(projectDirs(root).length, 1);
+  await svc.close();
+});
+
+// 责任：主检出内部嵌套的 worktree 不得把父项目身份贴到自己的子目录。
+test('a worktree nested inside the main checkout never inherits the parent project identity', async () => {
+  const root = tmp('pb-id-wt-nested');
+  const main = tmp('pb-id-git-nested');
+  fs.mkdirSync(path.join(main, 'docs'));
+  fs.writeFileSync(path.join(main, 'docs', 'main.md'), 'main\n');
+  git(['init', '-q', '-b', 'master'], main);
+  git(['config', 'user.email', 'id@test'], main);
+  git(['config', 'user.name', 'id'], main);
+  git(['config', 'commit.gpgsign', 'false'], main);
+  git(['add', '-A'], main);
+  git(['commit', '-qm', 'base'], main);
+  const wt = path.join(main, '.worktrees', 'feature');
+  git(['worktree', 'add', '-q', '-b', 'feature-nested', wt], main);
+  fs.mkdirSync(path.join(wt, 'docs'), { recursive: true });
+  fs.writeFileSync(path.join(wt, 'docs', 'branch.md'), 'branch\n');
+  const svc = await service(root);
+  const h = await svc.createProject({ workspacePath: main });
+  assert.equal(await svc.openByWorkspace(path.join(wt, 'docs')), null, 'the nested .git root stops the walk before the main binding');
+  assert.equal(svc.resolveWorkspace(path.join(wt, 'docs')), null);
+  assert.equal(svc.resolveWorkspace(main).projectId, h.id, 'the main checkout still resolves to its own project');
   assert.equal(projectDirs(root).length, 1);
   await svc.close();
 });
@@ -200,7 +226,6 @@ test('non-git projects bind explicitly; a broken .git file is not a worktree', a
   fs.mkdirSync(path.join(ws, 'notes'));
   const fake = tmp('pb-id-fakegit');
   fs.writeFileSync(path.join(fake, '.git'), 'gitdir: ' + path.join(fake, 'missing') + '\n');
-  assert.equal(mainWorktreeOf(fake), null);
   const svc = await service(root);
   const h = await svc.createProject({ workspacePath: ws });
   assert.equal((await svc.openByWorkspace(path.join(ws, 'notes'))).id, h.id);
@@ -296,15 +321,18 @@ test('review: identity writes judge fresh disk state, not a stale legacy view he
   await host.close();
 });
 
-// 责任：worktree 携带主项目 tracked marker 时 create 应加入该项目，不误当独立副本。
-test('review: a linked worktree carrying the tracked marker of the main project joins it on create', async () => {
+// 责任：worktree 携带主项目 tracked marker 时须要求显式绑定，不得自动归主树项目。
+test('review: a linked worktree carrying the main project marker asks for explicit binding on create', async () => {
   const root = tmp('pb-id-rv-marked');
   const { main, wt } = repoWithWorktree();
   const svc = await service(root);
   const a = await svc.createProject({ workspacePath: main });
   writeMarker(main, a.id);
   writeMarker(wt, a.id);
-  assert.equal(svc.resolveWorkspace(wt).projectId, a.id);
+  assert.throws(() => svc.resolveWorkspace(wt), (e) => e.code === 'binding-required' && e.details.projectId === a.id);
+  await assert.rejects(svc.createProject({ workspacePath: wt }), (e) => e.code === 'binding-required');
+  const bound = bindWorktree(svc, { projectId: a.id, workspacePath: wt, actor: { kind: 'human' } });
+  assert.equal(svc.resolveWorkspace(wt).bindingId, bound.bindingId);
   assert.equal((await svc.createProject({ workspacePath: wt })).id, a.id);
   writeMarker(wt, 'prj_00112233aabbccdd');
   assert.throws(() => svc.resolveWorkspace(wt), (e) => e.code === 'identity-conflict');

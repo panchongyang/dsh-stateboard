@@ -58,7 +58,6 @@ test('foreign owner and gated cancellation preserve token/role boundaries (84 co
       for (const kind of ['agent', 'human']) for (const token of ['correct', 'stale', 'missing']) for (const open of [false, true]) {
         const row = { op, state: op === 'reject' ? 'review' : 'in_progress', kind, token, open, lease: 'live', foreign: true, gated: op === 'cancel' };
         f.reset(row);
-        f.h.state.tasks[TASK].requiresAudit = row.gated;
         await f.check(commandFor(f, row), oracle(row), JSON.stringify(row));
         count++;
       }
@@ -167,8 +166,8 @@ test('project archive live-work guard and unarchive recovery (32 combinations)',
   } finally { f.close(); }
 });
 
-// 责任：归档生命周期、preflight 和底层 append 也须零写，不能绕过总线屏障。
-test('archived no-write lifecycle and preflight/append backstops', async () => {
+// 责任：归档生命周期、preflight 须零写，且不得存在直接 append 绕过总线的入口。
+test('archived no-write lifecycle and preflight with no append bypass', async () => {
   const f = fixture();
   try {
     f.reset({ state: 'in_progress', lease: 'expired', open: true, phase: 'archived' });
@@ -179,7 +178,8 @@ test('archived no-write lifecycle and preflight/append backstops', async () => {
     assert.deepEqual(f.snapshot(), before);
     await assert.rejects(f.h._preflight(f.command('submit')), { code: 'project-archived' });
     assert.deepEqual(f.snapshot(), before);
-    assert.throws(() => f.h._appendEvents([{ type: 'task/readied' }], actor(), 'cmd_no', 1), { code: 'project-archived' });
+    assert.equal(typeof f.h._appendEvents, 'undefined', 'raw event append is not a handle capability');
+    assert.equal(typeof f.h.store.append, 'undefined', 'the medium cannot bypass the model with business events');
     assert.deepEqual(f.snapshot(), before);
     for (const op of ['doc.put', 'plan.publish', 'project.relocate', 'session.checkpoint', 'session.handoff', 'project.update']) {
       await f.check(f.command('unused', { op, body: 'not written', title: 'not written' }), { error: 'project-archived' });

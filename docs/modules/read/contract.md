@@ -33,12 +33,12 @@
 | query health / health() | state、租约、时钟及证据内容 | 同步读 I/O，无修复/事件 |
 | healthAsync | 捕获快照、worker 外部观测 | 无权威写入；有调度状态和 worker 生命周期 |
 | buildDigest | 已传入 brief/session/options | 纯渲染，无时钟与 I/O |
-| open 后 query / 普通 HTTP GET | 先 service.open 再 query | 冷开可 recover/heal，不能声称整链零写 |
-| DSH/MCP 共同管理工具读 | resolveHandle/open/touch 后 query | 可有恢复写和内存续租，不自动创建项目 |
+| 显式 open 后 query | 调用方主动打开可写生命周期 | 冷开可 recover/heal，不是普通读取入口 |
+| HTTP、DSH/MCP 管理读 | 统一 application read port；复用已发布值或冷读 worker | 无恢复、写锁、续租或绑定写入 |
 | 专用 project-reader | writer 发布态或 lock=false 前缀 | 不 open writer、不修尾/恢复/续租 |
-| knowledge 读端口 | 已保留来源及发布锚点 | 无权威写入；可写可重建派生缓存 |
+| knowledge 读端口 | 已验证日志、授权当前与已留存正文 | 无权威写入；可写派生缓存 |
 
-管理入口的 open/touch 边界见[project](<../project/contract.md>)与[host](<../host/contract.md>)。
+显式维护和生命周期能力与普通读取的区别见[project](<../project/contract.md>)与[host](<../host/contract.md>)。
 
 ## 3. 输入校验域
 

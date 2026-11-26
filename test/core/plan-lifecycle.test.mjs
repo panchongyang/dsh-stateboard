@@ -378,9 +378,10 @@ test('fsck I20 flags a task that appears in two steps', async () => {
   const { h, svc } = await setup();
   await publish(h);
   const head = planHeadByTitle(h, 'Demo plan');
-  const pv = h.state.plans[head.id + '@' + head.currentVersion];
+  const historical = structuredClone(h.state);
+  const pv = historical.plans[head.id + '@' + head.currentVersion];
   pv.steps[1].taskIds.push(pv.steps[0].taskIds[0]);
-  const report = checkState(h.state);
+  const report = checkState(historical);
   const check = report.checks.find((item) => item.name === 'plan-step-unique:' + head.id);
   assert.ok(check, 'I20 check present');
   assert.equal(check.ok, false);

@@ -25,7 +25,8 @@ import { scanPrefix } from '../../lib/core/repair.js';
 import { sha256 } from '../../lib/core/util.js';
 import { scan } from '../../scripts/stores-replay.mjs';
 import { validateCommits } from '../../lib/core/store/format.js';
-import { docMigrate } from '../../lib/core/commands/doc-migration.js';
+import { DOC_MIGRATION_HANDLERS } from '../../lib/core/commands/doc-migration.js';
+import { DOCUMENT_OPERATIONS } from '../../lib/core/domain/operations/documents.js';
 
 const human = (op, fields = {}) => ({ op, cmdId: randomUUID(), actor: { kind: 'human', via: 'test' }, ...fields });
 function tree(root, result = {}, base = root) {
@@ -208,8 +209,16 @@ test('partial WAL failure rolls back; a durable but unacknowledged migration res
 // 责任：残片冷开只修不完整帧，续跑后须恰有一份映射且不用人工清理。
 test('crash-fragment cold open repairs only incomplete framing and resumes with one mapping, no manual cleanup', async (t) => {
   const { h, svc, root, mapping, backup } = await setup(t);
-  const planned = docMigrate(h, human('doc.external.migrate', { authorized: true, backup, ...mapping }));
-  const commit = makeCommit(h.rev + 1, h.lastHash, { kind: 'human' }, randomUUID(), h.rev, planned.events);
+  const command = human('doc.external.migrate', { authorized: true, backup, ...mapping });
+  // 明确的命令编排：handler 在公开 read 上只产出具名操作，模型操作在私有草稿上
+  // 派生事件；这里故意不提交，用来构造“进程在落盘前死亡”的残片。
+  const planned = DOC_MIGRATION_HANDLERS['doc.external.migrate'](h._working(), command);
+  const plannedWork = h._working();
+  const events = planned.operations.flatMap((operation) => {
+    const result = DOCUMENT_OPERATIONS[operation.kind](plannedWork, operation.args, command);
+    return result.events || [];
+  });
+  const commit = makeCommit(h.rev + 1, h.lastHash, { kind: 'human' }, randomUUID(), h.rev, events);
   const file = h.store.commitsFile;
   const count = h.store.commits.length;
   const id = h.id;

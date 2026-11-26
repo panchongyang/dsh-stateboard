@@ -7,6 +7,7 @@ export const READ = 'ac'.repeat(32);
 export const WRITE = 'bc'.repeat(32);
 const HOST = '127.0.0.1';
 export const ENV = { PROJECT_BOARD_MCP_TOKEN: READ, PROJECT_BOARD_MCP_WRITE_TOKEN: WRITE };
+export const KNOWLEDGE_JSON = Object.freeze({ 'project-board/knowledge-output': 'json' });
 
 export async function listener(t, service, write, env = ENV) {
   const reserve = createServer().listen(0, HOST);
@@ -18,14 +19,14 @@ export async function listener(t, service, write, env = ENV) {
   const close = mountProjectMcp({ service, ready: Promise.resolve(), ctx: { logger } }, { enabled: true, port, write }, env);
   t.after(close);
   await started.promise;
-  const post = (token, method, params) => new Promise((resolve, reject) => {
+  const post = (token, method, params, protocol = '2025-11-25') => new Promise((resolve, reject) => {
     const req = request({
       hostname: HOST, port, path: '/mcp',
       method: 'POST',
       headers: {
         authorization: 'Bearer ' + token,
         'content-type': 'application/json',
-        'mcp-protocol-version': '2025-11-25',
+        ...(protocol ? { 'mcp-protocol-version': protocol } : {}),
       },
       signal: AbortSignal.timeout(5000),
     }, async (res) => {
@@ -45,11 +46,13 @@ export async function listener(t, service, write, env = ENV) {
     req.end(JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }));
   });
   const call = (name, args, token = WRITE) => post(token, 'tools/call', { name, arguments: args });
-  return { post, call, close };
+  const callJson = (name, args, token = WRITE) => post(token, 'tools/call', { name, arguments: args, _meta: KNOWLEDGE_JSON });
+  return { post, call, callJson, close };
 }
 
 export async function success(mcp, name, args, token) {
-  const body = await mcp.call(name, args, token);
+  const machineRead = name === 'search_project_knowledge' || name === 'read_project_knowledge';
+  const body = await (machineRead ? mcp.callJson : mcp.call)(name, args, token);
   assert.equal(body.result?.isError, undefined, JSON.stringify(body));
   assert.equal(body.result?.structuredContent, undefined);
   return JSON.parse(body.result.content[0].text);
@@ -57,6 +60,7 @@ export async function success(mcp, name, args, token) {
 
 export function denied(body, code) {
   assert.equal(body.result?.isError, true, JSON.stringify(body));
+  assert.equal(body.result?.structuredContent, undefined);
   const result = JSON.parse(body.result.content[0].text);
   assert.deepEqual(Object.keys(result).sort(), ['code', 'details', 'message', 'next', 'ok', 'status']);
   assert.equal(result.code, code);

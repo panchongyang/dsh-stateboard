@@ -6,7 +6,7 @@
 
 ## 1. 职责与非职责
 
-project 负责将稳定项目 ID、本机工作区和日志目录连接起来。
+project 负责将稳定的历史项目 ID 与可信物理根连接。集中布局按本机绑定选择项目；显式所属空间布局以宿主确认根选择单一看板。
 service 维护项目元数据索引、绑定索引、共享 writer 和项目列表读取器。
 专用 reader 提供不打开 writer 的读取路径，两者不是同一生命周期。
 
@@ -23,7 +23,8 @@ service 维护项目元数据索引、绑定索引、共享 writer 和项目列�
 | 实现 | 职责 |
 |---|---|
 | [service.js](<../../../lib/core/service.js>) | 项目发现门面、创建、open、共享与 meta 自愈 |
-| [discover.js](<../../../lib/core/identity/discover.js>) | cwd 上行查找、marker、关联 worktree 映射 |
+| [discover.js](<../../../lib/core/identity/discover.js>) | cwd 上行、marker 与目录绑定 |
+| [space-home.js](<../../../lib/core/store/space-home.js>) | 可信所属根、独立状态目录和空间授权复核 |
 | [bindings.js](<../../../lib/core/identity/bindings.js>) | 持久绑定加隐式主绑定的内存索引 |
 | [registry.js](<../../../lib/core/identity/registry.js>) | 本机注册表、锁内读改写和唯一性 |
 | [ops.js](<../../../lib/core/identity/ops.js>) | 显式 bind/unbind/fork/import/迁移 |
@@ -42,20 +43,20 @@ BindingIndex 对无持久主绑定的项目派生稳定 legacy binding，仅存�
 1. 规范化 cwd，从最近目录向上查绑定和 marker。
 2. 最近命中决定归属；遇到 .git 边界停止，嵌套仓库不穿透父项目。
 3. 同目录多项目或 marker/绑定不一致，返回冲突，不静默择一。
-4. 关联 worktree 自身未绑定时，用 Git common-dir 映射主 checkout 同相对位置。
+4. worktree 自身与普通目录一样，由其显式绑定或 marker 决定；不会映射到主 checkout。
 5. 标记只有身份但没有绑定时，要求显式选择移动重绑、连接、副本 fork 或导入。
 6. 普通发现未命中时，service 锁外扫描日志主根，兼容 relocate 后 meta 未同步。
 
-worktree 映射返回同一项目，但不会修改共享 handle 的主工作区和 file 证据根。
-子模块的 common-dir 与 git-dir 相同，不视作关联 worktree。
-Git 不可用、超时或损坏时不做映射，不推断为独立项目授权。
+所属空间模式以受信根为唯一选库键，两个副本以不同物理根分别打开；集中模式不读取这些副本。
+
+
 仅 marker 且无本机数据是 board-data-missing，不是创建空项目的许可。
 
 ## 4. 身份建立与创建边界
 
 新项目生成随机 projectId；已有 ID 不因路径移动而重算。
 创建前重读磁盘 meta/注册表，核对当前目录自身的绑定、marker 与日志占用。
-关联 worktree 的创建请求映射到主 checkout 的对应路径。
+关联 worktree 的创建按自己的目录决定，不由 Git 归属扩大权限。
 
 创建次序有意选择“先占目录，后写创世日志”：
 
@@ -78,7 +79,7 @@ open 首先复用 service 缓存，再复用进程内 SHARED_HANDLES。
 
 因此 open/openByWorkspace 不等于零写查询入口。
 resolveWorkspace/peek 与专用 reader 不会隐式创建项目；open 也不应替代显式 create。
-专用 reader 查 writer.store.state，或在 worker 中锁外验证前缀。
+专用 reader 查 writer 已发布值，或在 worker 中锁外验证日志。
 冷读只能展示持久任务状态，不能从 owner 推出 live lease。
 
 service.close 先关闭项目列表 worker，再释放共享句柄引用。
@@ -109,7 +110,7 @@ import 核对已有日志前缀，保留 ID，不复制外机锁，也不覆盖�
 
 ## 7. I/O 成本与关键取舍
 
-身份发现是同步目录上行检查；关联 worktree 有只读 Git 调用和短期内存缓存。
+集中布局身份发现是同步目录上行检查，不启动 Git 子进程。
 miss 时日志扫描可能同步验证多个项目，不是常量时间路径。
 service.init/refreshFromDisk 可确保 projects 目录存在，不应作为零写探针。
 
@@ -125,7 +126,7 @@ worker 启动、序列化、完整链验证仍有成本，隔离不代表免费�
 ## 8. 阅读顺序
 
 1. [service](<../../../lib/core/service.js>)：resolveWorkspace/createProject/_openSync/_healMeta。
-2. [discover](<../../../lib/core/identity/discover.js>)：walkUp/fromBinding/viaWorktree。
+2. [discover](<../../../lib/core/identity/discover.js>)：walkUp/fromBinding；所属空间另走 [space-home](<../../../lib/core/store/space-home.js>)。
 3. [BindingIndex](<../../../lib/core/identity/bindings.js>)与[registry](<../../../lib/core/identity/registry.js>)：隐式绑定与唯一性。
 4. [project 命令](<../../../lib/core/commands/project.js>)：预留与日志后置同步。
 5. [ops](<../../../lib/core/identity/ops.js>)：操作角色、导入前缀和迁移确认。

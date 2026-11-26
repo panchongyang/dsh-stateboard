@@ -44,22 +44,31 @@ async function main() {
 
   const service = new ProjectService({ rootDir: rootDir() });
   await service.init();
-  const handle = from ? await service.openByWorkspace(from) : await service.open(projectId);
-  if (!handle) throw new Error('project not found for workspace: ' + from);
+  let resolvedId = projectId;
+  if (from) {
+    const found = service.resolveWorkspace(from);
+    if (!found) throw new Error('project not found for workspace: ' + from);
+    resolvedId = found.projectId;
+  }
+  // Dry-run reads a lock-free replayed snapshot; it must not open a writer,
+  // recover the log, touch a lease or hold the project lock.
+  const state = service.peekProjectState(resolvedId);
+  if (!state || !state.project) throw new Error('project not found: ' + resolvedId);
   const current = {
-    projectId: handle.id,
-    name: handle.name,
-    from: handle.workspacePath,
+    projectId: state.project.id,
+    name: state.project.name,
+    from: state.project.workspacePath,
     to: path.resolve(to),
-    rev: handle.rev,
-    readOnly: handle.readOnly,
+    rev: state.lastSeq,
+    readOnly: null,
   };
   if (dryRun) {
-    log({ ok: true, dryRun: true, current });
-    handle.close();
+    log({ ok: true, dryRun: true, writerOpened: false, current });
     await service.close();
     return;
   }
+  const handle = from ? await service.openByWorkspace(from) : await service.open(resolvedId);
+  if (!handle) throw new Error('project not found for workspace: ' + from);
   if (handle.readOnly) {
     throw new Error('project is read-only (another process holds the lock). Stop dsh-web first, then retry.');
   }

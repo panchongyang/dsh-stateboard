@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { ProjectService } from '../../lib/core/service.js';
+import { reopenSyntheticHistory } from '../helpers/core-matrix-fixture.mjs';
 
 function tmp(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix + '-'));
@@ -198,15 +199,17 @@ test('interrupt rejects missing or stale fencing tokens without touching state',
 
 // 责任：旧 blocked 加开放意图不能直接 unblock，人工 interrupt 后才可修复流程。
 test('legacy blocked + open intent is refused by unblock and repairable by a human interrupt', async () => {
-  const { svc, h, taskId } = await setup();
+  const { svc, h: initial, taskId } = await setup();
+  let h = initial;
   const task = await claimAndBegin(h, taskId);
   // Simulate an old log produced before RFC-3: state=blocked, intent still open.
-  h.state.tasks[taskId] = {
+  const legacy = {
     ...taskOf(h, taskId),
     state: 'blocked',
     owner: null,
     blocker: { code: 'legacy', note: 'old block', since: new Date().toISOString(), resumeTo: 'in_progress' },
   };
+  h = reopenSyntheticHistory(h, [{ type: 'task/updated', taskId, rev: legacy.rev, data: legacy }]);
   const blocked = taskOf(h, taskId);
   const refused = await h.command(cmd('task.unblock', { taskId, expected: { entityRev: blocked.rev }, note: 'go' })).then(() => null, (error) => error);
   assert.equal(refused.code, 'intent-unresolved');
@@ -216,6 +219,7 @@ test('legacy blocked + open intent is refused by unblock and repairable by a hum
   assert.equal(taskOf(h, taskId).interrupt.previousState, 'blocked');
   assert.equal(taskOf(h, taskId).interrupt.previousBlocker.code, 'legacy');
   assert.equal(Object.values(h.state.intents).some((intent) => intent.taskId === taskId && intent.status === 'open'), true);
+  h.close();
   await svc.close();
 });
 
@@ -275,8 +279,9 @@ test('block from review keeps resumeTo=review and unblock returns to review', as
 });
 
 // 责任：同会话 release 再领取会获得新 token，旧 block/cancel token 必须失效。
-test('same-session re-claim after release makes the old block/cancel token stale', async () => {
-  const { svc, h, taskId } = await setup();
+test('same-session re-claim after release makes the old block/cancel token stale', async (t) => {
+  let { svc, h, taskId } = await setup();
+  t.after(() => { if (!h.closed) h.close(); });
   let task = await claimAndBegin(h, taskId);
   const oldToken = tokenOf(h, taskId);
   await h.command(cmd('task.release', {
@@ -310,7 +315,7 @@ test('same-session re-claim after release makes the old block/cancel token stale
     evidence: [{ kind: 'file', ref: 'artifact.txt', acceptanceId: task.acceptance[0].id }],
   }));
   task = taskOf(h, taskId);
-  h.leases.set(taskId, {
+  const legacyLease = {
     taskId,
     sessionId: 's1',
     agentId: 's1',
@@ -318,7 +323,8 @@ test('same-session re-claim after release makes the old block/cancel token stale
     token: newToken + 100,
     acquiredAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 600_000).toISOString(),
-  });
+  };
+  h = reopenSyntheticHistory(h, [{ type: 'lease/granted', taskId, data: legacyLease }], [[taskId, legacyLease]]);
   const staleReject = await h.command(cmd('task.reject', {
     taskId, expected: { entityRev: task.rev }, fencingToken: oldToken, reason: 'stale reject',
   })).then(() => null, (error) => error);

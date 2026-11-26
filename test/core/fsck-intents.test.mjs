@@ -13,6 +13,7 @@ import { checkState } from '../../lib/core/fsck.js';
 import { emptyState } from '../../lib/core/model.js';
 import { ProjectService } from '../../lib/core/service.js';
 import { makeCommit } from '../../lib/core/store.js';
+import { reopenSyntheticHistory } from '../helpers/core-matrix-fixture.mjs';
 
 const AT = '2026-10-29T12:00:00.000Z';
 const OWNER = { sessionId: 'worker', epoch: 1, fencingToken: 1, leaseUntil: '2026-10-29T12:15:00.000Z' };
@@ -176,7 +177,8 @@ test('archived project reports each in_progress task, open intent and live lease
 
 // 责任：health 须按运行时续期后的 expiresAt 判断，不使用旧 owner 时间且不续租归档工作。
 test('health uses renewed runtime lease expiry, not stale owner.leaseUntil, and does not renew archived work', async (t) => {
-  const { h, task, taskId, work } = await fixture(t);
+  let { h, task, taskId, work } = await fixture(t);
+  t.after(() => { if (!h.closed) h.close(); });
   await work('task.claim');
   await work('task.begin', { summary: 'lease clock test' });
   const oldOwnerExpiry = task().owner.leaseUntil;
@@ -187,14 +189,17 @@ test('health uses renewed runtime lease expiry, not stale owner.leaseUntil, and 
   assert.ok(Date.parse(runtimeExpiry) > Date.parse(oldOwnerExpiry));
   assert.equal(task().owner.leaseUntil, oldOwnerExpiry);
   now = Date.parse(oldOwnerExpiry) + 1;
-  h.state.project.phase = 'archived'; // Offline legacy anomaly fixture.
+  // Restore the legacy archived/live-work anomaly on a new isolated model.
+  h = reopenSyntheticHistory(h, [{ type: 'project/updated', data: { ...h.state.project, phase: 'archived' } }]);
   const before = structuredClone(h.state);
   const leaseBefore = structuredClone(h.leases.get(taskId));
   const live = h.health();
   assert.ok(live.checks.some((check) => check.name === 'project-archived-lease:' + taskId && !check.ok));
   assert.deepEqual(h.state, before);
   assert.deepEqual(h.leases.get(taskId), leaseBefore);
-  h.leases.get(taskId).expiresAt = new Date(now).toISOString();
+  const expiredLeases = h.leases;
+  expiredLeases.get(taskId).expiresAt = new Date(now).toISOString();
+  h = reopenSyntheticHistory(h, [], expiredLeases);
   const expired = h.health();
   assert.ok(!expired.checks.some((check) => check.name === 'project-archived-lease:' + taskId && !check.ok));
   assert.ok(expired.warnings.some((warning) => warning.includes('lease expired but renewable: ' + taskId)));
@@ -272,15 +277,17 @@ test('legal claim/begin/block/unblock/interrupt/reconcile/submit/reject/reopen p
 
 // 责任：health 本身不得写数据，手工破坏意图关系须仅命中新 I6 检查。
 test('health is read-only and manual corruption hits exactly the new I6 check', async (t) => {
-  const { base, h, taskId, task, work } = await fixture(t);
+  let { base, h, taskId, task, work } = await fixture(t);
+  t.after(() => { if (!h.closed) h.close(); });
   await work('task.claim');
   await work('task.begin', { summary: 'read-only check' });
   const intentId = task().work.intentId;
-  task().state = 'blocked'; // Synthetic in-memory corruption, not a real store.
-  task().owner = null;
-  h.leases.clear();
+  const corrupted = structuredClone(task());
+  corrupted.state = 'blocked';
+  corrupted.owner = null;
   const marker = path.join(base, 'MUST-NOT-EXIST');
-  task().evidence.push({ kind: 'command', ref: 'node -e "require(\'fs\').writeFileSync(' + JSON.stringify(marker) + ', \'bad\')"' });
+  corrupted.evidence.push({ kind: 'command', ref: 'node -e "require(\'fs\').writeFileSync(' + JSON.stringify(marker) + ', \'bad\')"' });
+  h = reopenSyntheticHistory(h, [{ type: 'task/updated', taskId, rev: corrupted.rev, data: corrupted }], []);
   const before = {
     state: structuredClone(h.state), rev: h.rev, leases: [...h.leases],
     log: fs.readFileSync(h.store.commitsFile), meta: fs.readFileSync(path.join(h.meta.dir, 'meta.json')),

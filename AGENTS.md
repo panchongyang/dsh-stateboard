@@ -30,9 +30,9 @@
 | 计划能力、任务归属、生命周期 | [计划 v2](<docs/modules/plan/contract.md>) | 多计划、不可变版本、可写管理面 |
 | 外置文档、文档基线、状态 | [外置文档实现](<docs/modules/documents/contract.md>) | 当前实现与工具/HTTP 表面 |
 | 外置文档冻结语义、身份、固定证据 | [D1 冻结契约](<docs/WORKSPACE-DOCUMENTS-CONTRACT.md>) | 冻结 v1；变更须显式复议 |
-| 固定证据的自动跟随与降级 | [固定内容证据](<docs/modules/evidence/contract.md>) | 校验域、降级标记、回退边界 |
+| 留存正文与证据降级 | [固定内容证据](<docs/modules/evidence/contract.md>) | 版本、校验域、降级标记与回退边界 |
 | 内嵌文档转外置 | [内嵌文档迁移](<docs/operations/DOC-MIGRATION.md>) | D6 离线迁移 runbook，R3 |
-| Git 只读观测 | [Git 执行边界](<docs/modules/evidence/contract.md>) | 解析规则与禁止调用面；不管理分支/worktree |
+| 历史 Git 兼容 | [证据模块](<docs/modules/evidence/contract.md>) | 只回放来源；运行时不调用 Git，不核验历史正文 |
 | 项目身份、本机绑定、打开项目 | [项目身份](<docs/modules/project/contract.md>) | 最小身份闭环 |
 | UI、样式、页面验收 | [UI 重做设计](<docs/modules/client/design.md>) · [文档页验收清单](<docs/operations/DOCS-UI-CHECKLIST.md>) | 设计系统与人工验收项 |
 

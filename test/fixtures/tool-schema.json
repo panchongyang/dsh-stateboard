@@ -145,7 +145,7 @@
   },
   {
     "name": "project_doc",
-    "description": "Read or write project documents. Inline documents are read-only archives: put/link return inline-write-disabled unless the project owner explicitly re-enabled inline writes; reads and historical docId@rev keep working. External documents are registered workspace files: register/inspect/update_meta/relocate/confirm/unregister work on a locator and expectedMetaRev and never read or write a body blob; get/put/link reject external docs. Doc evidence is automatic: submit {kind:\"doc\", ref:docId} and the server pins a committed clean Git version or silently degrades to current-only evidence with fixedState/fixedReason; no approval or confirmation step exists, and callers never pass a fixed reference as evidence. For external docs an @rev suffix is ignored (it is metadata, not content); inline docId@rev keeps its historical pinned bytes. get_fixed is an advanced read of explicit Git bytes and creates no evidence.",
+    "description": "Read or write project documents. Inline documents are read-only archives: put/link return inline-write-disabled unless the project owner explicitly re-enabled inline writes; reads and historical docId@rev keep working. External documents are registered workspace files: register/inspect/update_meta/relocate/confirm/unregister use a locator and expectedMetaRev; confirm in an owning workspace retains the confirmed version without editing its file. get/put/link reject external docs. Doc evidence is automatic: submit {kind:\"doc\", ref:docId}; the server retains the exact workspace version when available, otherwise reports current-only evidence. Callers do not supply proof or version fields. For external docs an @rev suffix is ignored (it is metadata, not content); inline docId@rev keeps its historical pinned bytes. get_fixed is deprecated: it returns recorded historical Git provenance only, without original bytes or re-verification. For a registered file in the owning space, capture retains its observed bytes without editing the file; history lists retained versions, read_version reads one exact version, and compare checks current bytes against that version without writing. These operations require full authority; retained history is not a complete record of external edits. Workspace projection (discover/read_current/refresh_current) is derived from the owning space only: discover pages through supported documents whether registered or not; read_current returns a fresh bounded text preview and refresh_current reports one path's fresh observation without writing. Projection requires full authority and takes no project, root or scope argument. In the owning space, relate adds or replaces an explicit version relation, unrelate removes an active relation without erasing history, and relations reads relations without capture. All three require full authority and do not change current links.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -163,13 +163,23 @@
             "confirm",
             "unregister",
             "list_external",
-            "get_fixed"
+            "get_fixed",
+            "capture",
+            "history",
+            "read_version",
+            "compare",
+            "discover",
+            "read_current",
+            "refresh_current",
+            "relate",
+            "unrelate",
+            "relations"
           ]
         },
         "fixed": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Legacy explicit Git byte identity returned by get_fixed; auto doc evidence does not need it.",
+          "description": "Deprecated Git provenance selector for recorded sources only; original bytes are not read.",
           "properties": {
             "v": {
               "type": "integer"
@@ -209,11 +219,11 @@
         },
         "commitOid": {
           "type": "string",
-          "description": "get_fixed: explicit full commit OID (alternative to fixed)."
+          "description": "Deprecated get_fixed: recorded full commit OID (alternative to fixed)."
         },
         "pathAtCommit": {
           "type": "string",
-          "description": "get_fixed: repository-relative path at commitOid."
+          "description": "Deprecated get_fixed: the recorded repository-relative path at commitOid."
         },
         "docId": {
           "type": "string"
@@ -238,7 +248,70 @@
           "type": "integer"
         },
         "maxBytes": {
-          "type": "integer"
+          "type": "integer",
+          "description": "read_version: defaults to 256 KiB, up to 16 MiB. read_current: 1–1048576 bytes, defaults to 262144. relations: workspace body read by relationId only."
+        },
+        "versionId": {
+          "type": "string",
+          "description": "Exact retained versionId; required by read_version/compare, optional with docId for relations."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "List page size for history (default 30, max 100) or relations."
+        },
+        "after": {
+          "type": "string",
+          "description": "nextCursor from the previous page of history or a relations list."
+        },
+        "from": {
+          "type": "object",
+          "description": "Source event position for relate, or a forward relations selector; event is a zero-based ordinal within commit seq.",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "description": "task, plan, evidence or audit."
+            },
+            "id": {
+              "type": "string"
+            },
+            "seq": {
+              "type": "integer"
+            },
+            "event": {
+              "type": "integer"
+            }
+          }
+        },
+        "to": {
+          "type": "object",
+          "description": "Target for relate or an exact reverse relations selector. Supply kind and docId: workspace-body requires versionId; inline requires rev; git-fixed requires fixed (a saved FixedRef). workspace-current is accepted only by relate."
+        },
+        "relationId": {
+          "type": "string",
+          "description": "Required by unrelate; for relations selects one relation, optionally with maxBytes for its workspace body. Use exactly one selector: from, to, docId (optionally with versionId), or relationId."
+        },
+        "expectedRev": {
+          "type": "integer",
+          "description": "Expected source revision for relate/unrelate."
+        },
+        "replacesId": {
+          "type": "string",
+          "description": "relate: optional relation ID explicitly replaced by the new relation."
+        },
+        "purpose": {
+          "type": "string",
+          "description": "Document purpose (register/update_meta only)."
+        },
+        "scope": {
+          "type": "string",
+          "description": "Document responsibility scope (register/update_meta only)."
+        },
+        "supersedes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Stable document IDs explicitly superseded (register/update_meta only)."
         },
         "links": {
           "type": "object",
@@ -277,7 +350,11 @@
         },
         "relPath": {
           "type": "string",
-          "description": "Workspace-relative path of the external file (register/relocate)."
+          "description": "Workspace-relative path of the external file (register/relocate) or of the current projection (read_current/refresh_current)."
+        },
+        "cursor": {
+          "type": "string",
+          "description": "discover: opaque nextCursor from the previous page. Bound to this credential, project and operation; never construct one."
         },
         "expectedMetaRev": {
           "type": "integer",
@@ -543,7 +620,7 @@
   },
   {
     "name": "project_task",
-    "description": "Drive one task through the state machine. Read project_board view=task first for rev and allowedOps. claim/begin/submit need a live lease; begin writes an intent before irreversible work; submit attaches evidence and only enters review. verify records acceptance, not correctness: any authorized agent (including the submitter) may verify ordinary tasks without a report; audit gates require an independent agent with audit.report (20–4000 characters). Humans may verify either. Reports are self-declared; no evidence commands are executed. Any agent may reject review with reason (a live lease requires its owner); unassign remains human-only. Doc evidence is automatic: {kind:\"doc\", ref:docId} is pinned when the path is committed and clean, otherwise it degrades silently to current-only evidence (fixedState/fixedReason); no repository approval or version confirmation is needed. renew extends a lease (max 2 without progress). gate with requiresAudit:true enables third-party audit (agents can only enable it outside review; human may enable/disable; no lease needed). With an open intent, block/release/cancel/reject must pass intent:{outcome:\"stopped\",sideEffects:[...]}; if the outcome is unknown, interrupt then reconcile. On stale-revision or fencing-stale, re-read instead of forcing.",
+    "description": "Drive one task through the state machine. Read project_board view=task first for rev and allowedOps. claim/begin/submit need a live lease; begin writes an intent before irreversible work; submit attaches evidence and only enters review. verify records acceptance, not correctness: any authorized agent (including the submitter) may verify ordinary tasks without a report; audit gates require an independent agent with audit.report (20–4000 characters). Humans may verify either. Reports are self-declared; no evidence commands are executed. Any agent may reject review with reason (a live lease requires its owner); unassign remains human-only. Doc evidence captures the exact workspace version when available; otherwise it is recorded as current-only. Callers submit only {kind:\"doc\", ref:docId}; do not pass fixed or version fields. renew extends a lease (max 2 without progress). gate with requiresAudit:true enables third-party audit (agents can only enable it outside review; human may enable/disable; no lease needed). With an open intent, block/release/cancel/reject must pass intent:{outcome:\"stopped\",sideEffects:[...]}; if the outcome is unknown, interrupt then reconcile. On stale-revision or fencing-stale, re-read instead of forcing.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -855,7 +932,7 @@
   },
   {
     "name": "read_project_knowledge",
-    "description": "Read original retained records or observed content by stable knowledge reference. Optional context adds one hop of recorded relations; choose references or search again to explore further. Changed or unavailable content is explicit. References grant no additional access. No task lease is required.",
+    "description": "Read original retained records or observed content by stable knowledge reference. Use context for one hop of recorded relations, or compact for the same evidence with less structure. Changed or unavailable content is explicit. References grant no additional access. No task lease is required.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -879,7 +956,8 @@
           "type": "string",
           "enum": [
             "source",
-            "context"
+            "context",
+            "compact"
           ]
         },
         "maxBytes": {
@@ -899,7 +977,7 @@
   },
   {
     "name": "search_project_knowledge",
-    "description": "Search retained project knowledge. Results show original excerpts and references. Open a result with read, or pass its ref as historyRef with the same query to see matching versions. Exact matches take priority; a zero-hit range can return labeled partial keyword matches. Inspect coverage and use keywords separated by spaces. No task lease is required.",
+    "description": "Search retained project knowledge and authorized workspace materials. Results show original excerpts and references. Open a result with read, or pass its ref as historyRef with the same query to see matching versions. Exact matches take priority; a zero-hit range can return labeled partial keyword matches. Inspect coverage and use keywords separated by spaces. No task lease is required.",
     "parameters": {
       "type": "object",
       "properties": {

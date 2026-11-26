@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { ProjectService } from '../../lib/core/service.js';
+import { archivedHistory, touchSnapshot } from '../helpers/lease-touch-fixture.mjs';
 
 function tmp(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix + '-'));
@@ -50,7 +51,7 @@ async function setup({ publish = true } = {}) {
   await h.attach({ sessionId: 's1', agentId: 's1', source: 'test', role: 'worker' });
   await h.command(humanCmd('project.update', { policy: { verification: 'manual' } }));
   if (publish) await h.command(cmd('plan.publish', { title: PLAN.title, steps: PLAN.steps }));
-  return { svc, h, wsDir };
+  return { svc, h, wsDir, stateDir };
 }
 
 function taskByTitle(h, title) {
@@ -152,20 +153,27 @@ test('archived rejects writes at the bus before side effects; unarchive restores
 });
 
 // 责任：旧归档数据不在 recover 时写日志，解归档须同次提交中断任务并保留待对账意图。
-test('opening an archived project does not recover; unarchive carries recovery in the same commit', async () => {
-  const { svc, h } = await setup();
-  const t1 = taskByTitle(h, 'T1');
-  await claimBegin(h, t1.id);
-  const beforeRev = h.rev;
-  // Simulate legacy archived data: phase archived while a task is still in_progress
-  // with an open intent (old project.update did not check live work).
-  h.state.project = { ...h.state.project, phase: 'archived' };
+test('opening an archived project does not recover; unarchive carries recovery in the same commit', async (t) => {
+  const fixture = await setup();
+  t.after(() => fixture.svc.close());
+  const t1 = taskByTitle(fixture.h, 'T1');
+  await claimBegin(fixture.h, t1.id);
+  const intent = structuredClone(Object.values(fixture.h.state.intents).find(row => row.taskId === t1.id && row.status === 'open'));
+  const { svc, h } = await archivedHistory(fixture.h, fixture.stateDir, { privilegedInlineWrites: true });
+  t.after(() => svc.close());
+  const before = touchSnapshot(h);
   h.recover();
-  assert.equal(h.rev, beforeRev, 'recover on archived must not append');
+  assert.deepEqual(touchSnapshot(h), before, 'recover on archived must not change bytes, watermarks, leases or bindings');
   assert.equal(h.state.tasks[t1.id].state, 'in_progress');
+  assert.deepEqual(h.state.intents[intent.id], intent);
 
   const result = await h.command(humanCmd('project.update', { phase: 'active' }));
   assert.equal(h.state.project.phase, 'active');
+  assert.equal(h.rev, before.rev + 1, 'unarchive and recovery share one commit');
+  assert.deepEqual(h.store.commits.at(-1).events, result.events);
+  assert.deepEqual(fs.readFileSync(h.store.commitsFile).subarray(0, before.bytes.length), before.bytes);
+  assert.deepEqual(h.state.bindings, before.bindings);
+  assert.deepEqual(h.state.intents[intent.id], intent);
   assert.equal(h.state.tasks[t1.id].state, 'interrupted');
   assert.equal(h.leases.size, 0, 'unarchive clears stale in-memory leases');
   assert.equal(h.recovered, true);

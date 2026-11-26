@@ -107,13 +107,14 @@ test('packed text rejects synthetic examples of developer paths, opaque ids and 
   }
 });
 
-// 责任：所有出货 Git 调用点须满足受限表面，运行时对变更型命令必须拒绝。
-test('shipped Git callsites stay constrained and runtime refuses mutating commands', () => {
+// 责任：出货运行时代码不调用子进程或引入开发 Git 适配器；维护工具自身仍维持只读参数约束。
+test('shipped runtime has no Git invocation or dependency on the developer adapter', () => {
   const callers = ['lib/core/documents/fixed-git.js', 'lib/core/documents/external-git.js', 'lib/core/identity/discover.js'];
   const files = Object.fromEntries(callers.map((file) => [file, fs.readFileSync(path.join(root, file), 'utf8')]));
   assert.equal(checkGitSurface(files), true);
   assert.throws(() => checkGitSurface({ ...files, 'lib/core/surprise.js': "spawnSync('git', ['commit'], {})" }), /Unapproved/);
-  assert.throws(() => checkGitSurface({ ...files, [callers[0]]: files[callers[0]].replace('assertReadOnlyGitArgs(args)', 'args') }), /Git/);
+  assert.throws(() => checkGitSurface({ ...files, 'lib/core/surprise.js': "import { resolveGitExecutable } from './git-exec.js'" }), /Unapproved/);
+  assert.throws(() => checkGitSurface({ ...files, 'lib/core/surprise.js': "import child from 'node:child_process'" }), /Unapproved/);
   for (const args of [['rev-parse', '--show-toplevel'], ['config', '-z', '--get-regexp', '^filter\\.'], ['status', '--porcelain=v1', '-z', '--ignored=matching', '--untracked-files=all', '--no-renames', '--', ':(literal)file.txt'], ['cat-file', '-t', 'a'.repeat(40)], ['rev-parse', '--verify', '--end-of-options', 'a'.repeat(40) + '^{commit}']]) {
     assert.deepEqual(assertReadOnlyGitArgs(args), args);
   }

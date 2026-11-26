@@ -213,7 +213,7 @@ test('inline events require a valid legacy body identity and reject external-onl
 // 责任：快照删掉外置 source 伪装成内嵌记录时，结构校验必须识别并拒绝。
 test('snapshot rows cannot disguise external records as source-less inline documents', () => {
   const commits = chain([[created], [registered()]]);
-  const snapshot = open(commits).state;
+  const snapshot = structuredClone(open(commits).state);
   delete snapshot.docs.doc_ext1.source;
   const dir = tmp('pbx-inline-snapshot');
   fs.writeFileSync(path.join(dir, 'commits.jsonl'), commits.map((c) => JSON.stringify(c)).join('\n') + '\n');
@@ -335,47 +335,31 @@ test('legacy inline rows without source keep loading and fsck separates external
   assert.equal(checked.checks.some((c) => c.name === 'doc-hash:doc_ext1'), false, 'external rows are not checked for a body hash');
 });
 
-// 责任：在临时 Git 仓库改变文件状态后，观测须区分未跟踪、已提交、修改、忽略及非仓库。
-test('git observation distinguishes untracked, committed, modified, ignored and not_a_repo', async (t) => {
-  try {
-    execFileSync('git', ['--version'], { stdio: 'ignore' });
-  } catch {
-    t.skip('git is not installed');
-    return;
-  }
+// 责任：P5 起外置观测不再运行 Git；仓库状态变化只影响正文 hash，git 字段恒为 null。
+test('external observation reports no Git state and never runs Git', async (t) => {
+  try { execFileSync('git', ['--version'], { stdio: 'ignore' }); } catch { t.skip('git is not installed'); return; }
   const board = tmp('pbx-git-board');
   const ws = tmp('pbx-git-ws');
   const git = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: ws, stdio: 'pipe' });
   fs.mkdirSync(path.join(ws, 'docs'));
   fs.writeFileSync(path.join(ws, 'docs/a.md'), 'a\n');
-  fs.writeFileSync(path.join(ws, 'docs/b.md'), 'b\n');
-  fs.writeFileSync(path.join(ws, 'docs/c.log.md'), 'c\n');
   fs.writeFileSync(path.join(ws, '.gitignore'), '*.log.md\n');
   const svc = new ProjectService({ rootDir: board, privilegedInlineWrites: true });
   await svc.init();
   const h = await svc.createProject({ workspacePath: ws });
-  const reg = async (relPath) => (await h.command(agent('doc.external.register', { title: relPath, relPath }))).docId;
-  const a = await reg('docs/a.md');
-  const b = await reg('docs/b.md');
-  const c = await reg('docs/c.log.md');
-  assert.equal(inspectExternalDoc(h, a).git.state, 'not_a_repo');
-
+  const a = (await h.command(agent('doc.external.register', { title: 'a', relPath: 'docs/a.md' }))).docId;
+  const state = (docId) => inspectExternalDoc(h, docId, { fresh: true });
+  assert.equal(state(a).git, null, 'not a repository still reports null');
   git('init', '-q');
   git('add', 'docs/a.md', '.gitignore');
   git('commit', '-q', '-m', 'init');
-  const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ws, encoding: 'utf8' }).trim();
-  const state = (docId) => inspectExternalDoc(h, docId, { fresh: true }).git;
-  assert.equal(state(a).state, 'committed');
-  assert.equal(state(b).state, 'untracked');
-  assert.equal(state(c).state, 'ignored');
+  assert.equal(state(a).git, null, 'committed reports null');
   fs.appendFileSync(path.join(ws, 'docs/a.md'), 'more\n');
-  assert.deepEqual(state(a), { state: 'modified', staged: false, unstaged: true });
-  git('add', 'docs/a.md');
-  assert.equal(state(a).staged, true);
-
+  assert.equal(state(a).git, null, 'modified reports null');
   const hash = sha(fs.readFileSync(path.join(ws, 'docs/a.md')));
+  assert.equal(state(a).observation.contentHash, hash, 'body drift is still observed');
   await h.command(agent('doc.external.confirm', { docId: a, expectedMetaRev: 1, expectedContentHash: hash }));
-  assert.equal(h.state.docs[a].baseline.gitHeadOid, head);
+  assert.equal(h.state.docs[a].baseline.contentHash, hash);
   await svc.close();
 });
 

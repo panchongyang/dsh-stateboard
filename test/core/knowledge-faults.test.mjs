@@ -14,6 +14,8 @@ import { createKnowledgeReader } from '../../lib/core/knowledge/reader.js';
 import { openKnowledgeIndex } from '../../lib/core/knowledge/sqlite-index.js';
 import { readKnowledgeSnapshot } from '../../lib/core/knowledge/snapshot.js';
 import { currentIndexState, updateIndex } from '../../lib/core/knowledge/build.js';
+import { ProjectService } from '../../lib/core/service.js';
+import { makeService } from '../helpers/service-fixture.mjs';
 import { knowledgeFixture, addTask, cmd, tree, registerFile } from '../helpers/knowledge-fixture.mjs';
 
 // 责任：增量批次公开落后水位并最终无遗漏追赶，旧引用保持可读。
@@ -335,4 +337,103 @@ test('index update reports its own generation and continuation loads the committ
       assert.equal(current.bodies.refreshed, 0);
     } finally { index.commit(); }
   } finally { index.close(); }
+});
+
+// 责任：失败的正文观测也占用保守字节额度，下一窗口仍能继续。
+test('failed observations consume the conservative byte budget and do not stall fallback', async t => {
+  const f = await knowledgeFixture(t, { disableSqlite: true });
+  for (let i = 0; i < 3; i++) {
+    const { file } = await registerFile(f, `bad-${i}.md`, 'original');
+    fs.writeFileSync(file, Buffer.from([0xc3, 0x28]));
+  }
+  await registerFile(f, 'tail.md', 'failurebudgettail');
+  const first = await f.search('failurebudgettail', { kinds: ['content'] });
+  assert.equal(first.coverage.bodies.refreshed, 2, 'two failed reads reserve the full 32 MiB budget');
+  assert.equal(first.coverage.bodies.unavailableReasons.undecodable, 2);
+  assert.ok(first.nextCursor);
+  const next = await f.search('failurebudgettail', { kinds: ['content'], cursor: first.nextCursor });
+  assert.equal(next.hits.length, 1);
+  assert.equal(next.nextCursor, null);
+});
+
+async function workspaceBudgetFixture(t, disableSqlite) {
+  let service;
+  t.after(() => service?.close());
+  const { wsDir } = await makeService(t);
+  const root = fs.realpathSync.native(wsDir);
+  service = await new ProjectService({ spaceRoot: root }).init();
+  const h = await service.createProject({ workspacePath: root, actor: { kind: 'human', via: 'test' } });
+  const f = { h, wsDir: root };
+  const { docId } = await registerFile(f, 'registered.md', 'sharedbudget archived');
+  await h.command(cmd('doc.workspace_capture', { docId }));
+  for (const file of ['first.md', 'middle.md', 'terminal.md']) {
+    fs.writeFileSync(path.join(root, file), 'sharedbudget ' + file);
+  }
+  const pages = [];
+  const discover = service.queryWorkspaceProjection.bind(service);
+  service.queryWorkspaceProjection = async (...args) => {
+    const page = await discover(...args);
+    pages.push(page);
+    return page;
+  };
+  const reader = createKnowledgeReader(service, { bodyCount: 1, disableSqlite });
+  t.after(() => reader.close());
+  const input = { projectId: h.id, query: 'sharedbudget', kinds: ['content'], relatedLimit: 0 };
+  const access = { authority: { scopeKey: 'synthetic-quota', assertCurrent() {} } };
+  await assert.rejects(reader.search(input, { authority: null }), { code: 'project-forbidden' });
+  return { pages, search: cursor => reader.search({ ...input, ...(cursor ? { cursor } : {}) }, access) };
+}
+
+function assertSharedBodyCount(result) {
+  const { bodies, workspace } = result.coverage;
+  assert.ok(bodies.refreshed + workspace.retainedRead + workspace.currentRead <= 1, 'all three source lanes share one attempt');
+}
+
+// 责任：FTS 在共享额度内分批消费同一发现页，不跳过页尾。
+test('FTS drains one P3 page across shared-budget batches before advancing discovery', async t => {
+  const f = await workspaceBudgetFixture(t, false);
+  let result = await f.search();
+  if (result.engine !== 'fts5') return t.skip('SQLite unavailable; fallback is covered separately');
+  assert.equal(f.pages.length, 1);
+  assert.ok(f.pages[0].entries.length > 1);
+  assert.equal(result.coverage.workspace.pagePending, true);
+  assert.equal(result.coverage.bodies.refreshed, 1);
+  assertSharedBodyCount(result);
+  let retainedAttempts = 0, currentAttempts = 0;
+  for (let i = 0; result.coverage.workspace.pagePending && i < 24; i++) {
+    result = await f.search();
+    assertSharedBodyCount(result);
+    retainedAttempts += result.coverage.workspace.retainedRead;
+    currentAttempts += result.coverage.workspace.currentRead;
+    assert.equal(f.pages.length, 1, 'the pending P3 page stays in process-local replay');
+  }
+  assert.equal(result.coverage.workspace.pagePending, false);
+  assert.equal(currentAttempts, f.pages[0].entries.length);
+  assert.ok(retainedAttempts > 0, 'the retained lane cannot starve behind legacy/current');
+  assert.deepEqual(result.hits.filter(hit => hit.sourcePart === 'workspace-current').map(hit => hit.sourceVersion.relPath).sort(),
+    ['first.md', 'middle.md', 'registered.md', 'terminal.md']);
+  await f.search();
+  assert.equal(f.pages.length, 2, 'discovery advances only after all current entries are attempted');
+});
+
+// 责任：降级扫描游标分批推进同一发现页，三类正文均只回读一次。
+test('scan cursor drains the current page once without starving retained or legacy bodies', async t => {
+  const f = await workspaceBudgetFixture(t, true);
+  let result, cursor;
+  const refs = [];
+  for (let i = 0; i < 20; i++) {
+    result = await f.search(cursor);
+    assert.equal(result.engine, 'scan');
+    assertSharedBodyCount(result);
+    refs.push(...result.hits);
+    cursor = result.nextCursor;
+    if (!cursor) break;
+  }
+  assert.equal(cursor, null, 'the shared scan windows make monotonic progress');
+  assert.equal(f.pages.length, 1);
+  assert.equal(result.coverage.workspace.pagePending, false);
+  assert.equal(refs.filter(hit => hit.sourcePart === 'workspace-body').length, 1);
+  assert.equal(refs.filter(hit => hit.ref.startsWith('kb1.')).length, 1, 'legacy body reached its own scan window');
+  assert.deepEqual(refs.filter(hit => hit.sourcePart === 'workspace-current').map(hit => hit.sourceVersion.relPath).sort(),
+    ['first.md', 'middle.md', 'registered.md', 'terminal.md']);
 });

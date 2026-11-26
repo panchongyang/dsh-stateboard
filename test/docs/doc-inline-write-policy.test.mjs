@@ -179,16 +179,11 @@ test('inline admission is rechecked inside the serial command', async (t) => {
   const { h, svc } = await setup();
   t.after(() => svc.close());
   await h.command(human('doc.inline_policy', { authorized: true, disabled: false, expected: { projectRev: h.rev } }));
-  const open = svc.open.bind(svc);
-  let before;
-  svc.open = async (projectId) => {
-    const handle = await open(projectId);
-    await h.command(human('doc.inline_policy', { authorized: true, disabled: true, expected: { projectRev: h.rev } }));
-    before = tree(svc.rootDir);
-    return handle;
-  };
-  await rejects(svc.command(h.id, human('doc.put', { title: 'Changed policy', body: 'x' })), 'inline-write-disabled');
-  assert.ok(before, 'the policy changed after the request passed admission');
+  // doc.put 同步通过准入，在取得 writer 后排队；趁这个等待窗口先提交策略。
+  const denied = rejects(svc.command(h.id, human('doc.put', { title: 'Changed policy', body: 'x' })), 'inline-write-disabled');
+  await h.command(human('doc.inline_policy', { authorized: true, disabled: true, expected: { projectRev: h.rev } }));
+  const before = tree(svc.rootDir);
+  await denied;
   assert.deepEqual(tree(svc.rootDir), before);
 });
 

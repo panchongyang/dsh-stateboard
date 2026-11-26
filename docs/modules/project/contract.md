@@ -15,7 +15,7 @@
 | resolveWorkspace(path) | 返回项目/绑定/角色/发现来源或 null；冲突/未绑定 marker 抛错 |
 | openByWorkspace / open | 解析或按 ID 复用/打开句柄，可 heal/recover |
 | createProject | 显式建立项目；同根命中则打开已有身份 |
-| command | open + handle.command 的便利入口 |
+| command | 受信写入入口，取得项目串行位置，准备、验证并提交整批；不暴露 writer |
 | peekProjectState / peekProject | lock-free 持久投影；无 meta 时 null，不 recover |
 | lookupLiveWriter | 只查已存在可写句柄，不打开、不留新引用 |
 | listProjects / listProjectsAsync | 同步兼容 / worker 冷读列表 |
@@ -23,7 +23,11 @@
 | close | 关闭列表读取器并释放本 service 的共享句柄引用 |
 
 [身份操作](<../../../lib/core/identity/ops.js>)导出 ID 生成、占用检查、绑定同步、bindWorktree/unbind/forkWorkspace/importProject/planMigration/migrate。
-[discover](<../../../lib/core/identity/discover.js>)的 marker 与 worktree helper、[registry](<../../../lib/core/identity/registry.js>)的读改写函数是内部边界，不是任意 Agent 写入口。
+[discover](<../../../lib/core/identity/discover.js>) 的 marker 与[本机绑定注册表](<../../../lib/core/identity/registry.js>) 仅用于集中布局身份，不是任意 Agent 写入口。
+
+### 所属工作区布局
+
+[space-home](<../../../lib/core/store/space-home.js>) 以宿主确认的物理目录选择状态，不以历史项目 ID 选库；历史 ID 只用于校验。保持同一物理根的共享 writer/锁，不同完整副本可保持同一历史 ID、各自独立写入。空读取不创建看板；缺状态、权限撤回、根在请求中替换或不完整的副本，拒绝回退集中布局或其它副本。
 
 ## 2. 输入校验域
 
@@ -49,7 +53,7 @@ updateRegistry 在锁内重新读盘、clone、执行 mutate、检查唯一性�
 4. 绑定退役后不原地重指向；BindingIndex 只索引 active 项。
 5. 无持久主绑定时可派生 legacy main，不因读取把它写入注册表。
 6. nearest binding/marker 决定归属；仓库边界阻止嵌套项目落到父项目。
-7. worktree 映射不改变共享 handle 的主根和 file 证据根。
+7. 关联 worktree 不隐式映射；显式绑定的 locator 仍不改变所属根的取证边界。
 8. marker 不授予本机绑定、数据导入或项目写权限。
 9. 读取 miss 是 null/明确错误，不调用 createProject 兜底。
 
@@ -60,7 +64,7 @@ updateRegistry 在锁内重新读盘、clone、执行 mutate、检查唯一性�
 
 | 路径 | 允许副作用 |
 |---|---|
-| resolveWorkspace | 文件/Git 观测、内存 Git 缓存；无项目/绑定写入 |
+| resolveWorkspace | 读取文件系统与绑定/日志身份；无项目/绑定写入或运行时 Git 调用 |
 | init/refreshFromDisk | 可确保 projects 目录存在，加载内存索引 |
 | peek / 专用 reader | lock=false 验证/回放，不修尾、不 recover、不续租 |
 | open | store 打开/锁、meta/绑定 heal、可写首次 recover |
@@ -104,8 +108,8 @@ import 续接先核对已有日志包含输入前缀，分叉历史拒绝覆盖�
 
 ## 7. 隐含契约与兼容类别
 
-L1 与实现均以 open(projectId) 取得 handle 后调用 handle.query；调用方不得假设 service 另有查询便利方法。
-open + query 不是零写读取保证；host 管理工具还可能 touch。
+[application](<../../../lib/core/application/index.js>) 让宿主仅使用值请求与只读端口；直接 open + query 是内部兼容路径，不能取代业务只读入口。
+显式 open 具有 writer 生命周期副作用；普通管理读不因查询打开 writer 或更新活性。
 resolveWorkspace 使用当前内存索引并可能日志扫描，不是每次全盘重新加载注册表。
 涉及占根的写操作必须走既有刷新与锁内更新，不能直接 mutate BindingIndex。
 workspace binding 与 session binding 名字相近但授权域不同，不能互相替代。

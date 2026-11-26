@@ -4,18 +4,18 @@
 
 ## 工作区与机器迁移
 
-先停写并备份整个 board 根、工作区文件、必要 Git 对象、profile 配置和匹配包；只 clone 代码或复制 marker 不包含看板状态。新环境遵守 [支持矩阵](<../../README.md#支持环境>)，不要与旧环境并发写同一 store。旧 key/profile 仅是私密历史材料，不作为新安装前置；当前版本不生成历史执行 key，也不执行或验签旧证明。
+先停写并备份适用布局的完整看板根、外置文件、profile 配置和匹配包。所属空间复制完整 `.projectboard/` 并重新核对物理根与授权，不自动迁移集中布局。只复制代码或 marker 不包含看板状态；备份和回退见[恢复](<RECOVERY.md>)。
 
-在匹配源码根目录，针对已核对的副本使用显式绝对 board 根和项目ID：
+集中布局在匹配源码根目录，针对已核对的副本使用显式绝对 board 根和项目 ID：
 
 ```text
 node scripts/relocate-project.mjs --root "BOARD_ROOT" --project PROJECT_ID --to "NEW_WORKSPACE" --dry-run
 node scripts/relocate-project.mjs --root "BOARD_ROOT" --project PROJECT_ID --to "NEW_WORKSPACE"
 ```
 
-目标目录须存在且无另一个项目。脚本追加正常 relocate 事件，不移动文件；dry-run 会服务 open，可能触发冷开恢复/索引写，故必须先在副本演练，不能当零写诊断。脚本不保证跨机身份注册表合并或多 binding 自动迁移；冲突/缺身份时停止并保留副本，不手改日志或另建项目代替。
+目标目录须存在且无另一个项目。脚本追加正常 relocate 事件，不移动文件；dry-run 不打开 writer 或执行恢复。脚本不保证跨机身份注册表合并或多 binding 自动迁移；冲突时保留副本，不手改日志或另建项目替代。
 
-启动前核对主根与 binding。外置文档原定位可能仍指旧绑定，使用 `project_doc relocate`（当前 expectedMetaRev、明确 bindingId/relPath）逐个重定位；批量 rebind 仅 human/system。再 inspect/confirm，新上下文确认前不可比较，不把旧基线当匹配。file 相对路径按主根，绝对引用不重写。既有 Git fixed 缺对象时必须从备份恢复对象，不 fetch、不用当前字节替代历史。
+集中布局启动前核对主根与 binding；若外置记录仍指旧绑定，按实际 `expectedMetaRev` 显式重定位后 inspect/confirm。file 相对引用按实际开库根，绝对引用不重写。旧 Git 仅保留来源；当前正文不能补齐过去的版本。
 
 迁移验收：新环境同一 projectId、任务/计划/文档数与历史可读；文件现状、binding、未闭意图及健康符合预期；授权副本可新提交并冷开保留。无可信备份或历史不可得必须记录限制。回退须停止写者，恢复完整备份与匹配版本，接受备份时点 RPO；外部副作用不能自动撤销。
 

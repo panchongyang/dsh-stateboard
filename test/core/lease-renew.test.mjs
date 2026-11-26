@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import { withProject } from '../helpers/service-fixture.mjs';
+import { archivedHistory, isolatedTouchHandle, touchSnapshot } from '../helpers/lease-touch-fixture.mjs';
 
 const START = Date.parse('2026-10-23T00:00:00.000Z');
 const TTL_MS = 900 * 1000;
@@ -19,11 +20,11 @@ function cmd(op, extra = {}) {
 
 async function setup(t) {
   let now = START;
-  const { svc, h } = await withProject(t, { clock: () => new Date(now), name: 'Renew' });
+  const { svc, h, stateDir } = await withProject(t, { clock: () => new Date(now), name: 'Renew' });
   await h.attach({ sessionId: 's1', agentId: 's1', source: 'test', role: 'worker' });
   await h.attach({ sessionId: 's2', agentId: 's2', source: 'test', role: 'worker' });
   const tick = (ms) => { now += ms; };
-  return { svc, h, tick, now: () => now };
+  return { svc, h, stateDir, tick, now: () => now };
 }
 
 async function makeTask(h, title, sessionId = 's1') {
@@ -241,61 +242,94 @@ test('failed begin does not reset the deadline or mutate leases and history', as
 
 // 责任：只读、归档或关闭 handle 的 touch 不得改 expiresAt 或绑定活跃度。
 test('read-only, archived and closed touch cannot change lease expiry or binding liveness', async (t) => {
-  const { svc, h, tick } = await setup(t);
+  const { svc, h, stateDir, tick, now } = await setup(t);
   t.after(() => svc.close());
   const id = await makeTask(h, 'Read only');
   await claim(h, id);
-  const before = structuredClone(h.leases.get(id));
-  const binding = structuredClone(h.state.bindings.s1);
+  const leases = h.leases;
   tick(TTL_MS / 2);
-  h.readOnly = true;
-  h.touch('s1');
-  assert.deepEqual(h.leases.get(id), before);
-  assert.deepEqual(h.state.bindings.s1, binding);
-  h.readOnly = false;
-  h.state.project.phase = 'archived';
-  h.touch('s1');
-  assert.deepEqual(h.leases.get(id), before);
-  assert.deepEqual(h.state.bindings.s1, binding);
-  h.state.project.phase = 'active';
-  h.closed = true;
-  h.touch('s1');
-  assert.deepEqual(h.leases.get(id), before);
-  assert.deepEqual(h.state.bindings.s1, binding);
-  h.closed = false;
+  const original = touchSnapshot(h);
+  for (const flags of [{ readOnly: true }, { closed: true }]) {
+    const isolated = isolatedTouchHandle(h, flags);
+    const before = touchSnapshot(isolated, h.store.commitsFile);
+    isolated.touch('s1');
+    assert.deepEqual(touchSnapshot(isolated, h.store.commitsFile), before);
+    assert.deepEqual(isolated.leases.get(id), leases.get(id), 'inert touch must retain the actual lease');
+    assert.deepEqual(touchSnapshot(h), original, 'the source writer must not be altered');
+  }
+  const archived = await archivedHistory(h, stateDir, { clock: () => new Date(now()) });
+  t.after(() => archived.svc.close());
+  // Cold replay correctly has no volatile authority. A separate constructed model
+  // retains the old lease specifically to prove the archive guard, not an empty Map.
+  const isolated = isolatedTouchHandle(archived.h, { leases });
+  const before = touchSnapshot(isolated, archived.h.store.commitsFile);
+  const durable = touchSnapshot(archived.h);
+  isolated.touch('s1');
+  assert.deepEqual(touchSnapshot(isolated, archived.h.store.commitsFile), before);
+  assert.deepEqual(isolated.leases.get(id), leases.get(id));
+  assert.deepEqual(touchSnapshot(archived.h), durable);
 });
 
 // 责任：touch 不能续租其他会话、已 detach 绑定或不匹配 epoch 的工作。
 test('touch cannot renew another session, detached binding, or mismatched epoch', async (t) => {
-  const { svc, h, tick } = await setup(t);
+  const { svc, h, tick, now } = await setup(t);
   t.after(() => svc.close());
   const id = await makeTask(h, 'Wrong owner');
   await claim(h, id);
-  const before = structuredClone(h.leases.get(id));
+  const before = touchSnapshot(h);
+  const lease = h.leases.get(id);
   tick(TTL_MS / 2);
   h.touch('s2');
+  assert.deepEqual(h.leases, before.leases);
+  assert.deepEqual(h.state.bindings.s1, before.bindings.s1);
+  assert.equal(h.rev, before.rev);
+  assert.equal(h.lastHash, before.hash);
+  assert.deepEqual(fs.readFileSync(h.store.commitsFile), before.bytes);
+  const afterOtherSession = touchSnapshot(h);
   h.touch('unknown');
-  assert.deepEqual(h.leases.get(id), before);
-  h.state.bindings.s1.epoch += 1;
-  h.touch('s1');
-  assert.deepEqual(h.leases.get(id), before);
-  h.state.bindings.s1.epoch = before.epoch;
-  h.state.bindings.s1.detachedAt = new Date().toISOString();
-  h.touch('s1');
-  assert.deepEqual(h.leases.get(id), before);
+  assert.deepEqual(touchSnapshot(h), afterOtherSession);
+  const valid = isolatedTouchHandle(h);
+  const validBefore = touchSnapshot(valid, h.store.commitsFile);
+  valid.touch('s1');
+  assert.equal(valid.leases.get(id).token, lease.token);
+  assert.equal(valid.leases.get(id).expiresAt, new Date(now() + TTL_MS).toISOString(), 'control fixture must really accept current-generation activity');
+  assert.equal(valid.state.bindings.s1.lastSeenAt, new Date(now()).toISOString());
+  assert.equal(valid.rev, validBefore.rev);
+  assert.equal(valid.lastHash, validBefore.hash);
+  assert.deepEqual(fs.readFileSync(h.store.commitsFile), validBefore.bytes);
+  assert.deepEqual(touchSnapshot(h), afterOtherSession);
+  for (const binding of [{ epoch: lease.epoch + 1 }, { detachedAt: new Date(now()).toISOString() }]) {
+    const isolated = isolatedTouchHandle(h, { binding });
+    const prior = touchSnapshot(isolated, h.store.commitsFile);
+    assert.equal(isolated.leases.has(id), true);
+    assert.equal(isolated._leaseOf(id), null, 'fixture must actually represent a fenced generation');
+    isolated.touch('s1');
+    assert.deepEqual(touchSnapshot(isolated, h.store.commitsFile), prior);
+    assert.deepEqual(isolated.leases.get(id), lease);
+    assert.deepEqual(touchSnapshot(h), afterOtherSession);
+  }
 });
 
 // 责任：续租预算为零仍允许初始 TTL，但 touch/renew 均不能让截止继续滑动。
 test('zero renewal budget still permits the initial TTL but cannot slide it', async (t) => {
   const { svc, h, tick } = await setup(t);
   t.after(() => svc.close());
-  h.state.project.policy.maxRenewalsWithoutProgress = 0;
+  await h.command({ ...cmd('project.update', { policy: { maxRenewalsWithoutProgress: 0 } }), actor: { kind: 'human', via: 'test' } });
+  assert.equal(h.state.project.policy.maxRenewalsWithoutProgress, 0);
   const id = await makeTask(h, 'No renewals');
   const lease = await claim(h, id);
   tick(TTL_MS / 2);
+  const before = touchSnapshot(h);
   h.touch('s1');
+  assert.deepEqual(h.leases, before.leases);
+  assert.equal(h.state.bindings.s1.lastSeenAt, new Date(START + TTL_MS / 2).toISOString());
+  assert.equal(h.rev, before.rev);
+  assert.equal(h.lastHash, before.hash);
+  assert.deepEqual(fs.readFileSync(h.store.commitsFile), before.bytes);
   assert.equal(Date.parse(h.leases.get(id).expiresAt), START + TTL_MS);
+  const afterTouch = touchSnapshot(h);
   await assert.rejects(renew(h, id, lease.token), { code: 'lease-expired' });
+  assert.deepEqual(touchSnapshot(h), afterTouch);
 });
 
 // 责任：unblock 遇到失效 assignee 不得发放新租约。

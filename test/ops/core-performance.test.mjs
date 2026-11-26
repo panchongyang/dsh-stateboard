@@ -37,6 +37,13 @@ test('the brief stays small on a board with 2000 tasks', async () => {
       updatedAt: '2026-10-01T00:00:00.000Z',
     };
   }
+  const clock = () => new Date('2026-10-01T01:00:00.000Z');
+  // 59 expired leases plus the unchecked-evidence notice exercise the real 60-warning projection.
+  const leases = new Map(Object.keys(tasks).slice(0, 59).map(taskId => {
+    const owner = { sessionId: 'bulk-worker-' + taskId, fencingToken: 1 };
+    tasks[taskId] = { ...tasks[taskId], state: 'in_progress', blocked: null, owner };
+    return [taskId, { taskId, sessionId: owner.sessionId, token: owner.fencingToken, expiresAt: '2026-10-01T00:15:00.000Z' }];
+  }));
   const fake = {
     state: {
       project: { id: 'prj_x', name: 'Bulk', phase: 'active', rev: 1, focusPlanId: null, updatedAt: '2026-10-01T00:00:00.000Z', policy: { maxInProgress: 2, maxPerSession: 1, leaseTtlSec: 900, verification: 'auto' } },
@@ -47,18 +54,15 @@ test('the brief stays small on a board with 2000 tasks', async () => {
       bindings: {},
       intents: {},
     },
-    leases: new Map(),
-    rev: 1,
+    leases, clock, rev: 1,
     health: () => { throw new Error('brief must not request a full audit'); },
-    healthSummary: () => ({ ok: false, total: 60, evidenceAudit: 'unchecked',
-      warnings: Array.from({ length: 60 }, (_, i) => 'warning number ' + i + ' with a long explanatory sentence') }),
   };
   const brief = briefView(fake, null);
-  const size = JSON.stringify(brief).length;
+  const size = Buffer.byteLength(JSON.stringify(brief), 'utf8');
   assert.ok(size < 10 * 1024, 'brief is ' + size + ' bytes');
   assert.equal(brief.attention.length, 5);
   assert.equal(brief.health.total, 60);
-  assert.equal(brief.health.evidenceAudit, 'unchecked');
+  assert.equal(brief.health.evidenceAudit.status, 'unchecked');
   assert.equal(brief.health.warnings.length, 5);
 });
 

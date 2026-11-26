@@ -132,9 +132,18 @@ function replayProblem(id, error) {
     + (hint ? ' — ' + hint : '');
 }
 
+const EMPTY_SOURCE_LOG = Symbol('empty source log');
+
 class ReplayStore extends JsonlStore {
-  open() {
-    const data = super.open();
+  open(options) {
+    let data;
+    try { data = super.open(options); }
+    catch (error) {
+      // In this store's open path, board-data-missing means there is no verified
+      // first commit. Keep the CLI's specific coverage failure for that case.
+      if (error?.code === 'board-data-missing') throw EMPTY_SOURCE_LOG;
+      throw error;
+    }
     // ProjectService recovers the copy after open and can append new events.
     this.sourceCommitCount = data.commits.length;
     return data;
@@ -188,7 +197,7 @@ export async function scan(projectsDir) {
         problems.push(...invariantProblems(id, row));
         report[id] = row;
       } catch (error) {
-        problems.push(replayProblem(id, error));
+        problems.push(error === EMPTY_SOURCE_LOG ? id + ': no log commits to validate' : replayProblem(id, error));
       } finally {
         await handle?.close();
       }

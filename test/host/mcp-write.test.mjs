@@ -7,6 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fixture, text, error, READ, WRITE } from '../helpers/agent-parity-fixture.mjs';
 import { createMcpWrite } from '../../lib/host/mcp-write.js';
@@ -36,6 +37,10 @@ test('bad credentials, contexts and malformed intake cannot open a cold writer',
   const before = fs.readFileSync(f.h.store.commitsFile);
   await f.h.close();
   f.svc.openByWorkspace = () => assert.fail('denial must precede writer acquisition');
+  f.svc.commandInWorkspace = () => assert.fail('MCP cannot create a project from an owning cwd');
+  error(await f.call('project_task', { op: 'create', title: 'x', acceptance: [{ text: 'ok' }] }), 'work-session-invalid');
+  error(await f.call('project_plan', { op: 'create', title: 'x' }), 'work-session-invalid');
+  error(await f.call('project_session', { op: 'init' }), 'work-session-invalid');
   error(await f.call('project_task', { op: 'create', title: 'x', acceptance: [{ text: 'ok' }], context: 'forged' }), 'work-session-invalid');
   error(await f.call('project_task', { op: 'create', title: 'x', acceptance: [{ text: 'ok' }], actor: { kind: 'human' }, context }), 'invalid-command');
   error(await f.call('project_task', { op: 'create', title: 'x', acceptance: [{ text: 'ok' }], requiresAudit: 'true', context }), 'INVALID_ARGS');
@@ -113,8 +118,87 @@ test('closing one MCP authority detaches its workers before reject can auto-resu
   assert.equal(f.h.leases.has(active), false);
   assert.equal(f.h.state.tasks[active].state, 'interrupted');
   assert.equal(f.h.leases.has(native), true, 'another authority is untouched');
-  assert.equal(f.runtime.sessionHandles.has(actor), false);
+  assert.equal(f.runtime.sessionProjectRefs.has(actor), false);
   await f.nativeCall('project_task', { op: 'reject', taskId: review, expectedRev: f.h.state.tasks[review].rev, reason: 'needs rework' });
   assert.equal(f.h.state.tasks[review].state, 'ready');
   assert.equal(f.h.leases.has(review), false);
+});
+
+// 责任：首次写（native/full MCP）把会话绑定并入同一 commit；stale 请求不写、不绑、
+// 不动已持租约的 expiry/lastSeen；并发首次 checkpoint 只绑一次；重试不刷。
+test('first-write boundaries bind once and stale requests leave no side effects', async t => {
+  const f = await fixture(t);
+  const nativeExec = { agent: { id: 'first-native', session: { header: { cwd: f.wsDir } } }, callId: 'first-native-call' };
+  const createTask = async title => {
+    const result = await f.h.command({ cmdId: 'cmd_setup_' + title, actor: { kind: 'human', via: 'test' }, op: 'task.create', title, acceptance: [{ text: 'ok' }] });
+    return result.events.find(e => e.type === 'task/created').taskId;
+  };
+  const first = await createTask('native-first');
+  const before = f.h.rev;
+  const claimed = await f.nativeCall('project_task', { op: 'claim', taskId: first, expectedRev: 1, projectRev: before }, nativeExec);
+  assert.equal(claimed.ok, true);
+  assert.equal(f.h.rev, before + 1, 'the first native write is exactly one commit');
+  assert.ok(f.h.state.bindings['first-native'], 'the first native write binds its session');
+  const claimCommit = f.h.store.commits.at(-1);
+  assert.deepEqual(claimCommit.events.map(e => e.type), ['session/bound', 'lease/granted', 'task/claimed'], 'binding and claim share one commit');
+
+  const context = (await f.open()).context;
+  const remoteTask = await createTask('mcp-first');
+  const remoteBefore = f.h.rev;
+  text(await f.call('project_task', { op: 'claim', taskId: remoteTask, expectedRev: f.h.state.tasks[remoteTask].rev, projectRev: remoteBefore, context }));
+  assert.equal(f.h.rev, remoteBefore + 1, 'the first full-MCP write is exactly one commit');
+  assert.deepEqual(f.h.store.commits.at(-1).events.map(e => e.type), ['session/bound', 'lease/granted', 'task/claimed']);
+
+  // stale claim from a fresh session: no write, no binding, no log line.
+  const staleExec = { agent: { id: 'stale-worker', session: { header: { cwd: f.wsDir } } } };
+  const staleTask = await createTask('stale-target');
+  const log = fs.readFileSync(f.h.store.commitsFile);
+  const staleRev = f.h.rev;
+  let stale;
+  try { await f.nativeCall('project_task', { op: 'claim', taskId: staleTask, expectedRev: 999 }, staleExec); } catch (error) { stale = error.boardFailure; }
+  assert.equal(stale.code, 'stale-revision');
+  assert.equal(f.h.rev, staleRev);
+  assert.equal(f.h.state.bindings['stale-worker'], undefined);
+  assert.deepEqual(fs.readFileSync(f.h.store.commitsFile), log);
+
+  // stale begin must not refresh the already-held lease or binding lastSeen.
+  const held = await f.h.state.tasks[first];
+  const lease = f.h.leases.get(first);
+  const lastSeen = f.h.state.bindings['first-native'].lastSeenAt;
+  let begin;
+  try { await f.nativeCall('project_task', { op: 'begin', taskId: first, expectedRev: 999, fencingToken: lease.token, summary: 'stale' }, nativeExec); } catch (error) { begin = error.boardFailure; }
+  assert.equal(begin.code, 'stale-revision');
+  assert.equal(f.h.leases.get(first).expiresAt, lease.expiresAt);
+  assert.equal(f.h.state.bindings['first-native'].lastSeenAt, lastSeen);
+
+  // two concurrent first checkpoints from the same new session bind once.
+  const cpExec = { agent: { id: 'cp-worker', session: { header: { cwd: f.wsDir } } } };
+  const cpBefore = f.h.rev;
+  await Promise.all([
+    f.nativeCall('project_session', { op: 'checkpoint', note: 'first' }, cpExec),
+    f.nativeCall('project_session', { op: 'checkpoint', note: 'second' }, cpExec),
+  ]);
+  const added = f.h.store.commits.filter(c => c.seq > cpBefore).flatMap(c => c.events).filter(e => e.type === 'session/bound');
+  assert.equal(added.length, 1, 'two concurrent first checkpoints bind exactly once');
+  assert.equal(f.h.rev, cpBefore + 2, 'each successful first checkpoint is one commit');
+
+  // same cmdId retry is deduped and does not refresh rev or bindings.
+  const { applicationFor } = await import('../../lib/host/application.js');
+  const application = applicationFor(f.runtime);
+  const dto = { cmdId: 'cmd_retry_once', actor: { kind: 'agent', sessionId: 'retry-worker', agentId: 'retry-worker', via: 'test' }, op: 'session.checkpoint', note: 'retry' };
+  const retryRev = f.h.rev;
+  const one = await application.command(f.h.id, dto, { agentSessionSource: 'test' });
+  assert.equal(one.committed, true);
+  const two = await application.command(f.h.id, dto, { agentSessionSource: 'test' });
+  assert.equal(two.deduped, true);
+  assert.equal(f.h.rev, retryRev + 1, 'retry does not write a second commit');
+
+  // Only the native commands that create an entity can initialize a workspace.
+  const unbound = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-unbound-'));
+  const projectsBefore = fs.readdirSync(f.svc.projectsDir).length;
+  const unboundExec = { agent: { id: 'unbound-agent', session: { header: { cwd: unbound } } } };
+  await assert.rejects(f.nativeCall('project_task', { op: 'claim', taskId: 'tsk_missing', expectedRev: 1 }, unboundExec), { code: 'not-found' });
+  assert.equal(fs.readdirSync(f.svc.projectsDir).length, projectsBefore, 'a claim never creates a project');
+  assert.equal(f.svc.resolveWorkspace(unbound), null);
+  fs.rmSync(unbound, { recursive: true, force: true });
 });

@@ -77,6 +77,26 @@ test('one-hop recorded dependency is separate from unrestricted caller associati
   assert.equal(context.related[0].entity, 'task:' + dependency);
 });
 
+// 责任：紧凑回读只折叠重复结构，不改变原文、事实关系、版本或覆盖。
+test('compact context preserves the evidence chain while removing duplicated structure', async t => {
+  const f = await knowledgeFixture(t);
+  const linked = await addTask(f.h, '先核验引用');
+  const description = 'compactproof 原文，先核对版本，不从缓存补齐。';
+  await addTask(f.h, '紧凑回读案例', { description, deps: [linked] });
+  const ref = (await f.search('compactproof', { kinds: ['task'] })).hits[0].ref;
+  const normal = await f.read(ref, { mode: 'context', relatedLimit: 1 });
+  const compact = await f.read(ref, { mode: 'compact', relatedLimit: 1 });
+  for (const key of ['ref', 'content', 'revision', 'state', 'hashDomain', 'contentHash', 'range', 'availability']) {
+    assert.deepEqual(compact.records[0][key], normal.records[0][key], key);
+  }
+  assert.equal(JSON.parse(compact.records[0].content).data.description, description);
+  assert.deepEqual(compact.coverage, normal.coverage);
+  assert.equal(compact.related[0].via.fromIndex, 0);
+  assert.equal(compact.related[0].via.reason, normal.related[0].via.reason);
+  assert.equal(compact.related[0].ref, normal.related[0].ref);
+  assert.ok([...JSON.stringify(compact)].length < [...JSON.stringify(normal)].length);
+});
+
 // 责任：外置文件改变或丢失后不使用索引伪造旧正文。
 test('observed external text is not archived and changes cannot replace an old reference', async t => {
   const f = await knowledgeFixture(t);
@@ -98,6 +118,50 @@ test('observed external text is not archived and changes cannot replace an old r
   assert.equal(missing.hits.length, 0);
   assert.equal(missing.coverage.bodies.unavailable, 1);
   assert.equal(missing.coverage.bodies.archived, false);
+});
+
+// 责任：当有效原文排在模板后面时，交给 Agent 的片段不再填充模板；来源仍可精确回读。
+test('knowledge fragments keep the matching original and its limit instead of repeated boilerplate', async t => {
+  const f = await knowledgeFixture(t);
+  const boilerplate = '维护交接固定模板：此次记录请按常规格式归档并抄送维护组。';
+  const evidence = '调用 restore_context 前先核对当前来源版本。';
+  const caveat = '不得拿当前文件补旧版本。';
+  const description = [boilerplate, boilerplate, evidence, evidence, caveat].join('\n');
+  const taskId = await addTask(f.h, '工作区检索操作', { description });
+  const delivered = [];
+  for (const disableSqlite of [false, true]) {
+    const reader = createKnowledgeReader(f.svc, { disableSqlite });
+    t.after(() => reader.close());
+    const result = await reader.search({ projectId: f.projectId, query: 'restore_context', kinds: ['task'], limit: 5, relatedLimit: 0 });
+    const hit = result.hits[0];
+    assert.equal(hit.entity, 'task:' + taskId);
+    const read = await reader.read({ projectId: f.projectId, refs: [hit.ref], mode: 'context', relatedLimit: 0 });
+    assert.equal(JSON.parse(read.records[0].content).data.description, description);
+    // 只验这个片段的有效/无效码点；整链字符开销另行度量。
+    const lines = hit.fragment.split('\n');
+    const relevant = new Set(lines.filter(line => line === evidence || line === caveat));
+    const meaningfulChars = [...relevant].reduce((total, line) => total + [...line].length, 0);
+    const noisyChars = lines.reduce((total, line) => total + [...line].length, 0) - meaningfulChars;
+    t.diagnostic(`${result.engine}: ${meaningfulChars} effective, ${noisyChars} noisy fragment characters`);
+    delivered.push(lines);
+  }
+  assert.deepEqual(delivered, [[evidence, caveat], [evidence, caveat]]);
+});
+
+// 责任：命中原文中的一项限制不会挤掉另行记录的不同限制。
+test('a statement containing a restriction does not suppress a different recorded caveat', async t => {
+  const f = await knowledgeFixture(t);
+  const evidence = '调用 restore_context 前必须核对来源版本。';
+  const caveat = '不得拿当前文件补旧版本。';
+  await addTask(f.h, '检索限制', { description: evidence + '\n' + caveat });
+  const delivered = [];
+  for (const disableSqlite of [false, true]) {
+    const reader = createKnowledgeReader(f.svc, { disableSqlite });
+    t.after(() => reader.close());
+    const result = await reader.search({ projectId: f.projectId, query: 'restore_context', kinds: ['task'], limit: 5, relatedLimit: 0 });
+    delivered.push(result.hits[0]?.fragment);
+  }
+  assert.deepEqual(delivered, Array(2).fill(evidence + '\n' + caveat));
 });
 
 // 责任：中文及表情分页可无损拼回，跨项目与伪造来源被拒绝。
@@ -138,13 +202,19 @@ test('SQLite unavailable scans with honest coverage and the same exact source re
 test('mixed Chinese text preserves embedded English identifiers in FTS and fallback', async t => {
   const f = await knowledgeFixture(t);
   await addTask(f.h, '中英混写', { description: '采用FTS5检索，调用restore_context恢复上下文。' });
+  const exact = new Set();
+  for (const description of ['node:sqlite：可用时使用。', '接口：node:sqlite', 'node:sqlite：available']) {
+    exact.add('task:' + await addTask(f.h, '带中文分隔符的接口', { description }));
+  }
+  await addTask(f.h, '空格不等同内部冒号', { description: 'node sqlite are separate tokens.' });
   const fallback = createKnowledgeReader(f.svc, { disableSqlite: true });
   t.after(() => fallback.close());
-  for (const query of ['FTS5', 'restore_context', '恢复上下文']) {
-    const indexed = await f.search(query);
-    const scanned = await fallback.search({ projectId: f.projectId, query, relatedLimit: 0 });
-    assert.equal(indexed.hits.length, 1, query);
-    assert.equal(scanned.hits[0].ref, indexed.hits[0].ref, query);
+  for (const query of ['FTS5', 'restore_context', '恢复上下文', 'node:sqlite']) {
+    const indexed = await f.search(query, { kinds: ['task'] });
+    const scanned = await fallback.search({ projectId: f.projectId, query, kinds: ['task'], relatedLimit: 0 });
+    assert.deepEqual(indexed.hits.map(hit => hit.ref).sort(), scanned.hits.map(hit => hit.ref).sort(), query);
+    if (query === 'node:sqlite') assert.deepEqual(new Set(indexed.hits.map(hit => hit.entity)), exact);
+    else assert.equal(indexed.hits.length, 1, query);
   }
 });
 

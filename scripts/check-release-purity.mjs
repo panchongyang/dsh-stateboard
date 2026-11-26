@@ -13,12 +13,8 @@ const LEGACY = /requiresHumanReview|gate:human/g;
 const PACKED_TEXT = /^package\/(?:lib\/|src\/|docs\/CONTRACT\.md$|README\.md$|LICENSE$|package\.json$)/;
 const ALLOWED_ENTRY = /^package\/(?:lib\/[^/].*|src\/[^/].*|docs\/CONTRACT\.md|README\.md|LICENSE|package\.json)$/;
 const DEV_SOURCE = /^(?:bin\/|lib\/scripts\/|evidence\/|docs\/archive\/|scripts\/(?:wt\.|[^/]*worktree)|test\/(?:wt\.|[^/]*worktree))/;
-const GIT_CALLERS = new Map([
-  ['lib/core/documents/fixed-git.js', /spawnSync\(resolveGitExecutable\(\[root\]\),[\s\S]*?assertReadOnlyGitArgs\(args\)/],
-  ['lib/core/documents/external-git.js', /spawnSync\(execPath,[\s\S]*?assertReadOnlyGitArgs\(args\)/],
-  ['lib/core/identity/discover.js', /execFileSync\(resolveGitExecutable\(\[boundary\]\),\s*assertReadOnlyGitArgs\(/],
-]);
-const GIT_SPAWN = /\b(?:spawnSync|spawn|execFileSync|execFile|execSync)\s*\(/g;
+const PRODUCT_PROCESS = /\b(?:spawnSync|spawn|execFileSync|execFile|execSync)\s*\(|["'](?:node:)?child_process["']/;
+const GIT_ADAPTER_IMPORT = /["'][^"'\r\n]*\/git-exec\.js["']/;
 
 export function checkMetadata(metadata, licenseText) {
   if (metadata?.name !== 'dsh-stateboard' || metadata.version !== '0.4.0' || metadata.license !== 'BSD-3-Clause') throw new Error('Release metadata must be dsh-stateboard@0.4.0, BSD-3-Clause');
@@ -66,11 +62,12 @@ export function assertShippedText(text, entry = 'packed file') {
 }
 
 export function checkGitSurface(files) {
-  for (const [name, source] of Object.entries(files)) {
-    const count = [...source.replace(/^\s*\/\/.*$/gm, '').matchAll(GIT_SPAWN)].length;
-    if (count && (!GIT_CALLERS.has(name) || count !== 1 || !GIT_CALLERS.get(name).test(source))) throw new Error('Unapproved product Git/process invocation: ' + name);
+  for (const [name, text] of Object.entries(files)) {
+    const source = text.replace(/^\s*\/\/.*$/gm, '');
+    if (PRODUCT_PROCESS.test(source) || GIT_ADAPTER_IMPORT.test(source)) {
+      throw new Error('Unapproved product Git/process invocation or dependency: ' + name);
+    }
   }
-  for (const name of GIT_CALLERS.keys()) if (!files[name] || !GIT_CALLERS.get(name).test(files[name])) throw new Error('Product Git caller changed: ' + name);
   return true;
 }
 

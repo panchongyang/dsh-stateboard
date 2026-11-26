@@ -210,6 +210,25 @@ test('project and task lists page by ID and task detail is bounded', async (t) =
   } finally { await reader.close(); }
 });
 
+// 责任：只有元数据和不完整首行时，冷读、公开写与离线维护均不发布项目，也不能把残留字节修成空日志。
+test('an unconfirmed first record cannot be viewed, opened for work or repaired as a project', async t => {
+  const { svc, h, stateDir } = await withProject(t);
+  const projectId = h.id, log = h.store.commitsFile;
+  await svc.close();
+  const partial = '{"v":1,"seq":1,"prev":"genesis"';
+  fs.writeFileSync(log, partial); // offline synthetic counterpart of a lost first-write acknowledgement
+  const { svc: cold } = await makeService(t, { rootDir: stateDir, offlineMaintenance: true });
+  const reader = createProjectReader(cold);
+  try {
+    assert.equal((await reader.listProjects()).projects.find(p => p.id === projectId)?.available, false);
+    await assert.rejects(reader.listTasks({ projectId }), { code: 'project-unreadable' });
+    await assert.rejects(cold.open(projectId), { code: 'board-data-missing' });
+    await assert.rejects(cold.restoreHistoricalAcceptance(projectId, { expectedRev: 0, expectedHash: 'genesis', taskIds: [] }), { code: 'board-data-missing' });
+    assert.equal(cold.handles.size, 0);
+    assert.equal(fs.readFileSync(log, 'utf8'), partial, 'unconfirmed bytes survive public reopen attempts');
+  } finally { await reader.close(); }
+});
+
 // 责任：不存在、不可读或版本不支持保持不同错误，列表不可读项不暴露内部路径。
 test('reader separates missing projects and tasks from malformed and unsupported stores', async (t) => {
   const { svc, h, stateDir } = await withProject(t);

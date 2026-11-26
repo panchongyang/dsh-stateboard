@@ -6,11 +6,11 @@
 
 1. 确认 DSH home、profile、项目ID、工作区/绑定根与唯一写者，由操作者停止目标宿主。
 2. 将整个 board 数据根（`DSH_HOME/project-board`，默认用户目录下 `.dsh/project-board`）复制到源目录之外全新的备份目录，保留身份注册数据、所有项目的 meta/commits/snapshot/blobs 和锁诊断。仓库 marker 和 snapshot 均不能替代完整日志。
-3. 另备份工作区外置文件、引用所需的 Git 对象、实际存在的四份 profile 配置（manifest/lockfile/patch/workspace），保留匹配安装包/源码。记录时点、版本、路径、projectId 和日志 SHA-256；不公开私密数据。
+3. 另备份工作区外置文件和实际存在的 profile 配置，保留匹配构建。所属空间布局停写后备份完整工作区（含 `.projectboard/state/` 与 `.projectboard/objects/workspace-bytes/`），不使用集中根或 Git clone 代替。记录文件清单、版本、备份点和 SHA-256；凭据另行保管。
 4. 故障后先另存 damaged 副本；从一致备份复制到新的恢复目录核对，保留原数据，不能硬删或拼接日志。恢复匹配代码和完整数据；profile 的其它后续变更需合并。
 5. 先确认 RPO（备份后新写入会丢失），再由操作者恢复并启动/刷新。核对项目身份、业务状态、外置定位、历史字节和 health；在授权恢复副本验证新提交与再次冷开。外部文件修改/部署/人工裁决不会因日志回退而撤销。
 
-只回退插件版本：停止宿主，恢复本插件配置或上一包/链接目标，再启动刷新。若 schema/event 已变化，则必须同时使用迁移前完整数据与匹配旧构建，不能以“旧版本能打开”判安全。卸载不删除 store 或文件；没有备份就没有受支持的数据回退。锁归属不明时停下，不删锁、不猜 PID。
+低版本不能可靠读取新事件或字段时，不做仅代码回退：使用兼容读端，或恢复切换前完整数据与匹配构建。所属空间恢复在隔离新目录按日志、正文对象 contentHash 与原清单验读，再为目标根另行确认授权；对象缺失或损坏不能用当前正文补齐。卸载不删除 store 或文件；锁归属不明时停下，不删锁、不猜 PID。
 
 ## 安全边界
 
@@ -24,7 +24,7 @@
 
 ## 冷开写入的恢复事件
 
-可写 cold open 会替上一个进程收尾：每个仍是 `in_progress` 的任务在**同一条 commit** 里写 `lease/expired` + `task/interrupted|readied`（有 open intent → interrupted，否则 ready）。
+显式可写冷开可以恢复在途工作；普通业务首写在事务的私有态准备恢复，随成功写入同批发布，拒绝和只读不产生恢复记录。仍在 `in_progress` 的任务按 open intent 追加 `lease/expired` 与 `task/interrupted|readied`。
 
 - 重启回收的 `lease/expired` 不是运行时 lease 快照：租约表是进程状态，重启后为空。记录只从持久化 `task.owner` 重建（`sessionId`/`agentId`/`epoch`/`token`←`fencingToken`/`expiresAt`←`leaseUntil`），未知的续租字段省略，并带 `reason:'restart'`；常规 sweep 的记录才带完整 `grantedAt`/`renewCount`/`progressAt`。
 - 每个 writer 只恢复一次；再次冷开时日志里已无 `in_progress`，不追加事件，也不会重复写 `lease/expired`。

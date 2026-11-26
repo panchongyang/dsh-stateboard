@@ -11,6 +11,7 @@ import test from 'node:test';
 import { assertNoNewStageDependencies } from '../../lib/core/plan-stages.js';
 import { createProjectReader } from '../../lib/core/project-reader.js';
 import { cmd, humanCmd, setup, taskByTitle } from '../helpers/core-lifecycle-fixture.mjs';
+import { seedStageHistory, seedStageMembership } from '../helpers/plan-stage-history-fixture.mjs';
 
 function def(key, deps = []) {
   return { key, title: key, deps, acceptance: [{ text: 'deliver ' + key }] };
@@ -104,9 +105,9 @@ test('concurrent edits cannot link same-stage tasks through an inbox task', asyn
   assert.deepEqual(h.state.tasks[inbox].deps, []);
 });
 
-// 责任：旧计划修订可重复引用任务，新增依赖须检查该任务出现的每个当前阶段。
+// 责任：离线历史中的重复引用仍可读，新增依赖须检查其出现的每个当前阶段。
 test('new paths check every current stage that references a reused task', async (t) => {
-  const { h, log } = await fixture(t);
+  let { h, log } = await fixture(t);
   await publish(h, [step('original', def('A'), def('B'))]);
   const result = await h.command(cmd('plan.publish', {
     title: 'Other plan', steps: [step('other', def('C'), def('D'))],
@@ -115,17 +116,24 @@ test('new paths check every current stage that references a reused task', async 
   const { id: a } = taskByTitle(h, 'A');
   const { id: b } = taskByTitle(h, 'B');
   const { id: c } = taskByTitle(h, 'C');
+  const owner = structuredClone(h.state.tasks[a].planRef);
+  h = await seedStageMembership(h, planId, [{ id: 'other', title: 'other', taskIds: [a, c] }]);
   await h.command(cmd('plan.revise', {
-    planId, baseVersion: 1,
+    planId, baseVersion: 2,
     steps: [step('other', { ...def('A'), taskId: a }, { ...def('C'), taskId: c })],
   }));
+  assert.deepEqual(h.state.tasks[a].planRef, owner, 'editing a retained foreign legacy reference never migrates its owner');
   await rejectDependency(h, log, updateDeps(h, b, [a]), 'original');
   await rejectDependency(h, log, updateDeps(h, c, [a]), 'other');
+  const actualOwner = structuredClone(h.state.tasks[a]);
+  const cleanup = await h.command(cmd('plan.revise', { planId, baseVersion: 3, steps: [step('other', { ...def('C'), taskId: c })] }));
+  assert.deepEqual(h.state.tasks[a], actualOwner, 'removing a historical ghost never orphans its actual owner');
+  assert.equal(cleanup.events.some((event) => event.taskId === a), false);
 });
 
 // 责任：旧阶段重叠时保留已有任务对，合并阶段产生的新关系仍须拒绝。
 test('revising overlapping legacy stages preserves only previously grouped pairs', async (t) => {
-  const { h, log } = await fixture(t);
+  let { h, log } = await fixture(t);
   const planId = await publish(h, [step('first', def('A'), def('B')), step('second', def('C'))]);
   const { id: a } = taskByTitle(h, 'A');
   const { id: b } = taskByTitle(h, 'B');
@@ -136,17 +144,18 @@ test('revising overlapping legacy stages preserves only previously grouped pairs
   ];
   const overlap = revisedSteps('');
   overlap[0].tasks[0].deps = [b];
-  await h.command(cmd('plan.revise', { planId, baseVersion: 1, steps: overlap }));
+  h = await seedStageMembership(h, planId, [{ id: 'first', title: 'first', taskIds: [a, b] }, { id: 'second', title: 'second', taskIds: [a, c] }]);
+  await h.command(cmd('plan.revise', { planId, baseVersion: 2, steps: overlap }));
   assert.deepEqual(h.state.tasks[a].deps, [], 'only the final definition determines the dependency change');
   const legacyEdges = [[a, c], [b, a]].map(([id, dep]) => {
     const task = h.state.tasks[id];
     const rev = task.rev + 1;
     return { type: 'task/updated', taskId: id, rev, data: { ...task, rev, state: 'backlog', deps: [dep] } };
   });
-  h._appendEvents(legacyEdges, { kind: 'human' }, 'legacy-overlapping-stage-dependencies', h.rev);
-  await h.command(cmd('plan.revise', { planId, baseVersion: 2, steps: revisedSteps('-renamed', [c], [a]) }));
+  h = await seedStageHistory(h, legacyEdges);
+  await h.command(cmd('plan.revise', { planId, baseVersion: 3, steps: revisedSteps('-renamed', [c], [a]) }));
   const join = (deps) => cmd('plan.revise', {
-    planId, baseVersion: 3,
+    planId, baseVersion: 4,
     steps: [step('joined', { ...def('A', deps), taskId: a }, { ...def('B', [a]), taskId: b }, { ...def('C'), taskId: c })],
   });
   await rejectDependency(h, log, join([c]), 'joined');
@@ -198,14 +207,13 @@ test('DSH and MCP show implementation then the audit cohort and the next stage',
 
 // 责任：旧依赖可回放、改阶段名或解绑，禁止额外路径和解除后重建。
 test('legacy same-stage dependencies replay, can unblock via review, and cannot be reintroduced', async (t) => {
-  const { h, svc, log } = await fixture(t);
+  let { h, svc, log } = await fixture(t);
   const projectId = h.id;
   const planId = await publish(h, [step('first', def('A'), def('B'))]);
   const a = taskByTitle(h, 'A');
   const b = taskByTitle(h, 'B');
   // Append a valid pre-rule commit, then reopen via the normal reader and writer.
-  h._appendEvents([{ type: 'task/updated', taskId: b.id, rev: 2, data: { ...b, rev: 2, state: 'backlog', deps: [a.id] } }],
-    { kind: 'human' }, 'legacy-stage-dependency', h.rev);
+  h = await seedStageHistory(h, [{ type: 'task/updated', taskId: b.id, rev: 2, data: { ...b, rev: 2, state: 'backlog', deps: [a.id] } }]);
   await submit(h, a.id);
   assert.equal(h.query('brief').stageWork.mode, 'waiting');
   await h.close();

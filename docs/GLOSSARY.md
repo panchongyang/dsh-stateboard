@@ -31,13 +31,14 @@
 | Locator（定位符） | 外置文档的 bindingId 与 relPath 组合，不是正文内容身份，见[文档](<CONTRACT.md#24-文档>)。 |
 | metaRev（元数据修订） | 外置登记的修订计数，与 rev 同值但不代表正文版本，见[文档](<CONTRACT.md#24-文档>)。 |
 | Confirmation（确认基线） | 对完整重读的正文 hash 建立的基线，与管理状态和可用性独立，见[文档](<CONTRACT.md#24-文档>)。 |
-| Fixed / pinned（固定内容） | 绑定项目来源、Git commit/path/blob 与字节 hash 的历史内容身份，见[验收项与证据](<CONTRACT.md#验收项与证据>)。 |
+| Fixed / pinned（历史固定） | 已记录的 Git commit/path/blob 与内容 hash；现行运行时不重验证或回读 Git 正文，见[证据](<CONTRACT.md#验收项与证据>)。 |
+| Workspace version（留存正文版本） | 在获准所属空间留存的原始字节与日志中的稳定版本身份，区别于当前观测和 metaRev，见[文档](<CONTRACT.md#24-文档>)。 |
 | current-only（当前文件） | 固定条件不满足时仅记录当前文件观测并附降级原因的证据档，见[兼容与降级](<CONTRACT.md#4-兼容与降级>)。 |
 | Commit（日志提交） | 带 seq、prev/hash、actor、cmdId 和事件批次的 JSONL 记录，见[存储格式](<CONTRACT.md#25-存储格式与事件兼容>)。 |
 | cmdId（命令身份） | 用于已提交命令去重的稳定 ID，见[命令信封](<CONTRACT.md#21-命令信封错误码与-http-映射>)。 |
 | Rev / projectRev（修订/项目水位） | 实体变更计数与项目提交序号，用于并发比较而非内容正确性判断，见[命令信封](<CONTRACT.md#21-命令信封错误码与-http-映射>)。 |
 | Snapshot（存储快照） | 带 seq/hash 的状态加速文件，不替代完整日志校验，见[存储格式](<CONTRACT.md#25-存储格式与事件兼容>)。 |
-| Blob（内容寻址字节） | 以 sha256 定位的 inline 正文存储，不收纳固定 Git 正文，见[文档](<CONTRACT.md#24-文档>)。 |
+| Blob（内容寻址字节） | 内嵌正文按 SHA-256 寻址，工作区版本使用独立对象域；见[文档](<CONTRACT.md#24-文档>)。 |
 | Digest（项目简报） | 同 state/sessionId/includeRules 输入产生同文的有界纯文本摘要，见[Digest](<CONTRACT.md#digest>)。 |
 | Health / fsck（健康诊断） | 只读状态和内容诊断，不执行材料、不修复数据，见[只读诊断](<CONTRACT.md#health--fsck-只读诊断>)。 |
 | 读取纯度 | 区分纯渲染、无权威写入和整链零写；普通 open/query 与专用锁外 reader 的副作用不同，见[纯度矩阵](<modules/read/contract.md#2-view路径与纯度矩阵>)。 |

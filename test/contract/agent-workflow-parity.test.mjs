@@ -92,7 +92,7 @@ test('parallel first calls attach once; separate logical agents compete for one 
   const one = await f.open(), two = await f.open();
   const before = f.h.rev;
   await Promise.all([1, 2, 3].map(() => f.call('project_board', { view: 'health', context: one.context })));
-  assert.equal(f.h.rev, before + 1, 'one session/bound commit, not three epochs');
+  assert.equal(f.h.rev, before, 'reads never attach a session or bump the project rev');
   text(await f.call('project_task', { op: 'create', title: 'competition', acceptance: [{ text: 'done' }], context: one.context }));
   const id = Object.keys(f.h.state.tasks)[0];
   const responses = await Promise.all([one, two].map(({ context }) => f.call('project_task', { op: 'claim', taskId: id, expectedRev: 1, context })));

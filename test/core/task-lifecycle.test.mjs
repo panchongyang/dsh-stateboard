@@ -13,6 +13,7 @@ import test from 'node:test';
 import { buildDigest } from '../../lib/core/digest.js';
 import { signExecution } from '../fixtures/legacy-execution.mjs';
 import { cmd, humanCmd, PLAN, setup, publish, taskByTitle, tokenOf } from '../helpers/core-lifecycle-fixture.mjs';
+import { reopenSyntheticHistory } from '../helpers/core-matrix-fixture.mjs';
 
 async function reachReview(h, taskId, sessionId = 's1') {
   await h.attach({ sessionId, agentId: sessionId, source: 'test', role: 'worker' });
@@ -394,13 +395,16 @@ test('doc links reject unknown tasks and plan versions', async () => {
 });
 
 // 责任：人为制造悬空文档关联后 health 须报警，但普通读取不得因此被阻断。
-test('health flags dangling doc links without blocking reads', async () => {
-  const { h, svc } = await setup();
+test('health flags dangling doc links without blocking reads', async (t) => {
+  let { h, svc } = await setup();
+  t.after(() => { if (!h.closed) h.close(); });
   await publish(h);
   const t1 = taskByTitle(h, 'T1');
   const created = await h.command(cmd('doc.put', { title: 'Legacy', body: 'x', links: { taskIds: [t1.id] } }));
-  const doc = h.state.docs[created.events[0].docId];
+  const doc = structuredClone(h.state.docs[created.events[0].docId]);
   doc.links.taskIds.push('tsk_gone');
+  // Today's public doc.link rejects dangling IDs; replay a validated historical record.
+  h = reopenSyntheticHistory(h, [{ type: 'doc/updated', docId: doc.id, rev: doc.rev, data: doc }]);
   const health = h.health();
   assert.ok(health.warnings.some((warning) => warning.includes('doc-link-task:' + doc.id)), JSON.stringify(health.warnings));
   assert.equal(h.query('task', { taskId: t1.id }).linkedDocs.length, 1, 'reads still work');

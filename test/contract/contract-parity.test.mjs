@@ -34,10 +34,12 @@ for (const [op, handler] of Object.entries(COMMAND_HANDLERS)) {
 // command and must reach the unknown-command path instead of being called.
 assert.ok(!Object.hasOwn(COMMAND_HANDLERS, 'constructor'), 'a prototype key became dispatchable');
 assert.ok(!Object.hasOwn(COMMAND_HANDLERS, 'toString'), 'a prototype key became dispatchable');
-assert.ok(
-  read('lib/core/handle.js').includes('Object.hasOwn(COMMAND_HANDLERS, cmd.op)'),
-  'ProjectHandle._execute must dispatch via Object.hasOwn(COMMAND_HANDLERS, ...)',
-);
+const { assembleCommand } = await import('../../lib/core/commands/transaction.js');
+for (const key of ['constructor', 'toString', 'not-registered']) {
+  const cmd = { op: key, cmdId: 'unregistered-key', actor: { kind: 'human' } };
+  assert.throws(() => assembleCommand(cmd, Object.freeze({})), { code: 'invalid-command' },
+    'only own registered command keys may produce model operation requests');
+}
 
 // 分段职责：领域 TASK_STATES 必须是共享对象本身，不维护漂移副本。
 // 2. The domain layer reads states from the shared contract (identity, not a copy).

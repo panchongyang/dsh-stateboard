@@ -1,6 +1,6 @@
 /**
- * 测试职责：保证宿主会话在主 checkout 和 linked worktree 共用项目且证据根不漂移。
- * 典型流程：临时 Git 主树/worktree 与合成工具宿主 → init/发布/提交 → 比较项目和文件取证位置。
+ * 测试职责：保证宿主会话在显式绑定的 worktree 与主 checkout 共用项目且证据根不漂移。
+ * 典型流程：临时 Git 主树/worktree 显式绑定与合成工具宿主 → init/发布/提交 → 比较项目和文件取证位置。
  * 覆盖边界：覆盖 会话 cwd 映射和复制 marker 的拒绝提示；不覆盖真实 DSH 会话或 UI。
  * 外部前置：需要 Git 和 DSH peer；所有 Git 工作区均为临时 fixture。
  */
@@ -11,6 +11,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { apply } from '../../lib/index.js';
+import { ProjectService } from '../../lib/core/service.js';
+import { bindWorktree } from '../../lib/core/identity/ops.js';
 import { canonicalKey } from '../../lib/core/util.js';
 import { MARKER_FILE, writeMarker } from '../../lib/core/identity/discover.js';
 
@@ -34,8 +36,8 @@ function host(rootDir) {
 
 const execIn = (id, cwd) => ({ agent: { id, session: { header: { cwd } } }, callId: 'call-' + id });
 
-// 责任：两种 cwd 的 init 须共用同项目，worktree 独有文件不能当主树证据而主树文件可提交。
-test('tool sessions in the main checkout and a linked worktree share one board and one main workspace', async () => {
+// 责任：显式绑定的 worktree 会话与主 checkout 共用项目，证据根不漂移到 worktree。
+test('tool sessions in an explicitly bound worktree share one board and one main workspace', async () => {
   const rootDir = tmp('pb-idh-root');
   const main = tmp('pb-idh-main');
   fs.writeFileSync(path.join(main, 'shipped.txt'), 'main\n');
@@ -48,6 +50,11 @@ test('tool sessions in the main checkout and a linked worktree share one board a
   const wt = path.join(tmp('pb-idh-wt'), 'feature');
   git(['worktree', 'add', '-q', '-b', 'feature', wt], main);
   fs.writeFileSync(path.join(wt, 'branch-only.txt'), 'branch\n');
+
+  const seed = await new ProjectService({ rootDir }).init();
+  const seeded = await seed.createProject({ workspacePath: main });
+  bindWorktree(seed, { projectId: seeded.id, workspacePath: wt, actor: { kind: 'human' } });
+  await seed.close();
 
   const tools = host(rootDir);
   await new Promise((resolve) => setTimeout(resolve, 30));
@@ -93,5 +100,6 @@ test('an unbound marked copy surfaces binding-required with a hint instead of cr
     return body.code === 'binding-required' && /do not create a new project/.test(body.next);
   });
   await assert.rejects(tools.get('project_board').execute({ view: 'brief' }, execIn('s-c', copy)), /binding-required/);
+  await assert.rejects(tools.get('project_task').execute({ op: 'create', title: 'Must not fork', acceptance: [{ text: 'done' }] }, execIn('s-c', copy)), { code: 'binding-required' });
   assert.equal(fs.readdirSync(path.join(rootDir, 'projects')).filter((n) => n.startsWith('prj_')).length, 1);
 });

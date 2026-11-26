@@ -18,8 +18,8 @@
 ## 2. 只读与冷读
 
 - 专用项目读取器在已有 writer 时读取其已发布状态，否则用 worker 验证锁外日志前缀；不打开 writer、不修尾、不恢复任务、不续租，见 [project-reader.js](<../lib/core/project-reader.js>) 和 [MCP 读取契约](<CONTRACT.md#267-可选本机-mcp>)。
-- 文档图片资源使用锁外状态读取，不走 open、命令或观测缓存写入，见 [assets.js](<../lib/core/documents/assets.js>) 与[文档契约](<CONTRACT.md#24-文档>)。
-- 读取不等于无写：普通 HTTP GET 或 open 后 query 的冷开可 recover/heal，五个管理工具还可 touch 会话；专用 reader/knowledge 链则不 open writer，不能把其保证推广到所有“读”操作，见[service.js](<../lib/core/service.js>)、[管理入口](<../lib/host/tools/shared.js>)与[纯度矩阵](<modules/read/contract.md#2-view路径与纯度矩阵>)。
+- 文档图片资源使用相同只读端口，不走 open、命令或观测缓存写入，见 [assets.js](<../lib/core/documents/assets.js>) 与[文档契约](<CONTRACT.md#24-文档>)。
+- 普通 HTTP GET 和管理工具读不打开 writer 或 touch；显式 open 才具备恢复等生命周期副作用。见[纯度矩阵](<modules/read/contract.md#2-view路径与纯度矩阵>)。
 - brief 只有内存健康摘要；显式完整 health 在隔离 worker 中读取内容，诊断本身不修改状态、不执行证据，见 [health-audit.js](<../lib/core/health-audit.js>) 和[只读诊断](<CONTRACT.md#health--fsck-只读诊断>)。
 - knowledge 使用独立 worker 和可重建缓存，不参与命令、验收或恢复事务；锁外水位只供展示，不能充当领取或写入权威，见 [reader.js](<../lib/core/knowledge/reader.js>) 与[知识契约](<CONTRACT.md#历史知识读取与检索>)。
 
@@ -27,17 +27,17 @@ worker 的截止时间、内存和并发预算是资源约束，不宣称是对�
 
 ## 3. 外部文档根与文件边界
 
-外置文档只在其 locator 指定的有效 binding 根内读取；不跨根兜底，不以空正文冒充失败。登记、管理状态、确认基线、可用性与 Git 观测不互相替代。词法拒绝、realpath 根包含、链接组件拒绝、普通文件句柄和前后身份复核共同限制读取，不能宣称读取是原子文件系统快照，见 [locate.js](<../lib/core/documents/locate.js>)、[read.js](<../lib/core/documents/read.js>) 与 [CONTRACT §2.4](<CONTRACT.md#24-文档>)。
+外置文档只在 locator 所属的有效根内读取，不跨根兜底或以空正文冒充失败。词法、realpath 根包含、链接组件拒绝、普通文件句柄和前后身份校验共同限制读取；不声称是原子文件快照。
 
 图片按文档所在目录解析，只服务正文独占一行真实图片引用；路径规范化后仍须在同一根内，且受扩展名和字节上限约束。客户端对外部 URL、data 和绝对路径不发图片请求，SVG 以图片资源使用，不注入正文 HTML，见 [assets.js](<../lib/core/documents/assets.js>)、[Markdown 展示](<../src/client/components/content.tsx>) 与[图片条款](<CONTRACT.md#内嵌外置与图片只读资源>)。
 
 file 证据独立按工作区真实路径做包含检查；不能把外置 locator 的词法规则直接当成所有文件证据规则，见 [evidence.js](<../lib/core/evidence.js>) 与[证据条款](<CONTRACT.md#验收项与证据>)。文件系统权限失败分类返回，不扩大授权根。
 
-## 4. Git 只读与执行隔离
+## 4. 工作区对象与 Git 兼容边界
 
-Git 可选；解析器只接受真实路径位于所有待读工作区和实现 checkout 之外的普通可执行文件，无安全候选则不可用，不回退裸命令名。调用白名单只允许观测；固定读取限制环境、时限和输出，禁用交互、lazy fetch、replace objects、hooks 和 fsmonitor，见 [git-exec.js](<../lib/core/git-exec.js>) 与 [fixed-git.js](<../lib/core/documents/fixed-git.js>)。
+所属工作区的文件发现与历史读回遵守根、授权和版本边界，失效的命中不会交付。空间授权绑定真实目录和权限范围，不因相同历史项目 ID 延伸到另一副本。
 
-正文还原不运行 filter、textconv、hook 或远端 LFS；不支持的内容转换降级，不写仓库配置、不 add/commit/stash，不管理分支/worktree，见 [fixed-worktree.js](<../lib/core/documents/fixed-worktree.js>)、[Git 执行边界](<modules/evidence/contract.md>) 和 [CONTRACT §4](<CONTRACT.md#4-兼容与降级>)。固定字节属于 Git 对象读取，不拷入看板 blob。
+产品运行时不执行 Git、不读取 Git 对象、不运行仓库驱动。历史 Git 只返回记录来源，无正文、未重新核验；见[证据内部契约](<modules/evidence/contract.md>)。
 
 ## 5. 数据不是指令，材料不是执行结果
 
@@ -53,4 +53,4 @@ Git 可选；解析器只接受真实路径位于所有待读工作区和实现 
 
 焦点、重开、强制操作等角色边界在 core 再判定；授权网页 capability 生成 human actor，MCP 工作会话不获得这些人工权限，见[命令清单](<CONTRACT.md#22-命令清单>)、[计划命令](<CONTRACT.md#223-plan-v2-命令>)与[MCP 完整视图](<CONTRACT.md#2673-有界摘要与精读>)。
 
-管理视图的 DSH/MCP 调用均会 open/touch；只有元数据投影和知识查询保持无 writer/touch。相同目录不授予概览凭据正文权限，准入先于 writer。
+概览凭据不会因共用工具目录而获得正文能力；身份与权限核验先于取数与写入。

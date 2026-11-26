@@ -16,6 +16,9 @@ import test from 'node:test';
 import { ProjectService } from '../../lib/core/service.js';
 import { makeCommit } from '../../lib/core/store.js';
 import { projectsRoute } from '../../lib/host/routes/projects.js';
+import { authorizeWebRequest } from '../../lib/host/auth.js';
+import { createApplication } from '../../lib/core/application/index.js';
+import { createProjectReader } from '../../lib/core/project-reader.js';
 
 async function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-list-perf-'));
@@ -72,7 +75,13 @@ test('hot project listing/HTTP never reopens a live writer or reads log bodies',
     rows[0].name = 'caller mutation';
   }
   const res = response();
-  await projectsRoute({}, res, { service }, 'GET');
+  const reader = createProjectReader(service);
+  t.after(() => reader.close());
+  const application = createApplication({ service, reader });
+  const token = 'synthetic-hot-list';
+  const req = { headers: { 'x-project-board-token': token } };
+  const { authority } = authorizeWebRequest(req, token);
+  await projectsRoute(req, res, { application }, 'GET', authority);
   assert.equal(res.body.projects[0].name, 'Performance fixture');
   assert.equal(service._projectList.metrics.replayRequests, 0);
   assert.equal(reads(), 0);

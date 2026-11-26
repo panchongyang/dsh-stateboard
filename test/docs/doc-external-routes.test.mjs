@@ -163,11 +163,14 @@ try {
   assert.equal(logBytes(stateDir), coldLogBefore, 'link-shape rejection never cold-opens');
   assert.equal(taskStateFromLog(stateDir, coldTaskId), 'in_progress');
 
-  // 分段职责：合法读取作为对照须真正冷开恢复，让零写断言不因测试失效而误绿。
-  // Control: a valid request still opens the cold project and runs recovery.
+  // 分段职责：读取不再冷开。对照改为显式写入，让零写断言不因测试失效而误绿。
+  // Control: reads never open; the first write opens the cold project and recovery runs.
   const coldList = await call('GET', coldBase);
   assert.equal(coldList.status, 200);
-  assert.notEqual(logBytes(stateDir), coldLogBefore, 'a valid open still runs recovery (log grew)');
+  assert.equal(logBytes(stateDir), coldLogBefore, 'a cold listing does not open or recover');
+  const warm = await call('POST', '/projects/' + cold.id + '/commands', { op: 'task.create', title: 'warm the cold project', acceptance: [{ text: 'warm' }] });
+  assert.equal(warm.status, 200);
+  assert.notEqual(logBytes(stateDir), coldLogBefore, 'a valid write still opens and runs recovery');
   const coldBoard = await call('GET', '/projects/' + cold.id + '/board');
   assert.equal(coldBoard.value.columns.in_progress.length, 0, 'recovery moved the task out of in_progress');
   assert.ok(coldBoard.value.columns.ready.some((task) => task.id === coldTaskId), 'recovery readied the task');

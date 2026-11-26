@@ -56,9 +56,11 @@ async function legacyStore(state) {
   ];
   if (state === 'done') events.push({ type: 'task/verified', taskId: id, rev: task.rev, data: task });
   const commit = makeCommit(h.rev + 1, h.lastHash, { kind: 'system' }, 'historical_signed_policy', h.rev, events);
-  h.store.append(commit);
   const projectId = h.id;
+  const commitsFile = h.store.commitsFile;
+  // Close the only writer, then append the synthetic historical line for a real cold replay.
   await svc.close();
+  fs.appendFileSync(commitsFile, JSON.stringify(commit) + '\n');
   return { rootDir, projectId, id, task, project, commit };
 }
 // 责任：旧 policy 完成任务重开后新 submit 必须停 review，历史 execution 保留并 supersede，有效策略为 manual。
