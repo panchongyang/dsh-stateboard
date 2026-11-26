@@ -13,7 +13,12 @@ import test from 'node:test';
 import { ProjectService } from '../../lib/core/service.js';
 import { command } from '../helpers/service-fixture.mjs';
 
-const repoRoot = path.resolve(import.meta.dirname, '../..');
+const repoRoot = fs.realpathSync.native(path.resolve(import.meta.dirname, '../..'));
+
+function containsPath(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return !path.isAbsolute(relative) && relative !== '..' && !relative.startsWith('..' + path.sep);
+}
 // 正文数保持在元数据缓存上限（PROJECTION_LIMITS.metadataEntries=16384，4MiB）以内，热扫描复用才有意义。
 const MAIN = { sections: 30, perSection: 200 };
 const SECOND = { sections: 20, perSection: 60 };
@@ -280,7 +285,9 @@ async function measureConcurrent(main, second) {
 
 // 责任：续页真实在途时任务命令不受扫描阻塞，冷/热/单改计数确定，双 space 并发也不拖累宿主。
 test('P3 workspace projection keeps discovery bounded and off the task hot path', { timeout: 600000 }, async t => {
-  const base = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'pb-p3-perf-')));
+  const tempRoot = fs.realpathSync.native(os.tmpdir());
+  const base = fs.realpathSync.native(fs.mkdtempSync(path.join(tempRoot, 'pb-p3-perf-')));
+  assert.ok(containsPath(tempRoot, base) && !containsPath(repoRoot, base), 'performance fixtures must stay outside the repository');
   t.diagnostic('Synthetic fixture preserved: ' + base);
   const services = [];
   t.after(async () => {
@@ -297,7 +304,9 @@ test('P3 workspace projection keeps discovery bounded and off the task hot path'
   assert.equal(typeof second.svc.queryWorkspaceProjection, 'function', 'each owning space must expose queryWorkspaceProjection');
   assert.equal(main.svc.spaceHome?.root, main.root);
   assert.equal(second.svc.spaceHome?.root, second.root);
-  assert.ok(main.root.startsWith(os.tmpdir()) && !main.root.startsWith(repoRoot));
+  for (const { root } of [main, second]) {
+    assert.ok(containsPath(base, root) && !containsPath(repoRoot, root), 'space fixtures must remain in their temporary directory');
+  }
   assert.equal(eligible, MAIN.sections * MAIN.perSection);
   assert.ok(main.corpus.bytes > 10 * 1024 * 1024);
   assert.ok(main.sources > 0 && main.excluded.length > 0);
